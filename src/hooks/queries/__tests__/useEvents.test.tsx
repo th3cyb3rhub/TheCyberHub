@@ -41,6 +41,11 @@ describe('optimistic patches', () => {
         expect(next).toMatchObject({ waitlistCount: 3, registeredCount: 42 })
         expect(next.viewer).toMatchObject({ waitlisted: true, position: 3 })
     })
+    it('joins the waiting list on a full event even if the viewer block still says canRegister', () => {
+        const next = optimistic.register(makeEvent({ isFull: true, spotsLeft: 0, waitlistCount: 0, viewer: viewer({ canRegister: true, canJoinWaitlist: false }) }))
+        expect(next.viewer).toMatchObject({ waitlisted: true, registered: false })
+        expect(next.registeredCount).toBe(42)
+    })
     it('leaving gives the seat back', () => {
         const next = optimistic.unregister(makeEvent({ joinLink: 'https://x.org', viewer: viewer({ registered: true, canRegister: false }) }))
         expect(next).toMatchObject({ registeredCount: 41, spotsLeft: 19, joinLink: null })

@@ -52,6 +52,12 @@ export function registrationView(
 
     if (viewer.registered) return { kind: 'registered', attended: viewer.attended };
     if (viewer.waitlisted) return { kind: 'waitlisted', position: viewer.position };
+    // A full event never offers a plain register button, whichever flag the server set: the waiting
+    // list when it has one and the viewer may use it, otherwise nothing
+    if (event.isFull) {
+        if (event.waitlistEnabled && (viewer.canJoinWaitlist || viewer.canRegister)) return { kind: 'can-waitlist' };
+        return { kind: 'closed', reason: closedReason(event, now) };
+    }
     if (viewer.canRegister) return { kind: 'can-register' };
     if (viewer.canJoinWaitlist) return { kind: 'can-waitlist' };
     return { kind: 'closed', reason: closedReason(event, now) };

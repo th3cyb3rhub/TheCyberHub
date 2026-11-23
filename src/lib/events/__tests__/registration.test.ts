@@ -17,6 +17,13 @@ describe('registrationView', () => {
     it('offers the waiting list when the event is full', () => {
         expect(view(makeEvent({ isFull: true, viewer: viewer({ canRegister: false, canJoinWaitlist: true }) })).kind).toBe('can-waitlist')
     })
+    it('never offers a plain register button on a full event, whatever the flags say', () => {
+        const full = { isFull: true, spotsLeft: 0, waitlistEnabled: true }
+        expect(view(makeEvent({ ...full, viewer: viewer({ canRegister: true, canJoinWaitlist: false }) })).kind).toBe('can-waitlist')
+        expect(view(makeEvent({ ...full, viewer: viewer({ canRegister: false, canJoinWaitlist: true }) })).kind).toBe('can-waitlist')
+        expect(view(makeEvent({ ...full, viewer: viewer({ canRegister: false, canJoinWaitlist: false }) })).kind).toBe('closed')
+        expect(view(makeEvent({ ...full, waitlistEnabled: false, viewer: viewer({ canRegister: true, canJoinWaitlist: false }) })).kind).toBe('closed')
+    })
     it('shows registered, attended and waitlisted from the viewer block', () => {
         expect(view(makeEvent({ viewer: viewer({ canRegister: false, registered: true }) }))).toEqual({ kind: 'registered', attended: false })
         expect(view(makeEvent({ viewer: viewer({ canRegister: false, waitlisted: true, position: 3 }) }))).toEqual({ kind: 'waitlisted', position: 3 })

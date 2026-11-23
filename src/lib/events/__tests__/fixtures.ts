@@ -1,5 +1,9 @@
 import type { EventDetail, EventViewer } from '@/types/event';
 
+/**
+ * The viewer block as the API builds it. An open event: canRegister true. Full with a waiting list:
+ * canRegister false and canJoinWaitlist true. Full without one: both false. Override per test.
+ */
 export const viewer = (over: Partial<EventViewer> = {}): EventViewer => ({
     registered: false, waitlisted: false, attended: false, position: null, reminder: null,
     canRegister: true, canJoinWaitlist: false, canFeedback: false, hasFeedback: false, joinOpensAt: null, canManage: false,
