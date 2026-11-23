@@ -19,6 +19,8 @@ vi.mock('@/context/NotificationProvider', () => ({ useNotificationSocket: () => 
 const useNotificationList = vi.hoisted(() => vi.fn())
 vi.mock('@/hooks/queries', () => ({ useNotificationList }))
 
+vi.mock('@/components/notifications/PushPrompt', () => ({ default: () => null }))
+
 import NotificationsPage from '../page'
 
 const n = (over: Record<string, unknown> = {}) => ({
@@ -44,6 +46,31 @@ describe('NotificationsPage', () => {
         expect(screen.getByRole('link', { name: /replied to your post/ })).toHaveAttribute('href', '/feed/post/p1')
         expect(screen.getByText('You earned a badge')).toBeInTheDocument()
         expect(screen.getByText('2 unread')).toBeInTheDocument()
+    })
+
+    it('shows a group as one row with its people and count', () => {
+        const group = n({
+            _id: 'g1', type: 'like', message: 'liked your post', groupKey: 'like:post:p1', actorCount: 5,
+            actor: { name: 'Alice', username: 'alice' },
+            recentActors: [{ _id: 'a', username: 'alice', avatar: null }, { _id: 'b', username: 'bob', avatar: null }],
+        })
+        useNotificationList.mockReturnValue(query([group]))
+        render(<NotificationsPage />)
+        expect(screen.getByRole('link', { name: /alice, bob and 3 others liked your post/i })).toBeInTheDocument()
+        expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    })
+
+    it('lists a group once even if two loaded pages both carry it', () => {
+        const item = n({ _id: 'dup' })
+        useNotificationList.mockReturnValue({
+            ...query([item]),
+            data: { pages: [
+                { data: [item], pagination: { page: 1, limit: 20, total: 2, totalPages: 2 } },
+                { data: [item], pagination: { page: 2, limit: 20, total: 2, totalPages: 2 } },
+            ] },
+        })
+        render(<NotificationsPage />)
+        expect(screen.getAllByRole('listitem')).toHaveLength(1)
     })
 
     it('marks a notification read when it is opened', () => {

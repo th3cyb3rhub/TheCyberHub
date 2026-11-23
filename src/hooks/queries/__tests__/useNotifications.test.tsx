@@ -75,3 +75,20 @@ describe('useUpdateNotificationPreferences', () => {
         expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error', message: 'Nope' }))
     })
 })
+
+describe('push preference', () => {
+    it('flips at once and keeps the other settings', async () => {
+        api.getNotificationPreferences.mockResolvedValue({ ...prefs(), push: { enabled: false } })
+        let release!: (v: unknown) => void
+        api.updateNotificationPreferences.mockReturnValue(new Promise((r) => { release = r }))
+        const read = renderHook(() => useNotificationPreferences(), { wrapper })
+        await waitFor(() => expect(read.result.current.data).toBeDefined())
+        const { result } = renderHook(() => useUpdateNotificationPreferences(), { wrapper })
+
+        act(() => { result.current.mutate({ push: { enabled: true } }) })
+        await waitFor(() => expect((qc.getQueryData(KEY) as { push: { enabled: boolean } }).push.enabled).toBe(true))
+        expect((qc.getQueryData(KEY) as ReturnType<typeof prefs>).emailDigest.enabled).toBe(true)
+        expect(api.updateNotificationPreferences).toHaveBeenCalledWith({ push: { enabled: true } })
+        await act(async () => { release({ ...prefs(), push: { enabled: true } }) })
+    })
+})

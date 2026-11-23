@@ -43,6 +43,7 @@ function merge(prefs: NotificationPreferences, update: NotificationPreferencesUp
         inApp: { ...prefs.inApp, ...update.inApp },
         quietHours: { ...prefs.quietHours, ...update.quietHours },
         emailDigest: { ...prefs.emailDigest, ...update.emailDigest },
+        push: { enabled: update.push?.enabled ?? prefs.push?.enabled ?? false },
     };
 }
 

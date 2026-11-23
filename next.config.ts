@@ -113,6 +113,20 @@ const nextConfig: NextConfig = {
                     }] : []),
                 ],
             },
+            // The service worker must be re-checked on every load so a new version reaches members promptly
+            {
+                source: '/sw.js',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'public, max-age=0, must-revalidate',
+                    },
+                    {
+                        key: 'Content-Type',
+                        value: 'application/javascript; charset=utf-8',
+                    },
+                ],
+            },
             // Cache static assets
             {
                 source: '/favicon.ico',

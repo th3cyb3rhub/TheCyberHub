@@ -9,6 +9,7 @@ import { useNotificationSocket } from '@/context/NotificationProvider';
 import { useNotificationList } from '@/hooks/queries';
 import { NOTIFICATION_GROUPS } from '@/lib/notificationMeta';
 import NotificationRow from '@/components/notifications/NotificationRow';
+import PushPrompt from '@/components/notifications/PushPrompt';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function NotificationsPage() {
@@ -93,6 +94,8 @@ export default function NotificationsPage() {
                         </Link>
                     </div>
                 </div>
+
+                <PushPrompt source="notifications_page" />
 
                 <div className="flex gap-1 mb-3 border-b border-white/10" role="tablist" aria-label="Show">
                     {([['all', 'All'], ['unread', 'Unread']] as const).map(([id, label]) => {
