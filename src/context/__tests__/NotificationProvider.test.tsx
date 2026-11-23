@@ -36,6 +36,7 @@ function Probe() {
             <span data-testid="count">{unreadCount}</span>
             <span data-testid="arrivals">{liveArrivals}</span>
             <span data-testid="ids">{notifications.map((n) => n._id).join(',')}</span>
+            <span data-testid="reads">{notifications.map((n) => `${n._id}:${n.read ? 'r' : 'u'}`).join(',')}</span>
             <button onClick={() => markAsRead('1')}>read1</button>
             <button onClick={() => deleteNotification('2')}>delete2</button>
         </div>
@@ -190,5 +191,56 @@ describe('NotificationProvider group updates', () => {
         await act(async () => { screen.getByText('read1').click() })
         expect(screen.getByTestId('count')).toHaveTextContent('0')
         expect(api.markNotificationRead).toHaveBeenCalledWith('1')
+    })
+
+    it('keeps an optimistic read when a socket event arrives in the same tick', async () => {
+        renderProvider()
+        await waitFor(() => expect(screen.getByTestId('ids')).toHaveTextContent('1,2'))
+        act(() => {
+            screen.getByText('read1').click()
+            handlers.newNotification(note('3'))
+        })
+        expect(screen.getByTestId('reads')).toHaveTextContent('3:u,1:r,2:r')
+    })
+
+    it('keeps an optimistic delete when an update arrives in the same tick', async () => {
+        renderProvider()
+        await waitFor(() => expect(screen.getByTestId('ids')).toHaveTextContent('1,2'))
+        act(() => {
+            screen.getByText('delete2').click()
+            handlers.newNotification(note('4'))
+        })
+        expect(screen.getByTestId('ids')).toHaveTextContent('4,1')
+    })
+
+    it('puts a failed delete back in place and keeps what arrived meanwhile', async () => {
+        let fail!: (e: Error) => void
+        api.deleteNotification.mockReturnValue(new Promise((_, reject) => { fail = reject }))
+        renderProvider()
+        await waitFor(() => expect(screen.getByTestId('ids')).toHaveTextContent('1,2'))
+        act(() => { screen.getByText('delete2').click() })
+        act(() => { handlers.newNotification(note('5')) })
+        await act(async () => { fail(new Error('no')) })
+        await waitFor(() => expect(screen.getByTestId('ids')).toHaveTextContent('5,1,2'))
+    })
+})
+
+describe('NotificationProvider list totals', () => {
+    const page = (data: unknown[], total: number) => ({ pages: [{ success: true, data, pagination: { page: 1, limit: 20, total, totalPages: 1 } }], pageParams: [1] })
+    const grp = (id: string) => ({ ...note(id), type: 'like', groupKey: `like:${id}`, actorCount: 3, createdAt: new Date().toISOString() })
+
+    it('counts a group the list did not hold, and not one it already did', async () => {
+        const { qc } = renderProvider()
+        await waitFor(() => expect(screen.getByTestId('ids')).toHaveTextContent('1,2'))
+        const key = ['notifications', 'list', 'u1', false, null]
+        qc.setQueryData(key, page([note('1'), grp('2')], 2))
+
+        act(() => { handlers.notificationUpdated(grp('2')) })
+        expect((qc.getQueryData(key) as ReturnType<typeof page>).pages[0].pagination.total).toBe(2)
+
+        act(() => { handlers.notificationUpdated(grp('9')) })
+        const after = qc.getQueryData(key) as ReturnType<typeof page>
+        expect(after.pages[0].pagination.total).toBe(3)
+        expect((after.pages[0].data as Array<{ _id: string }>).map((n) => n._id)).toEqual(['9', '2', '1'])
     })
 })
