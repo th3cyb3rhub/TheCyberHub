@@ -169,39 +169,6 @@ export const voteSchema = z.object({
 });
 
 // ============================================
-// Event Schemas
-// ============================================
-
-export const eventSchema = z.object({
-    title: z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be less than 200 characters'),
-    slug: z.string().min(3, 'Slug must be at least 3 characters').regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens').optional(),
-    description: z.string().min(10, 'Description must be at least 10 characters').max(50000, 'Description must be less than 50000 characters'),
-    shortDescription: z.string().max(300, 'Short description must be less than 300 characters').optional(),
-    image: urlSchema,
-    startDate: z.string().min(1, 'Start date is required'),
-    endDate: z.string().min(1, 'End date is required'),
-    locationType: z.enum(['online', 'in-person', 'hybrid']).optional(),
-    location: z.string().max(500, 'Location must be less than 500 characters').optional(),
-    virtualLink: urlSchema,
-    url: urlSchema,
-    category: z.enum(['ctf', 'workshop', 'meetup', 'webinar', 'conference', 'hackathon', 'other']),
-    maxParticipants: z.number().int().min(1, 'Must be at least 1').max(10000, 'Cannot exceed 10000').optional(),
-    maxAttendees: z.number().int().positive().optional(),
-    requiresApproval: z.boolean().optional(),
-    coverImage: urlSchema,
-    status: z.enum(['draft', 'published', 'cancelled']).optional(),
-    isVirtual: z.boolean().optional(),
-}).refine((data) => {
-    if (data.endDate && data.startDate) {
-        return new Date(data.endDate) >= new Date(data.startDate);
-    }
-    return true;
-}, {
-    message: 'End date must be after start date',
-    path: ['endDate'],
-});
-
-// ============================================
 // Challenge / CTF Schemas
 // ============================================
 
@@ -408,8 +375,6 @@ export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export type VerifyTotpFormData = z.infer<typeof verifyTotpSchema>;
 export type ProfileFormData = z.infer<typeof profileSchema>;
 export type ProfileInput = ProfileFormData;
-export type EventFormData = z.infer<typeof eventSchema>;
-export type EventInput = EventFormData;
 export type ChallengeFormData = z.infer<typeof challengeSchema>;
 export type ChallengeInput = ChallengeFormData;
 export type FlagSubmissionFormData = z.infer<typeof flagSubmissionSchema>;

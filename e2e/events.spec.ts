@@ -1,263 +1,217 @@
-import { test, expect } from '@playwright/test';
-import { mockEmptyApi, signInAs } from './helpers';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { signInAs, testUser } from './helpers';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const DAY = 24 * 60 * 60 * 1000;
+const iso = (offsetDays: number, hours = 0) => new Date(Date.now() + offsetDays * DAY + hours * 3600_000).toISOString();
 
-test.describe('Events Listing', () => {
-    test('should display events page', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        await expect(page.locator('h1')).toContainText(/learn, compete|events/i);
-    });
+const viewerBase = {
+    registered: false,
+    waitlisted: false,
+    attended: false,
+    position: null,
+    reminder: null,
+    canRegister: false,
+    canJoinWaitlist: false,
+    canFeedback: false,
+    hasFeedback: false,
+    joinOpensAt: null,
+    canManage: false,
+};
 
-    test('should show event cards', async ({ page }) => {
-        await mockEmptyApi(page);
-        await page.goto(`${BASE_URL}/events`);
+function makeEvent(overrides: Record<string, unknown> = {}) {
+    return {
+        _id: 'a'.repeat(24),
+        slug: 'winter-ctf-night',
+        title: 'Winter CTF Night',
+        shortDescription: 'Web and crypto challenges.',
+        description: 'A friendly night of **web and crypto** challenges.',
+        category: 'ctf',
+        status: 'upcoming',
+        locationType: 'online',
+        location: 'Online',
+        timezone: 'Europe/Berlin',
+        startDate: iso(5),
+        endDate: iso(5, 2),
+        organizer: 'Community Team',
+        tags: ['beginner'],
+        speakers: [],
+        maxParticipants: 60,
+        registeredCount: 42,
+        waitlistCount: 0,
+        spotsLeft: 18,
+        isFull: false,
+        waitlistEnabled: true,
+        hasRecording: false,
+        hasSlides: false,
+        ...overrides,
+    };
+}
 
-        // Cards are links to /events/<slug>; with an empty API the page falls back to sample events
-        const eventCards = page.locator('a[href^="/events/"]');
-        const emptyState = page.getByText(/no events found/i);
+function reply(route: Route, body: unknown, status = 200) {
+    const headers = {
+        'access-control-allow-origin': route.request().headers()['origin'] || '*',
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-headers': 'content-type, authorization',
+        'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    return route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body) });
+}
 
-        await expect(eventCards.first().or(emptyState)).toBeVisible();
-    });
+const page1 = (n: number) => ({ page: 1, limit: 12, total: n, totalPages: 1, hasMore: false });
 
-    test('should filter events by category', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        // Look for category filters
-        const categoryFilter = page.locator('button').filter({ hasText: /ctf|webinar|workshop/i }).first();
-        
-        if (await categoryFilter.count() > 0) {
-            await categoryFilter.click();
-            await page.waitForTimeout(1000);
+/** Routes registered later win in Playwright, so call this after signInAs. */
+async function mockEventsApi(page: Page, handlers: { list?: unknown[]; detail?: Record<string, unknown>; onRegister?: () => void; registerStatus?: number }) {
+    await page.route('**/api/events**', (route) => {
+        const url = new URL(route.request().url());
+        const method = route.request().method();
+        const path = url.pathname.replace(/^\/api\/events\/?/, '');
+
+        if (method === 'OPTIONS') return reply(route, {});
+        if (method === 'GET' && path === '') {
+            const items = handlers.list ?? [];
+            return reply(route, { success: true, data: items, pagination: page1(items.length) });
         }
-    });
-
-    test('should navigate to calendar view', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        // Look for calendar link
-        const calendarLink = page.getByRole('link', { name: /calendar/i });
-        
-        if (await calendarLink.count() > 0) {
-            await calendarLink.click();
-            await expect(page).toHaveURL(/calendar/);
-        }
-    });
-
-    test('should navigate to event detail page', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            // Should navigate to detail page
-            await page.waitForURL(/events\/.+/);
-            
-            // Should show event details
-            await expect(page.locator('h1')).toBeVisible();
-        }
-    });
-});
-
-test.describe('Event Detail Page', () => {
-    test('should display event information', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            // Should show title, date, description
-            await expect(page.locator('h1, h2')).toBeVisible();
-            
-            // Look for date/time info
-            const dateInfo = page.locator('text=/\\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i');
-            if (await dateInfo.count() > 0) {
-                await expect(dateInfo.first()).toBeVisible();
+        if (method === 'POST' && path.endsWith('/register')) {
+            handlers.onRegister?.();
+            if (handlers.registerStatus && handlers.registerStatus >= 400) {
+                return reply(route, { success: false, error: { code: 'EVENT_FULL', message: 'Full' } }, handlers.registerStatus);
             }
+            return reply(route, { success: true, data: { status: 'registered' } });
         }
-    });
-
-    test('should show RSVP button', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            // Look for RSVP or Register button
-            const rsvpButton = page.locator('button, a').filter({ hasText: /rsvp|register|join/i });
-            
-            if (await rsvpButton.count() > 0) {
-                await expect(rsvpButton.first()).toBeVisible();
-            }
+        if (method === 'GET' && handlers.detail) {
+            return reply(route, { success: true, data: handlers.detail });
         }
+        return reply(route, { success: true, data: [] });
     });
+}
 
-    test('should display event category badge', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            // Look for category badge
-            const categoryBadge = page.locator('text=/ctf|webinar|workshop|meetup|conference/i').first();
-            
-            if (await categoryBadge.count() > 0) {
-                await expect(categoryBadge).toBeVisible();
-            }
-        }
-    });
-});
-
-test.describe('Event RSVP Flow', () => {
-    test('should prompt login for RSVP when not authenticated', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            const rsvpButton = page.locator('button').filter({ hasText: /rsvp|register|join/i }).first();
-            
-            if (await rsvpButton.count() > 0) {
-                await rsvpButton.click();
-                
-                await page.waitForTimeout(500);
-                
-                // Should show login prompt or redirect
-                const loginPrompt = page.locator('text=/sign in|log in|login required/i');
-                
-                if (await loginPrompt.count() > 0) {
-                    await expect(loginPrompt).toBeVisible();
-                }
-            }
-        }
-    });
-
-    test('should show confirmation after RSVP', async ({ page, context }) => {
-        // Mock logged in state
-        await context.addCookies([{
-            name: 'token',
-            value: 'fake-token-for-testing',
-            domain: 'localhost',
-            path: '/',
-        }]);
-        
-        await page.goto(`${BASE_URL}/events`);
-        
-        const firstEvent = page.locator('[data-testid="event-card"], article').first();
-        
-        if (await firstEvent.count() > 0) {
-            await firstEvent.click();
-            
-            const rsvpButton = page.locator('button').filter({ hasText: /rsvp|register|join/i }).first();
-            
-            if (await rsvpButton.count() > 0) {
-                await rsvpButton.click();
-                
-                // Should show success message or button state change
-                await page.waitForTimeout(1000);
-            }
-        }
-    });
-
-    test('should show waitlist option when event is full', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events`);
-        
-        // Look for a full event
-        const waitlistButton = page.locator('button, text').filter({ hasText: /waitlist|full/i });
-        
-        if (await waitlistButton.count() > 0) {
-            await expect(waitlistButton.first()).toBeVisible();
-        }
-    });
-});
-
-test.describe('Event Calendar', () => {
-    test('should display calendar view', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events/calendar`);
-        
-        // Should show calendar grid or month view
-        const calendar = page.locator('[data-testid="calendar"], .calendar, table');
-        
-        if (await calendar.count() > 0) {
-            await expect(calendar).toBeVisible();
-        }
-    });
-
-    test('should navigate between months', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events/calendar`);
-        
-        // Look for navigation arrows
-        const nextButton = page.locator('button[aria-label*="next"], button').filter({ hasText: /next|→|›/i }).first();
-        const prevButton = page.locator('button[aria-label*="prev"], button').filter({ hasText: /prev|←|‹/i }).first();
-        
-        if (await nextButton.count() > 0) {
-            await nextButton.click();
-            await page.waitForTimeout(500);
-        }
-        
-        if (await prevButton.count() > 0) {
-            await prevButton.click();
-            await page.waitForTimeout(500);
-        }
-    });
-
-    test('should export ICS calendar file', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events/calendar`);
-        
-        // Look for download/export button
-        const exportButton = page.locator('button, a').filter({ hasText: /download|export|\.ics/i }).first();
-        
-        if (await exportButton.count() > 0) {
-            await expect(exportButton).toBeVisible();
-        }
-    });
-
-    test('should show events on calendar days', async ({ page }) => {
-        await page.goto(`${BASE_URL}/events/calendar`);
-        
-        await page.waitForTimeout(1000);
-        
-        // Look for event markers or highlighted days
-        const eventMarkers = page.locator('[data-has-event="true"], .has-event, .event-day');
-        
-        // Should have 0 or more event days
-        const count = await eventMarkers.count();
-        expect(count).toBeGreaterThanOrEqual(0);
-    });
-});
-
-test.describe('My Events', () => {
-    test('should display user registered events', async ({ page }) => {
+test.describe('Events list', () => {
+    test('shows real events from the API with availability badges', async ({ page }) => {
         await signInAs(page);
+        await mockEventsApi(page, {
+            list: [
+                makeEvent(),
+                makeEvent({ _id: 'b'.repeat(24), slug: 'full-night', title: 'Reverse Engineering Workshop', isFull: true, spotsLeft: 0, registeredCount: 30, maxParticipants: 30 }),
+            ],
+        });
+        await page.goto('/events');
 
-        await page.goto(`${BASE_URL}/my-events`);
-
-        await expect(page.getByRole('heading', { name: 'No registered events' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+        await expect(page.getByRole('link', { name: /Winter CTF Night/ }).first()).toBeVisible();
+        await expect(page.getByText('18 spots left')).toBeVisible();
+        await expect(page.getByText(/Full · waitlist open/).first()).toBeVisible();
     });
 
-    test('should require authentication', async ({ page }) => {
-        await page.goto(`${BASE_URL}/my-events`);
-        
-        // Should redirect to auth or show login prompt
-        await page.waitForTimeout(1000);
-        
-        const url = page.url();
-        const authRequired = page.locator('text=/sign in|log in required/i');
-        
-        const isAuthPage = url.includes('auth') || url.includes('login');
-        const hasAuthPrompt = await authRequired.count() > 0;
-        
-        expect(isAuthPage || hasAuthPrompt).toBeTruthy();
+    test('shows an empty state and no sample events when the API has none', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, { list: [] });
+        await page.goto('/events');
+
+        await expect(page.getByText(/no (upcoming )?events/i).first()).toBeVisible();
+        await expect(page.locator('[data-testid="event-card"]')).toHaveCount(0);
+    });
+
+    test('shows the API error instead of sample data when the list fails', async ({ page }) => {
+        await signInAs(page);
+        await page.route('**/api/events**', (route) => reply(route, { success: false, error: { code: 'SERVER', message: 'Boom' } }, 500));
+        await page.goto('/events');
+
+        await expect(page.getByRole('alert').first()).toBeVisible();
+        await expect(page.locator('[data-testid="event-card"]')).toHaveCount(0);
+    });
+
+    test('keeps the search term in the URL', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, { list: [makeEvent()] });
+        await page.goto('/events');
+
+        await page.getByPlaceholder('Search events').fill('crypto');
+        await expect(page).toHaveURL(/q=crypto/);
+    });
+
+    test('links to the month agenda', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, { list: [makeEvent()] });
+        await page.goto('/events');
+
+        await page.getByRole('link', { name: /calendar/i }).first().click();
+        await expect(page).toHaveURL(/\/events\/calendar/);
+        await expect(page.getByRole('heading', { name: /event calendar/i })).toBeVisible();
+    });
+});
+
+test.describe('Event detail', () => {
+    test('lets a member register when the viewer block allows it', async ({ page }) => {
+        let registered = 0;
+        await signInAs(page, { ...testUser });
+        await mockEventsApi(page, {
+            detail: makeEvent({ viewer: { ...viewerBase, canRegister: true } }),
+            onRegister: () => { registered += 1; },
+        });
+        await page.goto('/events/winter-ctf-night');
+
+        await expect(page.getByRole('heading', { name: 'Winter CTF Night', level: 1 })).toBeVisible();
+        await expect(page.getByText(/Event time zone: Europe\/Berlin/)).toBeVisible();
+        await page.getByRole('button', { name: 'Register', exact: true }).click();
+        await expect.poll(() => registered).toBe(1);
+    });
+
+    test('offers the waiting list on a full event', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, {
+            detail: makeEvent({ isFull: true, spotsLeft: 0, waitlistCount: 3, viewer: { ...viewerBase, canJoinWaitlist: true } }),
+        });
+        await page.goto('/events/winter-ctf-night');
+
+        await expect(page.getByRole('button', { name: /join the waiting list/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Register', exact: true })).toHaveCount(0);
+    });
+
+    test('shows the recording after the event has ended', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, {
+            detail: makeEvent({
+                status: 'ended',
+                startDate: iso(-5),
+                endDate: iso(-5, 2),
+                hasRecording: true,
+                recordingLink: 'https://video.example.org/r',
+                viewer: { ...viewerBase },
+            }),
+        });
+        await page.goto('/events/winter-ctf-night');
+
+        const recording = page.getByRole('link', { name: /watch the recording/i });
+        await expect(recording).toHaveAttribute('href', 'https://video.example.org/r');
+        await expect(page.getByRole('button', { name: 'Register', exact: true })).toHaveCount(0);
+    });
+
+    test('explains a cancelled event with the reason', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, {
+            detail: makeEvent({ status: 'cancelled', cancelReason: 'The venue closed.', viewer: { ...viewerBase } }),
+        });
+        await page.goto('/events/winter-ctf-night');
+
+        await expect(page.getByText('This event was cancelled.').first()).toBeVisible();
+        await expect(page.getByText('The venue closed.')).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Register', exact: true })).toHaveCount(0);
+    });
+});
+
+test.describe('Access control', () => {
+    test('sends guests who open the submit form to sign in', async ({ page }) => {
+        await page.route('**/api/**', (route) => reply(route, { success: false, error: { code: 'UNAUTHORIZED', message: 'Sign in' } }, 401));
+        await page.goto('/events/submit');
+        await expect(page).toHaveURL(/\/auth\?redirect=%2Fevents%2Fsubmit/);
+    });
+
+    test('keeps regular members out of the review queue', async ({ page }) => {
+        await signInAs(page);
+        await mockEventsApi(page, {});
+        await page.goto('/admin/events');
+        await expect(page.getByRole('heading', { name: 'You cannot open this page' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
     });
 });
