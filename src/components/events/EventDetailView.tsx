@@ -158,7 +158,8 @@ export function EventDetailView({ slug, initialEvent }: EventDetailViewProps) {
     const clock = now ?? serverClock(event);
     const status = effectiveStatus(event, clock);
     const viewer = event.viewer;
-    const image = event.bannerImage || event.image;
+    const image = safeHref(event.bannerImage || event.image);
+    const hasRegistration = event.status !== 'pending' && event.status !== 'rejected';
     const ended = status === 'ended';
     const recording = safeHref(event.recordingLink);
     const slides = safeHref(event.slidesLink);
@@ -203,8 +204,14 @@ export function EventDetailView({ slug, initialEvent }: EventDetailViewProps) {
                     <div className="mt-3"><Countdown event={event} now={now} /></div>
                 </header>
 
-                <div className="grid gap-6 lg:grid-cols-3">
-                    <div className="order-2 space-y-6 lg:order-none lg:col-span-2">
+                <div className="grid gap-6 lg:grid-cols-3 lg:grid-rows-[auto_1fr]">
+                    {hasRegistration && (
+                        <div className="lg:col-start-3 lg:row-start-1">
+                            <RegistrationPanel event={event} now={now} />
+                        </div>
+                    )}
+
+                    <div className="space-y-6 lg:col-span-2 lg:col-start-1 lg:row-span-2 lg:row-start-1">
                         {image && (
                             <div className={`${card} relative aspect-[16/9] overflow-hidden`}>
                                 <Image src={image} alt="" fill sizes="(min-width: 1024px) 66vw, 100vw" className="object-cover" priority unoptimized />
@@ -242,41 +249,37 @@ export function EventDetailView({ slug, initialEvent }: EventDetailViewProps) {
                         {ended && <EventFeedbackSection event={event} />}
                     </div>
 
-                    <aside className="contents lg:block lg:space-y-6" aria-label="Event details">
-                        {event.status !== 'pending' && event.status !== 'rejected' && <div className="order-1 lg:order-none"><RegistrationPanel event={event} now={now} /></div>}
-
-                        <section aria-labelledby="details-heading" className={`${cardPad} order-3 lg:order-none`}>
-                            <h2 id="details-heading" className="mb-4 text-base font-semibold text-gray-900 dark:text-white">Details</h2>
-                            <div className="space-y-4">
-                                <EventTimes event={event} />
-                                <div className="flex items-start gap-2.5">
-                                    {event.locationType === 'online' ? <Globe className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" /> : <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />}
-                                    <div className="min-w-0 text-sm">
-                                        <p className="font-medium text-gray-900 dark:text-white">{event.location || FORMAT_LABELS[event.locationType]}</p>
-                                        {event.venue && <p className={muted}>{event.venue}</p>}
-                                    </div>
+                    <section aria-labelledby="details-heading" className={`${cardPad} lg:col-start-3 ${hasRegistration ? 'lg:row-start-2' : 'lg:row-start-1'} lg:self-start`}>
+                        <h2 id="details-heading" className="mb-4 text-base font-semibold text-gray-900 dark:text-white">Details</h2>
+                        <div className="space-y-4">
+                            <EventTimes event={event} />
+                            <div className="flex items-start gap-2.5">
+                                {event.locationType === 'online' ? <Globe className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" /> : <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />}
+                                <div className="min-w-0 text-sm">
+                                    <p className="font-medium text-gray-900 dark:text-white">{event.location || FORMAT_LABELS[event.locationType]}</p>
+                                    {event.venue && <p className={muted}>{event.venue}</p>}
                                 </div>
-                                {!ended && status !== 'cancelled' && (
-                                    <div className="flex items-start gap-2.5">
-                                        <Users className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
-                                        <p className="text-sm text-gray-900 dark:text-white">
-                                            {event.maxParticipants ? `${event.registeredCount} of ${event.maxParticipants} seats taken` : `${event.registeredCount} going`}
-                                            {event.waitlistCount > 0 && <span className={`block ${muted}`}>{event.waitlistCount} on the waiting list</span>}
-                                            {event.isFull && <span className="block font-medium text-red-800 dark:text-red-300">Full</span>}
-                                        </p>
-                                    </div>
-                                )}
-                                {event.tags.length > 0 && (
-                                    <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
-                                        {event.tags.map((t) => <li key={t} className={`${chip} bg-gray-200 text-gray-800 dark:bg-neutral-700/60 dark:text-gray-300`}>#{t}</li>)}
-                                    </ul>
-                                )}
                             </div>
-                            <div className="mt-5 border-t border-gray-200 pt-3 dark:border-neutral-800">
-                                <ReportContentButton contentType="event" contentId={event._id} />
-                            </div>
-                        </section>
-                    </aside>
+                            {!ended && status !== 'cancelled' && (
+                                <div className="flex items-start gap-2.5">
+                                    <Users className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
+                                    <p className="text-sm text-gray-900 dark:text-white">
+                                        {event.maxParticipants ? `${event.registeredCount} of ${event.maxParticipants} seats taken` : `${event.registeredCount} going`}
+                                        {event.waitlistCount > 0 && <span className={`block ${muted}`}>{event.waitlistCount} on the waiting list</span>}
+                                        {event.isFull && <span className="block font-medium text-red-800 dark:text-red-300">Full</span>}
+                                    </p>
+                                </div>
+                            )}
+                            {event.tags.length > 0 && (
+                                <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
+                                    {event.tags.map((t) => <li key={t} className={`${chip} bg-gray-200 text-gray-800 dark:bg-neutral-700/60 dark:text-gray-300`}>#{t}</li>)}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="mt-5 border-t border-gray-200 pt-3 dark:border-neutral-800">
+                            <ReportContentButton contentType="event" contentId={event._id} />
+                        </div>
+                    </section>
                 </div>
 
                 {viewer?.canManage && <div className="mt-6"><OrganizerPanel event={event} now={now} /></div>}

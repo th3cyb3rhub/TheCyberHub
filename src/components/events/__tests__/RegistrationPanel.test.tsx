@@ -80,6 +80,33 @@ describe('RegistrationPanel', () => {
         expect(mut.remind.mutate).toHaveBeenCalledWith({ ...target, offsetMinutes: null })
     })
 
+    it('moves through the reminder choices with the arrow keys', () => {
+        panel(makeEvent({ viewer: viewer({ canRegister: false, registered: true }) }))
+        const group = screen.getByRole('radiogroup', { name: 'Reminder' })
+        const off = screen.getByRole('radio', { name: 'Off' })
+        expect(off).toHaveAttribute('tabindex', '0')
+        expect(screen.getByRole('radio', { name: '1 hour before' })).toHaveAttribute('tabindex', '-1')
+        fireEvent.keyDown(group, { key: 'ArrowRight' })
+        expect(mut.remind.mutate).toHaveBeenLastCalledWith({ ...target, offsetMinutes: 60 })
+        fireEvent.keyDown(group, { key: 'ArrowLeft' })
+        expect(mut.remind.mutate).toHaveBeenLastCalledWith({ ...target, offsetMinutes: 1440 })
+    })
+
+    it('does not offer a reminder that would already be past', () => {
+        const registered = viewer({ canRegister: false, registered: true })
+        const { unmount } = panel(makeEvent({ viewer: registered }), new Date('2026-12-05T10:00:00Z'))
+        expect(screen.queryByRole('radio', { name: '1 day before' })).toBeNull()
+        expect(screen.getByRole('radio', { name: '1 hour before' })).toBeInTheDocument()
+        unmount()
+        panel(makeEvent({ viewer: registered }), new Date('2026-12-05T16:30:00Z'))
+        expect(screen.queryByRole('radio', { name: '1 hour before' })).toBeNull()
+    })
+
+    it('never renders a join link that is not http or https', () => {
+        panel(makeEvent({ viewer: viewer({ canRegister: false, registered: true }), joinLink: 'javascript:alert(1)' }), new Date('2026-12-05T16:45:00Z'))
+        expect(screen.queryByRole('link', { name: /Join the event/ })).toBeNull()
+    })
+
     it('shows the join link once the API sends it, and says when it will open before that', () => {
         const registered = viewer({ canRegister: false, registered: true, joinOpensAt: '2026-12-05T16:30:00.000Z' })
         const { unmount } = panel(makeEvent({ viewer: registered }))

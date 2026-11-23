@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { BadgeCheck, CalendarDays, CheckCircle2, MapPin, Presentation, Star, Users, Video, Hourglass } from 'lucide-react';
-import { availability } from '@/lib/events/display';
+import { availability, safeHref } from '@/lib/events/display';
 import { CATEGORY_LABELS, FORMAT_LABELS } from '@/lib/events/form';
 import { effectiveStatus, toLocalParts } from '@/lib/events/time';
 import type { EventSummary } from '@/types/event';
@@ -48,7 +48,7 @@ export function EventCard({ event, now = null, footer, featured = false, href }:
     const status = now ? effectiveStatus(event, now) : event.status;
     const open = status === 'upcoming' || status === 'live';
     const avail = availability(event);
-    const image = event.image || event.bannerImage;
+    const image = safeHref(event.image || event.bannerImage);
     const viewer = event.viewer;
     const link = href ?? `/events/${event.slug}`;
 

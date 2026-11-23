@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { Bell, BellOff, CalendarCheck, CheckCircle2, ExternalLink, Hourglass, Loader2, LogIn, Lock, Ticket, Video } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
     useJoinWaitlist, useLeaveWaitlist, useRegisterForEvent, useSetReminder, useUnregisterFromEvent,
 } from '@/hooks/queries/useEvents';
-import { availability } from '@/lib/events/display';
+import { availability, safeHref } from '@/lib/events/display';
 import { registrationView } from '@/lib/events/registration';
 import { effectiveStatus, formatStart, serverClock } from '@/lib/events/time';
 import { REMINDER_OFFSETS, type EventDetail, type ReminderOffset } from '@/types/event';
@@ -36,6 +36,27 @@ export function RegistrationPanel({ event, now }: { event: EventDetail; now: Dat
     const busy = register.isPending || unregister.isPending || join.isPending || leave.isPending;
     const viewer = event.viewer;
     const online = event.locationType !== 'in-person';
+    const reminderGroup = useRef<HTMLDivElement>(null);
+    // A reminder has to fall before the start, so offers that are already past are left out
+    const untilStart = new Date(event.startDate).getTime() - clock.getTime();
+    const currentReminder = (viewer?.reminder?.offsetMinutes ?? null) as ReminderOffset | null;
+    const reminderChoices = ([null, ...REMINDER_OFFSETS] as (ReminderOffset | null)[])
+        .filter((offset) => offset === null || offset === currentReminder || untilStart > offset * 60_000);
+
+    // Arrow keys move through the choices and select, as a radio group does
+    const onReminderKey = (e: KeyboardEvent<HTMLDivElement>, choices: (ReminderOffset | null)[]) => {
+        const forward = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+        const back = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+        if (!forward && !back) return;
+        e.preventDefault();
+        const index = Math.max(0, choices.indexOf(currentReminder));
+        const next = (index + (forward ? 1 : choices.length - 1)) % choices.length;
+        remind.mutate({ ...target, offsetMinutes: choices[next] });
+        const buttons = reminderGroup.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+        buttons?.[next]?.focus();
+    };
+    const joinHref = safeHref(event.joinLink);
+    const registrationHref = safeHref(event.registrationLink);
 
     return (
         <section aria-labelledby="registration-heading" className={cardPad} data-testid="registration-panel" data-view={view.kind}>
@@ -122,8 +143,8 @@ export function RegistrationPanel({ event, now }: { event: EventDetail; now: Dat
                         {view.attended ? 'You attended' : 'You are registered'}
                     </p>
 
-                    {event.joinLink ? (
-                        <a href={event.joinLink} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} w-full`}>
+                    {joinHref ? (
+                        <a href={joinHref} target="_blank" rel="noopener noreferrer" className={`${btnPrimary} w-full`}>
                             <Video className="h-4 w-4" aria-hidden="true" /> Join the event <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                             <span className="sr-only">(opens in a new tab)</span>
                         </a>
@@ -138,16 +159,16 @@ export function RegistrationPanel({ event, now }: { event: EventDetail; now: Dat
                             <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white">
                                 {viewer?.reminder ? <Bell className="h-4 w-4" aria-hidden="true" /> : <BellOff className="h-4 w-4" aria-hidden="true" />} Remind me
                             </legend>
-                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Reminder">
-                                {([null, ...REMINDER_OFFSETS] as (ReminderOffset | null)[]).map((offset) => {
-                                    const active = (viewer?.reminder?.offsetMinutes ?? null) === offset;
+                            <div ref={reminderGroup} className="flex flex-wrap gap-2" role="radiogroup" aria-label="Reminder" onKeyDown={(e) => onReminderKey(e, reminderChoices)}>
+                                {reminderChoices.map((offset) => {
+                                    const active = currentReminder === offset;
                                     return (
                                         <button
                                             key={offset ?? 'off'}
                                             type="button"
                                             role="radio"
                                             aria-checked={active}
-                                            disabled={remind.isPending}
+                                            tabIndex={active ? 0 : -1}
                                             onClick={() => !active && remind.mutate({ ...target, offsetMinutes: offset })}
                                             className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${focusRing} ${active
                                                 ? 'border-orange-700 bg-orange-700 text-white'
@@ -186,8 +207,8 @@ export function RegistrationPanel({ event, now }: { event: EventDetail; now: Dat
                 </p>
             )}
 
-            {event.registrationLink && status !== 'ended' && status !== 'cancelled' && (
-                <a href={event.registrationLink} target="_blank" rel="noopener noreferrer nofollow" className={`${btnSecondary} mt-3 w-full`}>
+            {registrationHref && status !== 'ended' && status !== 'cancelled' && (
+                <a href={registrationHref} target="_blank" rel="noopener noreferrer nofollow" className={`${btnSecondary} mt-3 w-full`}>
                     <CalendarCheck className="h-4 w-4" aria-hidden="true" /> Organizer&apos;s registration page
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                     <span className="sr-only">(opens in a new tab)</span>
