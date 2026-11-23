@@ -23,14 +23,22 @@ describe('needsWelcome', () => {
 
 describe('landingPath', () => {
     it('lets a valid ?redirect= win over the welcome flow', () => {
-        expect(landingPath(fresh, '/challenges/xss')).toBe('/challenges/xss')
+        expect(landingPath(fresh, '/challenges/xss', undefined, NOW)).toBe('/challenges/xss')
     })
     it('ignores an unsafe redirect and carries on', () => {
-        expect(landingPath(fresh, 'https://evil.example')).toBe('/welcome')
-        expect(landingPath(fresh, '//evil.example', '/profile')).toBe('/welcome')
+        expect(landingPath(fresh, 'https://evil.example', undefined, NOW)).toBe('/welcome')
+        expect(landingPath(fresh, '//evil.example', '/profile', NOW)).toBe('/welcome')
     })
     it('sends a finished member to the fallback', () => {
         expect(landingPath({ ...fresh, onboarding: { completedAt: 'x', skippedAt: null } }, null)).toBe('/profile')
         expect(landingPath(null, null, '/dashboard')).toBe('/dashboard')
+    })
+    it('never forces an older member to /welcome, even if they never finished it', () => {
+        const old = { ...fresh, createdAt: '2026-09-01T00:00:00Z' }
+        expect(landingPath(old, null, '/profile', NOW)).toBe('/profile')
+    })
+    it('sends a new member to /welcome without a clock being passed', () => {
+        const justNow = { createdAt: new Date().toISOString(), onboarding: { completedAt: null, skippedAt: null } }
+        expect(landingPath(justNow, null)).toBe('/welcome')
     })
 })

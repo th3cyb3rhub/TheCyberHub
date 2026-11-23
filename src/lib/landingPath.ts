@@ -18,10 +18,10 @@ export function needsWelcome(user: OnboardingUser | null | undefined, now = Date
  * Where to go once signed in. A valid `?redirect=` always wins; otherwise a brand new member who
  * has not done the welcome flow goes there, and everyone else to `fallback`.
  */
-export function landingPath(user: OnboardingUser | null | undefined, explicitRedirect: string | null | undefined, fallback = '/profile'): string {
+export function landingPath(user: OnboardingUser | null | undefined, explicitRedirect: string | null | undefined, fallback = '/profile', now = Date.now()): string {
     if (explicitRedirect) {
         const safe = safeRedirectPath(explicitRedirect, '');
         if (safe) return safe;
     }
-    return needsWelcome(user) ? '/welcome' : fallback;
+    return needsWelcome(user, now) ? '/welcome' : fallback;
 }
