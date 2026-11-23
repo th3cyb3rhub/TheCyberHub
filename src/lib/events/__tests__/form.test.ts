@@ -172,10 +172,40 @@ describe('editing', () => {
         expect(toUpdatePayload({ ...v, endTime: '' }, v)).toMatchObject({ endDate: null })
     })
 
-    it('keeps date, time and zone together when one changes', () => {
+    it('sends the start when its instant moves, with the end and deadline checked against it', () => {
         const v = eventToFormValues(event)
         const p = toUpdatePayload({ ...v, timezone: 'UTC' }, v)
-        expect(p).toMatchObject({ timezone: 'UTC', startDate: '2026-12-05T18:00:00.000Z' })
+        expect(p).toMatchObject({ timezone: 'UTC', startDate: '2026-12-05T18:00:00.000Z', endDate: '2026-12-05T20:00:00.000Z' })
+    })
+
+    it('leaves an unchanged start out when only the end, the zone or the deadline changes', () => {
+        const v = eventToFormValues(event)
+        const endOnly = toUpdatePayload({ ...v, endTime: '21:00' }, v)
+        expect(endOnly).toEqual({ endDate: '2026-12-05T20:00:00.000Z' })
+        expect(endOnly).not.toHaveProperty('startDate')
+
+        // Same instant written in another zone: 18:00 Berlin is 17:00 UTC
+        const zoneOnly = toUpdatePayload({ ...v, timezone: 'UTC', startTime: '17:00', endTime: '19:00' }, v)
+        expect(zoneOnly).toEqual({ timezone: 'UTC' })
+
+        const deadline = toUpdatePayload({ ...v, rsvpDeadlineDate: '2026-12-04', rsvpDeadlineTime: '12:00' }, v)
+        expect(deadline).toEqual({ rsvpDeadline: '2026-12-04T11:00:00.000Z' })
+    })
+
+    it('does not fall back from the join link to the event link', () => {
+        const v = eventToFormValues(makeEvent({ joinLink: 'https://meet.example.org/private', eventLink: null }))
+        expect(v.eventLink).toBe('')
+    })
+
+    it('lets an older http link stay, but not a new one', () => {
+        const legacy = makeEvent({ eventLink: 'http://old.example.org/join' })
+        const initial = eventToFormValues(legacy)
+        expect(validateEventForm(initial, { initial }).ok).toBe(true)
+        const changed = { ...initial, eventLink: 'http://other.example.org/join' }
+        expect(validateEventForm(changed, { initial })).toMatchObject({ ok: false, errors: { eventLink: expect.stringContaining('https') } })
+        expect(validateEventForm({ ...initial, eventLink: 'https://new.example.org/join' }, { initial }).ok).toBe(true)
+        // Without the loaded values (a new event) http is never accepted
+        expect(validateEventForm(initial).ok).toBe(false)
     })
 
     it('never sends locked fields', () => {

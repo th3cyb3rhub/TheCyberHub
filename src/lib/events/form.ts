@@ -130,10 +130,23 @@ export function parseTags(value: string): string[] {
     return out;
 }
 
-const httpsLink = (label: string) =>
+function isHttpUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' && !url.username && !url.password;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * New values must be https. A link an older event already has (and the organizer leaves alone) may
+ * stay as it is, so the rest of that event can still be edited.
+ */
+const httpsLink = (label: string, unchanged?: string) =>
     z.string().trim()
         .max(EVENT_LIMITS.url, `${label} is too long`)
-        .refine((v) => v === '' || isHttpsUrl(v), `${label} must be a valid https link`);
+        .refine((v) => v === '' || isHttpsUrl(v) || (!!unchanged && v === unchanged.trim() && isHttpUrl(v)), `${label} must be a valid https link`);
 
 const optionalText = (max: number, label: string) => z.string().trim().max(max, `${label} cannot exceed ${max} characters`);
 
@@ -143,9 +156,11 @@ export interface SchemaOptions {
     /** Creating a new event: it has to start in the future for members */
     creating?: boolean;
     now?: Date;
+    /** The values the form was loaded with: an unchanged older http link is not an error */
+    initial?: EventFormValues;
 }
 
-export function createEventFormSchema({ admin = false, creating = false, now = new Date() }: SchemaOptions = {}) {
+export function createEventFormSchema({ admin = false, creating = false, now = new Date(), initial }: SchemaOptions = {}) {
     const capacityMax = admin ? EVENT_LIMITS.capacity : EVENT_LIMITS.memberCapacity;
 
     return z.object({
@@ -164,9 +179,9 @@ export function createEventFormSchema({ admin = false, creating = false, now = n
         timezone: z.string().refine(isValidTimeZone, 'Pick a valid time zone'),
         rsvpDeadlineDate: z.string(),
         rsvpDeadlineTime: z.string(),
-        eventLink: httpsLink('The join link'),
-        registrationLink: httpsLink('The registration link'),
-        image: httpsLink('The image link'),
+        eventLink: httpsLink('The join link', initial?.eventLink),
+        registrationLink: httpsLink('The registration link', initial?.registrationLink),
+        image: httpsLink('The image link', initial?.image),
         description: z.string().trim()
             .min(1, 'Describe the event')
             .max(EVENT_LIMITS.description, `The description cannot exceed ${EVENT_LIMITS.description} characters`),
@@ -192,8 +207,8 @@ export function createEventFormSchema({ admin = false, creating = false, now = n
             title: z.string().trim().max(EVENT_LIMITS.speakerTitle, 'Speaker title is too long').optional(),
             bio: z.string().trim().max(EVENT_LIMITS.speakerBio, `A speaker bio cannot exceed ${EVENT_LIMITS.speakerBio} characters`).optional(),
         })).max(EVENT_LIMITS.speakers, `At most ${EVENT_LIMITS.speakers} speakers`),
-        recordingLink: httpsLink('The recording link'),
-        slidesLink: httpsLink('The slides link'),
+        recordingLink: httpsLink('The recording link', initial?.recordingLink),
+        slidesLink: httpsLink('The slides link', initial?.slidesLink),
         summaryNotes: optionalText(EVENT_LIMITS.summaryNotes, 'The summary notes'),
         eventType: z.enum(['official', 'community']),
         isFeatured: z.boolean(),
@@ -355,11 +370,12 @@ export function toUpdatePayload(
         if (locked.includes(key)) continue;
         if (JSON.stringify(next[key]) !== JSON.stringify(prev[key])) out[key] = next[key];
     }
-    // A date and its zone only make sense together
-    if ('timezone' in out || 'startDate' in out || 'endDate' in out) {
-        out.timezone = next.timezone;
-        out.startDate = next.startDate;
-        if (prev.endDate !== null || next.endDate !== null) out.endDate = next.endDate;
+    // Dates travel as UTC instants, so the zone is only a label and can change alone. The start is sent
+    // only when its instant moved (a live event cannot take a start in the past, and the API ignores
+    // an unchanged one anyway). When it moved, the end and the deadline go with it so they are
+    // checked against the new start.
+    if ('startDate' in out) {
+        if (next.endDate !== null || prev.endDate !== null) out.endDate = next.endDate;
         if (next.rsvpDeadline !== null || prev.rsvpDeadline !== null) out.rsvpDeadline = next.rsvpDeadline;
     }
     return out;
@@ -386,7 +402,7 @@ export function eventToFormValues(event: EventDetail): EventFormValues {
         timezone: zone,
         rsvpDeadlineDate: deadline.date,
         rsvpDeadlineTime: deadline.time,
-        eventLink: event.eventLink ?? event.joinLink ?? '',
+        eventLink: event.eventLink ?? '',
         registrationLink: event.registrationLink ?? '',
         image: event.image ?? '',
         description: event.description ?? '',

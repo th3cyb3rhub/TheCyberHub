@@ -107,7 +107,7 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
-        const checked = validateEventForm(values, { admin, creating: mode === 'create' });
+        const checked = validateEventForm(values, { admin, creating: mode === 'create', initial: event ? initial : undefined });
         if (!checked.ok) {
             setErrors(checked.errors);
             setFormError('Some fields need your attention. Fix the marked fields and try again.');
@@ -156,7 +156,9 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
             )}
             {mode === 'edit' && lockedApi.length > 0 && (
                 <p className={`rounded-xl border border-gray-200 p-3 text-sm dark:border-neutral-800 ${muted}`}>
-                    This event is public, so a few fields (such as the title and category) can only be changed by an administrator.
+                    {status === 'ended'
+                        ? 'This event is over, so only the recording, slides and notes can be changed.'
+                        : 'This event is public, so a few fields (such as the title and category) can only be changed by an administrator.'}
                 </p>
             )}
 
@@ -166,7 +168,7 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
                     {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.title} onChange={(e) => set('title', e.target.value)} maxLength={EVENT_LIMITS.title.max + 20} disabled={locked('title')} className={`${input} ${p.invalid ? inputError : ''}`} />}
                 </Field>
                 <Field name="shortDescription" label="One-line summary" error={errors.shortDescription} hint={`Shown on cards. ${values.shortDescription.length}/${EVENT_LIMITS.shortDescription}`}>
-                    {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} className={`${input} ${p.invalid ? inputError : ''}`} />}
+                    {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} disabled={locked('shortDescription')} className={`${input} ${p.invalid ? inputError : ''}`} />}
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <Field name="category" label="Category" required error={errors.category}>
@@ -260,16 +262,16 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
                             {values.description.trim() ? <EventDescription content={values.description} /> : <p className={`text-sm ${muted}`}>Nothing to preview yet.</p>}
                         </div>
                     ) : (
-                        <textarea id="ef-description" value={values.description} onChange={(e) => set('description', e.target.value)} rows={9} aria-invalid={!!errors.description} aria-describedby="ef-description-hint" className={`${input} font-mono ${errors.description ? inputError : ''}`} />
+                        <textarea id="ef-description" value={values.description} onChange={(e) => set('description', e.target.value)} disabled={locked('description')} rows={9} aria-invalid={!!errors.description} aria-describedby="ef-description-hint" className={`${input} font-mono ${errors.description ? inputError : ''}`} />
                     )}
                     <p id="ef-description-hint" className={`mt-1 text-xs ${muted}`}>Markdown works: **bold**, lists, links, `code`. {values.description.length}/{EVENT_LIMITS.description}</p>
                     {errors.description && <p className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">{errors.description}</p>}
                 </div>
                 <Field name="tags" label="Tags" error={errors.tags} hint="Comma separated, up to 10.">
-                    {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.tags} onChange={(e) => set('tags', e.target.value)} placeholder="beginner, web, forensics" className={`${input} ${p.invalid ? inputError : ''}`} />}
+                    {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.tags} onChange={(e) => set('tags', e.target.value)} disabled={locked('tags')} placeholder="beginner, web, forensics" className={`${input} ${p.invalid ? inputError : ''}`} />}
                 </Field>
                 <Field name="image" label="Cover image link" error={errors.image} hint="Optional. https only.">
-                    {(p) => <input id={p.id} type="url" inputMode="url" aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.image} onChange={(e) => set('image', e.target.value)} placeholder="https://" className={`${input} ${p.invalid ? inputError : ''}`} />}
+                    {(p) => <input id={p.id} type="url" inputMode="url" aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.image} onChange={(e) => set('image', e.target.value)} disabled={locked('image')} placeholder="https://" className={`${input} ${p.invalid ? inputError : ''}`} />}
                 </Field>
             </fieldset>
 
@@ -280,11 +282,11 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
                         {(p) => <input id={p.id} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.organizer} onChange={(e) => set('organizer', e.target.value)} disabled={locked('organizer')} className={`${input} ${p.invalid ? inputError : ''}`} />}
                     </Field>
                     <Field name="maxParticipants" label="Capacity" required={!admin} error={errors.maxParticipants} hint={admin ? 'Empty means no limit.' : `Required, up to ${EVENT_LIMITS.memberCapacity}.`}>
-                        {(p) => <input id={p.id} type="number" inputMode="numeric" min={1} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.maxParticipants} onChange={(e) => set('maxParticipants', e.target.value)} className={`${input} ${p.invalid ? inputError : ''}`} />}
+                        {(p) => <input id={p.id} type="number" inputMode="numeric" min={1} aria-describedby={p.describedBy} aria-invalid={p.invalid} value={values.maxParticipants} onChange={(e) => set('maxParticipants', e.target.value)} disabled={locked('maxParticipants')} className={`${input} ${p.invalid ? inputError : ''}`} />}
                     </Field>
                 </div>
                 <label className="flex items-center gap-2.5 text-sm text-gray-800 dark:text-gray-200">
-                    <input type="checkbox" checked={values.waitlistEnabled} onChange={(e) => set('waitlistEnabled', e.target.checked)} className="h-4 w-4 accent-orange-600" />
+                    <input type="checkbox" checked={values.waitlistEnabled} onChange={(e) => set('waitlistEnabled', e.target.checked)} disabled={locked('waitlistEnabled')} className="h-4 w-4 accent-orange-600" />
                     Open a waiting list when the event is full
                 </label>
                 {admin && (
@@ -312,20 +314,20 @@ export function EventForm({ mode, admin, verified = true, event, cancelHref, onD
                     <div key={i} className="grid gap-3 rounded-xl border border-gray-200 p-3 sm:grid-cols-[1fr_1fr_auto] dark:border-neutral-800">
                         <div>
                             <label htmlFor={`ef-speakers.${i}.name`} className={labelClass}>Name</label>
-                            <input id={`ef-speakers.${i}.name`} value={s.name} onChange={(e) => set('speakers', values.speakers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-invalid={!!speakerErrors(i)} className={`${input} ${speakerErrors(i) ? inputError : ''}`} />
+                            <input id={`ef-speakers.${i}.name`} value={s.name} onChange={(e) => set('speakers', values.speakers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-invalid={!!speakerErrors(i)} disabled={locked('speakers')} className={`${input} ${speakerErrors(i) ? inputError : ''}`} />
                             {speakerErrors(i) && <p className="mt-1 text-xs font-medium text-red-700 dark:text-red-400">{speakerErrors(i)}</p>}
                         </div>
                         <div>
                             <label htmlFor={`ef-speaker-title-${i}`} className={labelClass}>Role or company</label>
-                            <input id={`ef-speaker-title-${i}`} value={s.title ?? ''} onChange={(e) => set('speakers', values.speakers.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className={input} />
+                            <input id={`ef-speaker-title-${i}`} value={s.title ?? ''} onChange={(e) => set('speakers', values.speakers.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} disabled={locked('speakers')} className={input} />
                         </div>
-                        <button type="button" onClick={() => set('speakers', values.speakers.filter((_, j) => j !== i))} className="self-end rounded-lg p-2.5 text-gray-600 hover:bg-gray-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-gray-400 dark:hover:bg-neutral-800" aria-label={`Remove speaker ${i + 1}`}>
+                        <button type="button" disabled={locked('speakers')} onClick={() => set('speakers', values.speakers.filter((_, j) => j !== i))} className="self-end rounded-lg p-2.5 text-gray-600 hover:bg-gray-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-gray-400 dark:hover:bg-neutral-800" aria-label={`Remove speaker ${i + 1}`}>
                             <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                     </div>
                 ))}
                 {values.speakers.length < EVENT_LIMITS.speakers && (
-                    <button type="button" className={btnSecondary} onClick={() => set('speakers', [...values.speakers, { name: '' }])}>
+                    <button type="button" className={btnSecondary} disabled={locked('speakers')} onClick={() => set('speakers', [...values.speakers, { name: '' }])}>
                         <Plus className="h-4 w-4" aria-hidden="true" /> Add a speaker
                     </button>
                 )}

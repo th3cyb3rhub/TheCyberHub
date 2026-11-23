@@ -144,6 +144,19 @@ describe('EventForm (editing)', () => {
         expect(screen.getByLabelText(/^Description/)).toBeEnabled()
     })
 
+    it('locks everything but the recording, slides and notes once the event is over', () => {
+        const ended = makeEvent({ status: 'ended', startDate: '2020-01-01T10:00:00Z', endDate: '2020-01-01T12:00:00Z', endsAt: '2020-01-01T12:00:00Z', viewer: viewer({ canManage: true }) })
+        render(<EventForm mode="edit" admin={false} event={ended} cancelHref="/events/x" onDone={onDone} />)
+        for (const name of [/^Title/, /^Description/, /^One-line summary/, /^Tags/, /^Cover image link/, /^Capacity/, /^Start date/, /^Time zone/, /^Join link/]) {
+            expect(screen.getByLabelText(name)).toBeDisabled()
+        }
+        expect(screen.getByRole('checkbox', { name: /waiting list/ })).toBeDisabled()
+        expect(screen.getByLabelText(/^Recording link/)).toBeEnabled()
+        expect(screen.getByLabelText(/^Slides link/)).toBeEnabled()
+        expect(screen.getByLabelText(/^Summary notes/)).toBeEnabled()
+        expect(screen.getByText(/only the recording, slides and notes/)).toBeInTheDocument()
+    })
+
     it('leaves everything open for an administrator', () => {
         render(<EventForm mode="edit" admin event={event} cancelHref="/admin/events" onDone={onDone} />)
         expect(screen.getByLabelText(/^Title/)).toBeEnabled()
