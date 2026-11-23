@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Circle, Loader2, Rocket, X } from 'lucide-react';
 import { useOnboarding, useUpdateOnboarding } from '@/hooks/queries';
+import { trackEvent } from '@/lib/analytics';
 import type { ChecklistKey } from '@/types/onboarding';
 
 export const CHECKLIST_COPY: Record<ChecklistKey, { title: string; hint: string }> = {
@@ -62,6 +63,7 @@ export default function ChecklistCard() {
                         <li key={item.key}>
                             <Link
                                 href={item.href}
+                                onClick={() => trackEvent('checklist_item', { name: item.key })}
                                 className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${item.done ? 'border-green-500/20 bg-green-500/5' : 'border-white/10 bg-white/[0.02] hover:border-orange-500/40'}`}
                             >
                                 {item.done
