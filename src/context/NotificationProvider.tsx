@@ -24,6 +24,8 @@ interface NotificationContextValue {
     /** The most recent notifications, for the bell menu */
     notifications: NotificationData[];
     unreadCount: number;
+    /** How many notifications have arrived live in this visit; 0 until the first one */
+    liveArrivals: number;
     markAsRead: (id: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
     deleteNotification: (id: string) => Promise<void>;
@@ -35,6 +37,7 @@ const NotificationContext = createContext<NotificationContextValue>({
     connected: false,
     notifications: [],
     unreadCount: 0,
+    liveArrivals: 0,
     markAsRead: async () => { },
     markAllAsRead: async () => { },
     deleteNotification: async () => { },
@@ -50,6 +53,28 @@ function patchLists(qc: QueryClient, fn: (items: NotificationData[]) => Notifica
         old && { ...old, pages: old.pages.map((p) => ({ ...p, data: fn(p.data) })) });
 }
 
+/** Where an updated group lands: gone from wherever it was, then first in every list it belongs in */
+function moveToTop(qc: QueryClient, updated: NotificationData) {
+    for (const [key, old] of qc.getQueriesData<Lists>({ queryKey: NOTIFICATION_LISTS })) {
+        if (!old) continue;
+        const typeFilter = key[4] as string | null | undefined;
+        const pages = old.pages.map((p) => ({ ...p, data: p.data.filter((n) => n._id !== updated._id) }));
+        if (!typeFilter || typeFilter === updated.type) pages[0] = { ...pages[0], data: [updated, ...pages[0].data] };
+        qc.setQueryData<Lists>(key, { ...old, pages });
+    }
+}
+
+/** What the caches know about a notification, if anything */
+function knownRead(qc: QueryClient, known: NotificationData[], id: string): boolean | null {
+    const local = known.find((n) => n._id === id);
+    if (local) return local.read;
+    for (const [, old] of qc.getQueriesData<Lists>({ queryKey: NOTIFICATION_LISTS })) {
+        const hit = old?.pages.flatMap((p) => p.data).find((n) => n._id === id);
+        if (hit) return hit.read;
+    }
+    return null;
+}
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const { token, user } = useAuth();
     const { addToast } = useToast();
@@ -60,6 +85,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const [connected, setConnected] = useState(false);
     const [notifications, setNotifications] = useState<NotificationData[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [liveArrivals, setLiveArrivals] = useState(0);
     const notificationsRef = useRef<NotificationData[]>([]);
     const burst = useRef<{ shown: number; extra: number; timer: ReturnType<typeof setTimeout> | null }>({ shown: 0, extra: 0, timer: null });
 
@@ -146,6 +172,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         if (!token || !userId) {
             setNotifications([]);
             setUnreadCount(0);
+            setLiveArrivals(0);
             return;
         }
 
@@ -192,17 +219,37 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             }
         };
 
+        const commit = (next: NotificationData[]) => {
+            notificationsRef.current = next;
+            setNotifications(next);
+        };
+
         const onNewNotification = (data: NotificationData) => {
-            setNotifications((prev) => (prev.some((n) => n._id === data._id) ? prev : [data, ...prev].slice(0, 50)));
+            if (notificationsRef.current.some((n) => n._id === data._id)) return;
+            commit([data, ...notificationsRef.current].slice(0, 50));
             setUnreadCount((c) => c + 1);
+            setLiveArrivals((c) => c + 1);
             qc.invalidateQueries({ queryKey: NOTIFICATION_LISTS });
             announce(data);
+        };
+
+        // Someone joined a group: the same row, newer and unread again. A group is one unread, however many people are in it.
+        const onNotificationUpdated = (data: NotificationData) => {
+            const updated = { ...data, read: false };
+            const wasRead = knownRead(qc, notificationsRef.current, data._id);
+            commit([updated, ...notificationsRef.current.filter((n) => n._id !== data._id)].slice(0, 50));
+            moveToTop(qc, updated);
+            if (wasRead === null) refreshCount();
+            else if (wasRead) setUnreadCount((c) => c + 1);
+            setLiveArrivals((c) => c + 1);
+            announce(updated);
         };
 
         newSocket.on('connect', onConnect);
         newSocket.on('disconnect', onDisconnect);
         newSocket.on('connect_error', onDisconnect);
         newSocket.on('newNotification', onNewNotification);
+        newSocket.on('notificationUpdated', onNotificationUpdated);
         setSocket(newSocket);
 
         return () => {
@@ -210,6 +257,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             newSocket.off('disconnect', onDisconnect);
             newSocket.off('connect_error', onDisconnect);
             newSocket.off('newNotification', onNewNotification);
+            newSocket.off('notificationUpdated', onNotificationUpdated);
             newSocket.disconnect();
             if (state.timer) clearTimeout(state.timer);
             state.timer = null;
@@ -218,7 +266,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             setSocket(null);
             setConnected(false);
         };
-    }, [token, userId, qc, fetchNotifications]);
+    }, [token, userId, qc, fetchNotifications, refreshCount]);
 
     return (
         <NotificationContext.Provider value={{
@@ -226,6 +274,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             connected,
             notifications,
             unreadCount,
+            liveArrivals,
             markAsRead,
             markAllAsRead,
             deleteNotification,

@@ -37,13 +37,15 @@ export default function NotificationsPage() {
 
     if (authLoading || !user) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center" role="status" aria-label="Loading">
+            <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center" role="status" aria-label="Loading">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" aria-hidden="true" />
             </div>
         );
     }
 
-    const all = data?.pages.flatMap((p) => p.data) ?? [];
+    // A group that moves to the top while later pages are open can briefly appear on two pages
+    const seen = new Set<string>();
+    const all = (data?.pages.flatMap((p) => p.data) ?? []).filter((n) => !seen.has(n._id) && !!seen.add(n._id));
     const items = groupTypes ? all.filter((n) => groupTypes.includes(n.type)) : all;
     const total = data?.pages[0]?.pagination.total ?? 0;
 
@@ -54,14 +56,14 @@ export default function NotificationsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-black">
+        <div className="min-h-screen bg-[var(--color-background)]">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/8 rounded-full blur-[120px] pointer-events-none" aria-hidden="true" />
 
             <div className="relative max-w-2xl mx-auto px-4 pt-28 pb-20">
                 <div className="flex items-start justify-between gap-3 mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Notifications</h1>
-                        <p className="text-sm text-gray-400 mt-0.5" aria-live="polite">
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Notifications</h1>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5" aria-live="polite">
                             {unreadCount > 0 ? `${unreadCount} unread` : 'You are all caught up'}
                         </p>
                     </div>
@@ -70,7 +72,7 @@ export default function NotificationsPage() {
                             <button
                                 onClick={handleMarkAll}
                                 disabled={markingAll}
-                                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors disabled:opacity-50"
                             >
                                 {markingAll ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <CheckCheck className="w-4 h-4" aria-hidden="true" />}
                                 Mark all read
@@ -79,13 +81,13 @@ export default function NotificationsPage() {
                         {all.length > 0 && (
                             <button
                                 onClick={() => setConfirmClear(true)}
-                                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
+                                className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-red-400 transition-colors"
                             >
                                 <Trash2 className="w-4 h-4" aria-hidden="true" />
                                 Clear all
                             </button>
                         )}
-                        <Link href="/profile?tab=notifications" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+                        <Link href="/profile?tab=notifications" className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
                             <Settings className="w-4 h-4" aria-hidden="true" />
                             Settings
                         </Link>
@@ -101,7 +103,7 @@ export default function NotificationsPage() {
                                 role="tab"
                                 aria-selected={active}
                                 onClick={() => setUnreadOnly(id === 'unread')}
-                                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${active ? 'border-orange-500 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}
+                                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${active ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                             >
                                 {label}
                                 {id === 'unread' && unreadCount > 0 && (
@@ -118,7 +120,7 @@ export default function NotificationsPage() {
                             key={g.id ?? 'all'}
                             onClick={() => setGroup(g.id)}
                             aria-pressed={group === g.id}
-                            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${group === g.id ? 'bg-orange-500/20 border-orange-500/40 text-orange-300' : 'border-white/10 text-gray-400 hover:text-white hover:border-white/20'}`}
+                            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${group === g.id ? 'bg-orange-500/20 border-orange-500/40 text-orange-300' : 'border-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-white/20'}`}
                         >
                             {g.label}
                         </button>
@@ -132,8 +134,8 @@ export default function NotificationsPage() {
                         </div>
                     ) : isError ? (
                         <div className="text-center py-16 px-4">
-                            <p className="text-gray-400 mb-3">Your notifications could not be loaded.</p>
-                            <button onClick={() => refetch()} className="px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-colors">
+                            <p className="text-gray-600 dark:text-gray-400 mb-3">Your notifications could not be loaded.</p>
+                            <button onClick={() => refetch()} className="px-4 py-2 bg-white/10 text-gray-900 dark:text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-colors">
                                 Try again
                             </button>
                         </div>
@@ -163,7 +165,7 @@ export default function NotificationsPage() {
                         <button
                             onClick={() => fetchNextPage()}
                             disabled={isFetchingNextPage}
-                            className="px-5 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            className="px-5 py-2 bg-white/10 text-gray-900 dark:text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50 flex items-center gap-2"
                         >
                             {isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                             Load older
