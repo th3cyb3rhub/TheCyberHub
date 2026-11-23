@@ -413,12 +413,14 @@ interface SitemapEvent { slug?: string; status?: string; startDate?: string; end
 
 const EVENT_PAGE_SIZE = 50
 const EVENT_MAX_PAGES = 10
+// A slow API must not hold up the sitemap: give up on events and list the rest
+const EVENT_FETCH_TIMEOUT_MS = 5000
 
 async function eventSitemapEntries(baseUrl: string): Promise<MetadataRoute.Sitemap> {
     const entries: MetadataRoute.Sitemap = []
     try {
         for (let page = 1; page <= EVENT_MAX_PAGES; page++) {
-            const res = await fetch(`${API_URL}/api/events?scope=all&sort=-startDate&limit=${EVENT_PAGE_SIZE}&page=${page}`, { next: { revalidate: 3600 } })
+            const res = await fetch(`${API_URL}/api/events?scope=all&sort=-startDate&limit=${EVENT_PAGE_SIZE}&page=${page}`, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(EVENT_FETCH_TIMEOUT_MS) })
             if (!res.ok) break
             const body = await res.json()
             const events: SitemapEvent[] = body.data || []

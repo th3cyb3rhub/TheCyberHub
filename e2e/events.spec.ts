@@ -168,6 +168,19 @@ test.describe('Event detail', () => {
         await expect(page.getByRole('button', { name: 'Register', exact: true })).toHaveCount(0);
     });
 
+    test('shows no register or waiting list button when the event is full without a waiting list', async ({ page }) => {
+        await signInAs(page);
+        // What the API sends: both flags false
+        await mockEventsApi(page, {
+            detail: makeEvent({ isFull: true, spotsLeft: 0, waitlistEnabled: false, viewer: { ...viewerBase } }),
+        });
+        await page.goto('/events/winter-ctf-night');
+
+        await expect(page.getByText(/full and has no waiting list/i)).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Register', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /waiting list/i })).toHaveCount(0);
+    });
+
     test('shows the recording after the event has ended', async ({ page }) => {
         await signInAs(page);
         await mockEventsApi(page, {

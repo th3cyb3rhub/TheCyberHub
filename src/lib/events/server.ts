@@ -14,7 +14,11 @@ export type ServerEvent =
 /** The public view of an event, fetched while rendering. No token, so no viewer block and no join link. */
 export async function fetchPublicEvent(slug: string): Promise<ServerEvent> {
     try {
-        const res = await fetch(`${API_URL}/api/events/${encodeURIComponent(slug)}`, { next: { revalidate: 60, tags: ['events'] } });
+        const res = await fetch(`${API_URL}/api/events/${encodeURIComponent(slug)}`, {
+            next: { revalidate: 60, tags: ['events'] },
+            // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
+            signal: AbortSignal.timeout(5000),
+        });
         if (res.status === 404) return { state: 'missing' };
         if (!res.ok) return { state: 'error' };
         const body = await res.json();
