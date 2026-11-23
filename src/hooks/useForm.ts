@@ -197,13 +197,13 @@ export function useForm<T extends Record<string, unknown>>({
 /**
  * Helper to create a validator from a Zod schema
  */
-export function createZodValidator<T>(schema: { safeParse: (data: unknown) => { success: boolean; error?: { errors: Array<{ path: (string | number)[]; message: string }> } } }) {
+export function createZodValidator<T>(schema: { safeParse: (data: unknown) => { success: boolean; error?: { issues: Array<{ path: PropertyKey[]; message: string }> } } }) {
     return (values: T): ValidationError => {
         const result = schema.safeParse(values);
         if (result.success) return {};
         
         const errors: ValidationError = {};
-        result.error?.errors.forEach((err) => {
+        result.error?.issues.forEach((err) => {
             const path = err.path.join('.');
             if (!errors[path]) {
                 errors[path] = err.message;
