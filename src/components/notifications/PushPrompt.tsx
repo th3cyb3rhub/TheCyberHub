@@ -46,7 +46,7 @@ export default function PushPrompt({ source, variant = 'inline' }: Props) {
                         <button
                             type="button"
                             onClick={push.dismiss}
-                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-xs font-medium transition-colors"
+                            className="px-3 py-1.5 bg-gray-500/10 hover:bg-gray-500/20 border border-gray-500/20 text-gray-900 dark:text-white rounded-lg text-xs font-medium transition-colors"
                         >
                             Not now
                         </button>

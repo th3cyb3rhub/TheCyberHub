@@ -27,26 +27,26 @@ export default function PushSettings() {
             case 'denied':
                 return 'Notifications are blocked for this site in your browser. Allow them in the site settings (usually under the lock icon in the address bar), then reload this page.';
             case 'on':
-                return 'Updates are sent to this browser when you are not on the site. Quiet hours and your in-app choices above still apply.';
+                return 'Updates go to every browser where you have allowed notifications, when you are not on the site. Quiet hours and your in-app choices still apply.';
             case 'error':
                 return 'Push settings could not be loaded.';
             default:
-                return 'Get replies, mentions and other updates on this device even when the site is closed. Your browser will ask for permission.';
+                return 'Get replies, mentions and other updates even when the site is closed. Your browser will ask for permission.';
         }
     })();
 
     return (
-        <section aria-labelledby="push-title" className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
+        <section aria-labelledby="push-title" className="rounded-2xl border border-white/10 bg-[var(--color-background)] p-6 sm:p-8">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                    <h2 id="push-title" className="text-lg font-semibold text-white">Push notifications</h2>
-                    <p id="push-hint" className="text-sm text-gray-400 mt-1">{hint}</p>
+                    <h2 id="push-title" className="text-lg font-semibold text-gray-900 dark:text-white">Push notifications for your account</h2>
+                    <p id="push-hint" className="text-sm text-gray-600 dark:text-gray-400 mt-1">{hint}</p>
                 </div>
                 {status !== 'unsupported' && status !== 'error' && (
                     <span className="inline-flex items-center gap-2 flex-shrink-0">
                         {push.busy && <Loader2 className="w-4 h-4 animate-spin text-orange-500" aria-hidden="true" />}
                         <ToggleSwitch
-                            label="Push notifications on this device"
+                            label="Push notifications for your account"
                             checked={status === 'on'}
                             disabled={status === 'denied' || push.busy}
                             onChange={(next) => { void (next ? push.enable('settings') : push.disable()); }}
@@ -55,9 +55,12 @@ export default function PushSettings() {
                 )}
             </div>
             {status === 'error' && (
-                <button type="button" onClick={push.retry} className="mt-3 px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-colors">
+                <button type="button" onClick={push.retry} className="mt-3 px-4 py-2 bg-gray-500/10 text-gray-900 dark:text-white rounded-xl text-sm font-medium hover:bg-gray-500/20 transition-colors">
                     Try again
                 </button>
+            )}
+            {status === 'on' && (
+                <p className="text-xs text-gray-500 mt-3">This switch covers your whole account. Turning it off here stops push on all your devices, and you can turn it on again from any of them.</p>
             )}
             {push.error && <p role="alert" className="text-sm text-red-400 mt-3">{push.error}</p>}
         </section>

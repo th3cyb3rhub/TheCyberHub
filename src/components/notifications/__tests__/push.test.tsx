@@ -75,12 +75,12 @@ describe('PushSettings', () => {
         state.permission = 'denied'
         render(<PushSettings />)
         expect(await screen.findByText(/blocked for this site/i)).toBeInTheDocument()
-        expect(screen.getByRole('switch', { name: /push notifications on this device/i })).toBeDisabled()
+        expect(screen.getByRole('switch', { name: /push notifications for your account/i })).toBeDisabled()
     })
 
     it('asks for permission, subscribes, saves the setting and records the opt-in', async () => {
         render(<PushSettings />)
-        const toggle = await screen.findByRole('switch', { name: /push notifications on this device/i })
+        const toggle = await screen.findByRole('switch', { name: /push notifications for your account/i })
         expect(toggle).toHaveAttribute('aria-checked', 'false')
         fireEvent.click(toggle)
         await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledWith({ push: { enabled: true } }))
@@ -102,7 +102,9 @@ describe('PushSettings', () => {
         state.subscribe.mockRejectedValue(Object.assign(new Error('limit'), { code: 'PUSH_LIMIT_REACHED' }))
         render(<PushSettings />)
         fireEvent.click(await screen.findByRole('switch'))
-        expect(await screen.findByRole('alert')).toHaveTextContent(/5 devices/)
+        const alert = await screen.findByRole('alert')
+        expect(alert).toHaveTextContent(/5 devices/)
+        expect(alert).not.toHaveTextContent(/turn .* off/i)
         expect(state.mutateAsync).not.toHaveBeenCalled()
         expect(state.track).not.toHaveBeenCalled()
     })
@@ -118,11 +120,19 @@ describe('PushSettings', () => {
         state.permission = 'granted'
         state.prefs = { data: { push: { enabled: true } }, isLoading: false, isError: false, refetch: vi.fn() }
         render(<PushSettings />)
-        const toggle = await screen.findByRole('switch', { name: /push notifications on this device/i })
+        const toggle = await screen.findByRole('switch', { name: /push notifications for your account/i })
         expect(toggle).toHaveAttribute('aria-checked', 'true')
         fireEvent.click(toggle)
         await waitFor(() => expect(state.mutateAsync).toHaveBeenCalledWith({ push: { enabled: false } }))
         expect(state.unsubscribe).toHaveBeenCalled()
+    })
+
+    it('says the switch covers the whole account', async () => {
+        state.permission = 'granted'
+        state.prefs = { data: { push: { enabled: true } }, isLoading: false, isError: false, refetch: vi.fn() }
+        render(<PushSettings />)
+        expect(await screen.findByRole('heading', { name: 'Push notifications for your account' })).toBeInTheDocument()
+        expect(screen.getByText(/stops push on all your devices/i)).toBeInTheDocument()
     })
 
     it('offers a retry when the settings cannot be loaded', async () => {

@@ -27,7 +27,7 @@ export type PushStatus =
     | 'off'
     | 'on';
 
-export const PUSH_LIMIT_MESSAGE = 'You already receive push notifications on 5 devices. Turn them off on one of those devices, then try again.';
+export const PUSH_LIMIT_MESSAGE = 'Push is already set up on 5 devices, the most allowed. Sign out on one of those devices to free a place, then try again.';
 
 function failureMessage(err: unknown): string {
     if (pushErrorCode(err) === 'PUSH_LIMIT_REACHED') return PUSH_LIMIT_MESSAGE;
