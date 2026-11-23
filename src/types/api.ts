@@ -173,49 +173,6 @@ export interface FlagSubmissionResponse {
 }
 
 // ============================================
-// Event Types
-// ============================================
-
-export interface Event {
-    id: string;
-    title: string;
-    slug: string;
-    description: string;
-    shortDescription?: string;
-    image?: string;
-    startDate: string;
-    endDate: string;
-    location?: string;
-    isVirtual: boolean;
-    virtualLink?: string;
-    category: EventCategory;
-    maxAttendees?: number;
-    currentAttendees: number;
-    requiresApproval: boolean;
-    status: 'draft' | 'published' | 'cancelled';
-    organizer?: string;
-    speakers?: EventSpeaker[];
-    createdAt: string;
-    updatedAt: string;
-}
-
-export type EventCategory =
-    | 'ctf'
-    | 'workshop'
-    | 'meetup'
-    | 'webinar'
-    | 'conference'
-    | 'hackathon'
-    | 'other';
-
-export interface EventSpeaker {
-    name: string;
-    title?: string;
-    bio?: string;
-    avatar?: string;
-}
-
-// ============================================
 // Blog Types
 // ============================================
 

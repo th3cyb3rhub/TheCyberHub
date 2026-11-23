@@ -100,6 +100,20 @@ describe('fetchApi', () => {
         expect(callHeaders).not.toHaveProperty('Authorization')
     })
 
+    it('keeps the code and the field details of a validation error', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 400,
+            json: () => Promise.resolve({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Validation failed', details: [{ field: 'startDate', message: 'Start date is required' }, { nope: 1 }] } }),
+        })
+
+        await expect(fetchApi('/api/bad', { requireAuth: false })).rejects.toMatchObject({
+            status: 400,
+            code: 'VALIDATION_ERROR',
+            details: [{ field: 'startDate', message: 'Start date is required' }],
+        })
+    })
+
     it('throws an error for non-ok responses', async () => {
         global.fetch = vi.fn().mockResolvedValue({
             ok: false,

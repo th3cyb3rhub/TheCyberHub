@@ -192,16 +192,11 @@ const staticRoutes = [
         priority: 0.7,
     },
 
-    // Events
+    // Events (the list is above; event pages are added from the API)
     {
-        url: '/events',
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/my-events',
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
+        url: '/events/calendar',
+        changeFrequency: 'daily' as const,
+        priority: 0.6,
     },
 
     // Mentorship
@@ -414,6 +409,39 @@ const staticRoutes = [
     },
 ]
 
+interface SitemapEvent { slug?: string; status?: string; startDate?: string; endsAt?: string }
+
+const EVENT_PAGE_SIZE = 50
+const EVENT_MAX_PAGES = 10
+// A slow API must not hold up the sitemap: give up on events and list the rest
+const EVENT_FETCH_TIMEOUT_MS = 5000
+
+async function eventSitemapEntries(baseUrl: string): Promise<MetadataRoute.Sitemap> {
+    const entries: MetadataRoute.Sitemap = []
+    try {
+        for (let page = 1; page <= EVENT_MAX_PAGES; page++) {
+            const res = await fetch(`${API_URL}/api/events?scope=all&sort=-startDate&limit=${EVENT_PAGE_SIZE}&page=${page}`, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(EVENT_FETCH_TIMEOUT_MS) })
+            if (!res.ok) break
+            const body = await res.json()
+            const events: SitemapEvent[] = body.data || []
+            for (const event of events) {
+                if (!event.slug || event.status === 'cancelled') continue
+                const over = event.endsAt ? new Date(event.endsAt) < new Date() : false
+                entries.push({
+                    url: `${baseUrl}/events/${event.slug}`,
+                    lastModified: event.startDate ? new Date(event.startDate) : new Date(),
+                    changeFrequency: over ? 'monthly' : 'daily',
+                    priority: over ? 0.4 : 0.7,
+                })
+            }
+            if (!body.pagination?.hasMore) break
+        }
+    } catch {
+        // The static pages are still listed
+    }
+    return entries
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const baseUrl = 'https://thecyberhub.org'
     const currentDate = new Date()
@@ -444,5 +472,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         // Silently fail — static pages still included
     }
 
-    return [...staticPages, ...jobPages]
+    // Approved events: every public one except those that were cancelled
+    const eventPages = await eventSitemapEntries(baseUrl)
+
+    return [...staticPages, ...jobPages, ...eventPages]
 }

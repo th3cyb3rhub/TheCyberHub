@@ -1,10 +1,8 @@
 // components/StructuredData.tsx
 import React from 'react';
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
 interface StructuredDataProps {
-    data: Record<string, JsonValue>;
+    data: Record<string, unknown>;
 }
 
 const StructuredData: React.FC<StructuredDataProps> = ({ data }) => {
@@ -12,7 +10,8 @@ const StructuredData: React.FC<StructuredDataProps> = ({ data }) => {
         <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
-                __html: JSON.stringify(data)
+                // A `<` is escaped so text from users can never close the script element
+                __html: JSON.stringify(data).replace(/</g, '\\u003c')
             }}
         />
     );

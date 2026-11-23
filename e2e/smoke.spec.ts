@@ -15,7 +15,7 @@ test.describe('Smoke navigation', () => {
 
     test('events page renders', async ({ page }) => {
         await page.goto('/events');
-        await expect(page.getByText(/Upcoming Events/i)).toBeVisible();
-        await expect(page.getByPlaceholder('Search events...')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+        await expect(page.getByPlaceholder('Search events')).toBeVisible();
     });
 });

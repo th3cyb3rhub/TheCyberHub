@@ -629,3 +629,24 @@ code .tag     { color: #f87171; }                          /* red - HTML tags */
 code .attr    { color: #fbbf24; }                          /* yellow - attributes */
 code .number  { color: #38bdf8; }                          /* blue - numbers */
 code .operator { color: #c084fc; }                         /* purple - operators */
+/* Markdown on event pages: the renderer's classes assume a dark page */
+html[data-theme="light"] .event-md p,
+html[data-theme="light"] .event-md li {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .event-md blockquote {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .event-md a {
+  color: #c2410c !important;
+}
+
+html[data-theme="light"] .event-md code {
+  color: #c2410c !important;
+}
+
+html[data-theme="light"] .event-md hr {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
