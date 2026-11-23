@@ -50,7 +50,7 @@ describe('NotificationsPage', () => {
 
     it('shows a group as one row with its people and count', () => {
         const group = n({
-            _id: 'g1', type: 'like', message: 'liked your post', groupKey: 'like:post:p1', actorCount: 5,
+            _id: 'g1', type: 'like', message: 'alice, bob and 3 others liked your post', groupKey: 'like:post:p1', actorCount: 5,
             actor: { name: 'Alice', username: 'alice' },
             recentActors: [{ _id: 'a', username: 'alice', avatar: null }, { _id: 'b', username: 'bob', avatar: null }],
         })

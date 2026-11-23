@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { X } from 'lucide-react';
 import { NotificationIcon, safeLink } from '@/lib/notificationMeta';
 import { timeAgo } from '@/lib/feedFormat';
-import { describeGroup, groupAvatars } from '@/lib/notificationGroups';
 import type { GroupActor, NotificationData } from '@/types/notifications';
 
 /** Up to three overlapping avatars; a missing picture shows the first letter of the name */
@@ -30,6 +29,11 @@ export function AvatarStack({ actors, unread }: { actors: GroupActor[]; unread: 
     );
 }
 
+/** A rolled-up row: the server wrote its message, and who is in it comes from `recentActors` */
+export function isGrouped(n: NotificationData): boolean {
+    return (n.actorCount ?? 1) > 1 || !!n.groupKey;
+}
+
 interface Props {
     notification: NotificationData;
     onRead: (id: string) => void;
@@ -38,16 +42,16 @@ interface Props {
 
 export default function NotificationRow({ notification: n, onRead, onDelete }: Props) {
     const href = safeLink(n.link);
-    const group = describeGroup(n);
-    const avatars = group ? groupAvatars(n) : [];
+    const grouped = isGrouped(n);
+    const avatars = grouped ? (n.recentActors ?? []).slice(0, 3) : [];
 
     const body = (
         <>
-            {group && avatars.length > 0 ? (
+            {avatars.length > 0 ? (
                 <AvatarStack actors={avatars} unread={!n.read} />
             ) : (
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 overflow-hidden ${!n.read ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-white/5 border border-white/5'}`}>
-                    {n.actor?.avatar ? (
+                    {!grouped && n.actor?.avatar ? (
                         <Image src={n.actor.avatar} alt="" width={36} height={36} className="w-9 h-9 rounded-full object-cover" unoptimized />
                     ) : (
                         <NotificationIcon type={n.type} />
@@ -56,10 +60,8 @@ export default function NotificationRow({ notification: n, onRead, onDelete }: P
             )}
             <div className="flex-1 min-w-0 text-left">
                 <p className={`text-sm leading-snug break-words ${n.read ? 'text-gray-600 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                    {group ? (
-                        <>
-                            <span className="font-medium text-gray-900 dark:text-white">{group.lead}</span> {group.tail}
-                        </>
+                    {grouped ? (
+                        n.message
                     ) : (
                         <>
                             {n.actor?.username && <span className="font-medium text-gray-900 dark:text-white">@{n.actor.username} </span>}
