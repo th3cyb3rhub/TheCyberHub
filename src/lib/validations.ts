@@ -311,7 +311,7 @@ export const mentorProfileSchema = z.object({
 
 export const internshipApplicationSchema = z.object({
     coverLetter: z.string().min(100, 'Cover letter must be at least 100 characters').max(5000, 'Cover letter cannot exceed 5000 characters'),
-    resume: z.string().url('Please upload your resume'),
+    resume: z.string({ error: 'Please upload your resume' }).url('Please upload your resume'),
     portfolio: urlSchema,
     expectedStartDate: z.string().optional(),
 });
