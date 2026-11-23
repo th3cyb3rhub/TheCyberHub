@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { fetchApi } from '@/lib/api';
 
-export type ReportContentType = 'blog' | 'discussion' | 'feedPost' | 'reply' | 'comment';
+export type ReportContentType = 'blog' | 'discussion' | 'feedPost' | 'reply' | 'comment' | 'event';
 
 interface ReportContentButtonProps {
     contentType: ReportContentType;
