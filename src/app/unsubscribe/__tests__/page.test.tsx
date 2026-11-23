@@ -7,6 +7,9 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => ({ get: () => token }
 const api = vi.hoisted(() => ({ previewUnsubscribe: vi.fn(), applyUnsubscribe: vi.fn() }))
 vi.mock('@/lib/api/notifications', () => api)
 
+const trackEvent = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/analytics', () => ({ trackEvent }))
+
 import UnsubscribePage from '../page'
 
 beforeEach(() => {
@@ -26,6 +29,19 @@ describe('UnsubscribePage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }))
         expect(await screen.findByText('You are unsubscribed')).toBeInTheDocument()
         expect(api.applyUnsubscribe).toHaveBeenCalledWith('tok')
+    })
+
+    it('records a click from the weekly digest, and not from other emails', async () => {
+        const { unmount } = render(<UnsubscribePage />)
+        await screen.findByText('Stop the weekly digest')
+        expect(trackEvent).toHaveBeenCalledWith('digest_click', { target: 'unsubscribe' })
+        unmount()
+
+        trackEvent.mockClear()
+        api.previewUnsubscribe.mockResolvedValue({ scope: 'email', email: 'a***@example.com' })
+        render(<UnsubscribePage />)
+        await screen.findByText('Stop all emails')
+        expect(trackEvent).not.toHaveBeenCalled()
     })
 
     it('describes the all-email scope plainly', async () => {

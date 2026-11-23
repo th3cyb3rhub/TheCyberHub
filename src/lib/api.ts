@@ -4,6 +4,18 @@ interface FetchOptions extends RequestInit {
     requireAuth?: boolean;
 }
 
+/** A failed API call. `code` is the machine-readable error code the API sends, when there is one. */
+export class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(message: string, status: number, code?: string) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.code = code;
+    }
+}
+
 // Centralized token access — all token reads/writes go through here
 export const tokenStore = {
     get: (): string | null => {
@@ -62,13 +74,15 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
 
     if (!response.ok) {
         let errorMessage = 'An error occurred while fetching data';
+        let errorCode: string | undefined;
         try {
             const data = await response.json();
             errorMessage = data.message || data.error?.message || errorMessage;
+            if (typeof data.error?.code === 'string') errorCode = data.error.code;
         } catch {
             // Ignore JSON parsing errors
         }
-        throw new Error(errorMessage);
+        throw new ApiError(errorMessage, response.status, errorCode);
     }
 
     try {

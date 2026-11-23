@@ -47,7 +47,7 @@ export const NotificationDropdown = ({ notifications, unreadCount, markAsRead, m
                 ref={buttonRef}
                 type="button"
                 onClick={() => setIsOpen((o) => !o)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all relative"
+                className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/5 rounded-lg transition-all relative"
                 aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
@@ -55,7 +55,7 @@ export const NotificationDropdown = ({ notifications, unreadCount, markAsRead, m
             >
                 <Bell className="w-5 h-5" aria-hidden="true" />
                 {unreadCount > 0 && (
-                    <span aria-hidden="true" className="absolute top-1 right-1.5 min-w-[16px] h-[16px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-black">
+                    <span aria-hidden="true" className="absolute top-1 right-1.5 min-w-[16px] h-[16px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-[var(--color-background)]">
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                 )}
@@ -63,9 +63,9 @@ export const NotificationDropdown = ({ notifications, unreadCount, markAsRead, m
 
             {isOpen && (
                 <div id="notification-menu" className="absolute top-full right-0 pt-2 w-80 max-w-[calc(100vw-1rem)] z-50">
-                    <div className="bg-black/95 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl overflow-hidden">
+                    <div className="bg-[var(--color-background)] backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</h3>
                             {unreadCount > 0 && (
                                 <button
                                     type="button"
@@ -91,7 +91,7 @@ export const NotificationDropdown = ({ notifications, unreadCount, markAsRead, m
                             <Link
                                 href="/notifications"
                                 onClick={() => setIsOpen(false)}
-                                className="block px-4 py-2.5 text-center text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                className="block px-4 py-2.5 text-center text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/5 transition-colors"
                             >
                                 View all notifications →
                             </Link>

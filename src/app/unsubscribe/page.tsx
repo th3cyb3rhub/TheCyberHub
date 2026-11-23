@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Loader2, MailX } from 'lucide-react';
+import { trackEvent } from '@/lib/analytics';
 import { applyUnsubscribe, previewUnsubscribe } from '@/lib/api/notifications';
 import type { UnsubscribeScope } from '@/types/notifications';
 
@@ -31,7 +32,12 @@ function UnsubscribeContent() {
         }
         let cancelled = false;
         previewUnsubscribe(token)
-            .then((p) => { if (!cancelled) setStage({ kind: 'ready', scope: p.scope, email: p.email }); })
+            .then((p) => {
+                if (cancelled) return;
+                // The one place a digest email's link lands
+                if (p.scope === 'digest') trackEvent('digest_click', { target: 'unsubscribe' });
+                setStage({ kind: 'ready', scope: p.scope, email: p.email });
+            })
             .catch((err) => {
                 if (!cancelled) setStage({ kind: 'invalid', message: err instanceof Error ? err.message : 'This unsubscribe link is invalid or has expired.' });
             });

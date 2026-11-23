@@ -57,4 +57,16 @@ describe('NotificationDropdown', () => {
         setup(0)
         expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument()
     })
+
+    it('shows a group as one line and counts it once in the badge', () => {
+        const group = {
+            _id: 'g', type: 'like', title: 't', message: 'alice, bob and 1 other liked your post', read: false, createdAt: new Date().toISOString(),
+            link: '/feed/post/9', groupKey: 'like:post:9', actorCount: 3,
+            recentActors: [{ _id: '1', username: 'alice', avatar: null }, { _id: '2', username: 'bob', avatar: null }, { _id: '3', username: 'cleo', avatar: null }],
+        }
+        render(<NotificationDropdown notifications={[group]} unreadCount={1} markAsRead={vi.fn()} markAllAsRead={vi.fn()} />)
+        const bell = screen.getByRole('button', { name: /notifications, 1 unread/i })
+        fireEvent.click(bell)
+        expect(screen.getByRole('link', { name: /alice, bob and 1 other liked your post/i })).toHaveAttribute('href', '/feed/post/9')
+    })
 })

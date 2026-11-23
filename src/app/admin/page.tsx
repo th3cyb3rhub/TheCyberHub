@@ -18,6 +18,7 @@ import {
     Crown,
     Flag,
     TrendingUp,
+    Filter,
     MessageSquare,
     Clock,
     Target,
@@ -90,6 +91,14 @@ const adminSections = [
         icon: TrendingUp,
         href: '/admin/analytics',
         color: 'from-emerald-500 to-teal-600',
+        minRole: 'admin' as MinRole,
+    },
+    {
+        title: 'Activation Funnel',
+        description: 'Weekly sign-ups through onboarding to first actions and return visits',
+        icon: Filter,
+        href: '/admin/activation',
+        color: 'from-orange-500 to-amber-600',
         minRole: 'admin' as MinRole,
     },
     {

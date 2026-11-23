@@ -24,6 +24,8 @@ interface NotificationContextValue {
     /** The most recent notifications, for the bell menu */
     notifications: NotificationData[];
     unreadCount: number;
+    /** How many notifications have arrived live in this visit; 0 until the first one */
+    liveArrivals: number;
     markAsRead: (id: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
     deleteNotification: (id: string) => Promise<void>;
@@ -35,6 +37,7 @@ const NotificationContext = createContext<NotificationContextValue>({
     connected: false,
     notifications: [],
     unreadCount: 0,
+    liveArrivals: 0,
     markAsRead: async () => { },
     markAllAsRead: async () => { },
     deleteNotification: async () => { },
@@ -50,6 +53,33 @@ function patchLists(qc: QueryClient, fn: (items: NotificationData[]) => Notifica
         old && { ...old, pages: old.pages.map((p) => ({ ...p, data: fn(p.data) })) });
 }
 
+/** Where an updated group lands: gone from wherever it was, then first in every list it belongs in */
+function moveToTop(qc: QueryClient, updated: NotificationData) {
+    for (const [key, old] of qc.getQueriesData<Lists>({ queryKey: NOTIFICATION_LISTS })) {
+        if (!old) continue;
+        const typeFilter = key[4] as string | null | undefined;
+        const existed = old.pages.some((p) => p.data.some((n) => n._id === updated._id));
+        let pages = old.pages.map((p) => ({ ...p, data: p.data.filter((n) => n._id !== updated._id) }));
+        if (!typeFilter || typeFilter === updated.type) {
+            pages[0] = { ...pages[0], data: [updated, ...pages[0].data] };
+            // A row this list did not hold yet makes it one longer
+            if (!existed) pages = pages.map((p) => ({ ...p, pagination: { ...p.pagination, total: p.pagination.total + 1 } }));
+        }
+        qc.setQueryData<Lists>(key, { ...old, pages });
+    }
+}
+
+/** What the caches know about a notification, if anything */
+function knownRead(qc: QueryClient, known: NotificationData[], id: string): boolean | null {
+    const local = known.find((n) => n._id === id);
+    if (local) return local.read;
+    for (const [, old] of qc.getQueriesData<Lists>({ queryKey: NOTIFICATION_LISTS })) {
+        const hit = old?.pages.flatMap((p) => p.data).find((n) => n._id === id);
+        if (hit) return hit.read;
+    }
+    return null;
+}
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const { token, user } = useAuth();
     const { addToast } = useToast();
@@ -60,11 +90,19 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     const [connected, setConnected] = useState(false);
     const [notifications, setNotifications] = useState<NotificationData[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [liveArrivals, setLiveArrivals] = useState(0);
     const notificationsRef = useRef<NotificationData[]>([]);
     const burst = useRef<{ shown: number; extra: number; timer: ReturnType<typeof setTimeout> | null }>({ shown: 0, extra: 0, timer: null });
 
     useEffect(() => { addToastRef.current = addToast; }, [addToast]);
-    useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
+
+    // The one way the list changes. The ref moves with it at once, so a socket event arriving in the same tick
+    // as an optimistic change builds on that change instead of on an older copy.
+    const commit = useCallback((next: NotificationData[] | ((prev: NotificationData[]) => NotificationData[])) => {
+        const value = typeof next === 'function' ? next(notificationsRef.current) : next;
+        notificationsRef.current = value;
+        setNotifications(value);
+    }, []);
 
     const refreshCount = useCallback(async () => {
         try {
@@ -78,43 +116,43 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         if (!token) return;
         try {
             const [page] = await Promise.all([api.getNotifications({ limit: 20 }), refreshCount()]);
-            if (page.success) setNotifications(page.data);
+            if (page.success) commit(page.data);
         } catch {
             // Non-critical
         }
-    }, [token, refreshCount]);
+    }, [token, refreshCount, commit]);
 
     const markAsRead = useCallback(async (id: string) => {
         const target = notificationsRef.current.find((n) => n._id === id);
         if (target?.read) return;
-        setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, read: true } : n)));
+        commit((prev) => prev.map((n) => (n._id === id ? { ...n, read: true } : n)));
         patchLists(qc, (items) => items.map((n) => (n._id === id ? { ...n, read: true } : n)));
         if (target) setUnreadCount((c) => Math.max(0, c - 1));
         try {
             await api.markNotificationRead(id);
         } catch {
-            setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, read: false } : n)));
+            commit((prev) => prev.map((n) => (n._id === id ? { ...n, read: false } : n)));
             patchLists(qc, (items) => items.map((n) => (n._id === id ? { ...n, read: false } : n)));
             refreshCount();
             addToastRef.current({ variant: 'error', message: 'Could not mark it as read.' });
         }
-    }, [qc, refreshCount]);
+    }, [qc, refreshCount, commit]);
 
     const markAllAsRead = useCallback(async () => {
         try {
             await api.markAllNotificationsRead();
-            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            commit((prev) => prev.map((n) => ({ ...n, read: true })));
             patchLists(qc, (items) => items.map((n) => ({ ...n, read: true })));
             setUnreadCount(0);
         } catch {
             addToastRef.current({ variant: 'error', message: 'Could not mark everything as read.' });
         }
-    }, [qc]);
+    }, [qc, commit]);
 
     const deleteNotification = useCallback(async (id: string) => {
         const before = notificationsRef.current;
         const target = before.find((n) => n._id === id);
-        setNotifications((prev) => prev.filter((n) => n._id !== id));
+        commit((prev) => prev.filter((n) => n._id !== id));
         patchLists(qc, (items) => items.filter((n) => n._id !== id));
         if (target && !target.read) setUnreadCount((c) => Math.max(0, c - 1));
         try {
@@ -123,29 +161,38 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             qc.invalidateQueries({ queryKey: NOTIFICATION_LISTS });
             refreshCount();
         } catch {
-            if (target) setNotifications(before);
+            if (target) {
+                // Put it back where it was, keeping anything that arrived in the meantime
+                const above = before[before.findIndex((n) => n._id === id) - 1]?._id;
+                commit((prev) => {
+                    if (prev.some((n) => n._id === id)) return prev;
+                    const at = above ? prev.findIndex((n) => n._id === above) + 1 : 0;
+                    return [...prev.slice(0, at), target, ...prev.slice(at)];
+                });
+            }
             qc.invalidateQueries({ queryKey: NOTIFICATION_LISTS });
             refreshCount();
             addToastRef.current({ variant: 'error', message: 'Could not delete the notification.' });
         }
-    }, [qc, refreshCount]);
+    }, [qc, refreshCount, commit]);
 
     const deleteAll = useCallback(async () => {
         try {
             await api.deleteAllNotifications();
-            setNotifications([]);
+            commit([]);
             setUnreadCount(0);
             qc.invalidateQueries({ queryKey: NOTIFICATION_LISTS });
         } catch {
             addToastRef.current({ variant: 'error', message: 'Could not clear your notifications.' });
         }
-    }, [qc]);
+    }, [qc, commit]);
 
     useEffect(() => {
         const state = burst.current;
         if (!token || !userId) {
-            setNotifications([]);
+            commit([]);
             setUnreadCount(0);
+            setLiveArrivals(0);
             return;
         }
 
@@ -193,16 +240,31 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         };
 
         const onNewNotification = (data: NotificationData) => {
-            setNotifications((prev) => (prev.some((n) => n._id === data._id) ? prev : [data, ...prev].slice(0, 50)));
+            if (notificationsRef.current.some((n) => n._id === data._id)) return;
+            commit((prev) => [data, ...prev].slice(0, 50));
             setUnreadCount((c) => c + 1);
+            setLiveArrivals((c) => c + 1);
             qc.invalidateQueries({ queryKey: NOTIFICATION_LISTS });
             announce(data);
+        };
+
+        // Someone joined a group: the same row, newer and unread again. A group is one unread, however many people are in it.
+        const onNotificationUpdated = (data: NotificationData) => {
+            const updated = { ...data, read: false };
+            const wasRead = knownRead(qc, notificationsRef.current, data._id);
+            commit((prev) => [updated, ...prev.filter((n) => n._id !== data._id)].slice(0, 50));
+            moveToTop(qc, updated);
+            if (wasRead === null) refreshCount();
+            else if (wasRead) setUnreadCount((c) => c + 1);
+            setLiveArrivals((c) => c + 1);
+            announce(updated);
         };
 
         newSocket.on('connect', onConnect);
         newSocket.on('disconnect', onDisconnect);
         newSocket.on('connect_error', onDisconnect);
         newSocket.on('newNotification', onNewNotification);
+        newSocket.on('notificationUpdated', onNotificationUpdated);
         setSocket(newSocket);
 
         return () => {
@@ -210,6 +272,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             newSocket.off('disconnect', onDisconnect);
             newSocket.off('connect_error', onDisconnect);
             newSocket.off('newNotification', onNewNotification);
+            newSocket.off('notificationUpdated', onNotificationUpdated);
             newSocket.disconnect();
             if (state.timer) clearTimeout(state.timer);
             state.timer = null;
@@ -218,7 +281,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             setSocket(null);
             setConnected(false);
         };
-    }, [token, userId, qc, fetchNotifications]);
+    }, [token, userId, qc, fetchNotifications, refreshCount, commit]);
 
     return (
         <NotificationContext.Provider value={{
@@ -226,6 +289,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             connected,
             notifications,
             unreadCount,
+            liveArrivals,
             markAsRead,
             markAllAsRead,
             deleteNotification,

@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/queries';
 import type { EmailPreferences, InAppPreferences } from '@/types/notifications';
 import ToggleSwitch from './ToggleSwitch';
+import PushSettings from '@/components/notifications/PushSettings';
 
 interface Row {
     label: string;
@@ -98,6 +99,8 @@ export default function NotificationSettings() {
 
     return (
         <div className="space-y-6">
+            <PushSettings />
+
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
                 <h2 className="text-lg font-semibold text-white mb-1">What you hear about</h2>
                 <p className="text-sm text-gray-400 mb-6">Choose where each kind of update reaches you. In the app means the bell and the notifications page.</p>

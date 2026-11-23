@@ -136,7 +136,10 @@ export default function AdminAnalyticsPage() {
                             </div>
                             <h1 className="text-2xl font-bold text-white">Analytics</h1>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Link href="/admin/activation" className="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 bg-white/5 text-gray-400 hover:text-white transition-colors">
+                                Activation funnel
+                            </Link>
                             {TIMEFRAMES.map(tf => (
                                 <button
                                     key={tf.value}

@@ -4,6 +4,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const hooks = vi.hoisted(() => ({ useOnboarding: vi.fn(), useUpdateOnboarding: vi.fn() }))
 vi.mock('@/hooks/queries', () => hooks)
 
+const trackEvent = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/analytics', () => ({ trackEvent }))
+
 import ChecklistCard from '../ChecklistCard'
 
 const data = (over: Record<string, unknown> = {}) => ({
@@ -34,6 +37,12 @@ describe('ChecklistCard', () => {
         expect(screen.getByRole('progressbar', { name: /getting started progress/i })).toHaveAttribute('aria-valuenow', '1')
         expect(screen.getByRole('link', { name: /solve your first challenge/i })).toHaveAttribute('href', '/challenges?category=web')
         expect(screen.getByRole('link', { name: /set up your profile \(done\)/i })).toBeInTheDocument()
+    })
+
+    it('records which step was opened, by name only', () => {
+        render(<ChecklistCard />)
+        fireEvent.click(screen.getByRole('link', { name: /solve your first challenge/i }))
+        expect(trackEvent).toHaveBeenCalledWith('checklist_item', { name: 'solve' })
     })
 
     it('can be hidden for good', () => {

@@ -7,6 +7,8 @@ vi.mock('@/hooks/queries', () => ({
     useUpdateNotificationPreferences: () => ({ mutate: state.mutate }),
 }))
 
+vi.mock('@/components/notifications/PushSettings', () => ({ default: () => null }))
+
 import NotificationSettings from '../NotificationSettings'
 
 const prefs = () => ({

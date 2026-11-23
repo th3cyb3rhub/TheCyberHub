@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { API_URL } from '@/lib/api';
+import { unsubscribeThisDevice } from '@/lib/push';
 
 interface User {
     id: string;
@@ -274,6 +275,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const logout = () => {
+        // This browser must stop getting the member's pushes. Started before the token goes, with that token, and never allowed to block or break signing out.
+        if (token) {
+            try {
+                void Promise.resolve(unsubscribeThisDevice(token)).catch(() => { /* best effort */ });
+            } catch {
+                // Nothing to do
+            }
+        }
         safeLocalStorage.removeItem('token');
         setToken(null);
         setUser(null);

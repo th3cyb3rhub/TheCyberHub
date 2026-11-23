@@ -13,6 +13,8 @@ const GlobalSearch = lazy(() => import("@/components/GlobalSearch"));
 import { SystemAlertNotice } from "@/components/ui/SystemAlertNotice";
 import { EmailVerificationBanner } from "@/components/ui/EmailVerificationBanner";
 import MobileBottomNav from "@/components/ui/MobileBottomNav";
+import PushSync from "@/components/notifications/PushSync";
+import LivePushPrompt from "@/components/notifications/LivePushPrompt";
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
     // Create QueryClient once per component instance (prevents SSR issues)
@@ -33,6 +35,8 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                                 </Suspense>
                                 <main className="pb-20 md:pb-0">{children}</main>
                                 <MobileBottomNav />
+                                <PushSync />
+                                <LivePushPrompt />
                             </NotificationProvider>
                         </ToastProvider>
                     </AuthProvider>

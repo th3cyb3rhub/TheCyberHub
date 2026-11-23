@@ -16,11 +16,24 @@ export interface NotificationData {
     link?: string;
     read: boolean;
     createdAt: string;
+    /** The latest actor. For a group, the person who joined it last. */
     actor?: {
         name: string;
         username: string;
         avatar?: string;
     };
+    /** Set on likes, reshares and comments that are rolled up per post; null when the notification stands alone */
+    groupKey?: string | null;
+    /** How many people are in the group; 1 when it is not grouped */
+    actorCount?: number;
+    /** Newest first, at most three */
+    recentActors?: GroupActor[];
+}
+
+export interface GroupActor {
+    _id: string;
+    username: string;
+    avatar?: string | null;
 }
 
 export interface NotificationPage {
@@ -70,11 +83,16 @@ export interface QuietHours {
     timezone: string;
 }
 
+export interface PushPreferences {
+    enabled: boolean;
+}
+
 export interface NotificationPreferences {
     email: EmailPreferences;
     inApp: InAppPreferences;
     quietHours: QuietHours;
     emailDigest: { enabled: boolean; frequency: 'weekly' };
+    push: PushPreferences;
 }
 
 export type NotificationPreferencesUpdate = {
@@ -82,6 +100,7 @@ export type NotificationPreferencesUpdate = {
     inApp?: Partial<InAppPreferences>;
     quietHours?: Partial<QuietHours>;
     emailDigest?: { enabled: boolean };
+    push?: Partial<PushPreferences>;
 };
 
 export type UnsubscribeScope = 'email' | 'digest';
