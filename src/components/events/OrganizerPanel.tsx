@@ -8,25 +8,33 @@ import { eventErrorMessage } from '@/lib/events/errors';
 import { effectiveStatus } from '@/lib/events/time';
 import type { Attendee, EventDetail } from '@/types/event';
 import { EventDialog } from './EventDialog';
+import { TabBar } from './TabBar';
 import { btnPrimary, btnSecondary, cardPad, muted } from './styles';
 
-const STATUS_LABEL: Record<Attendee['status'], string> = { registered: 'Registered', waitlisted: 'Waiting', attended: 'Attended' };
+type Group = 'registered' | 'attended' | 'waitlisted';
+const GROUPS: { id: Group; label: string; empty: string }[] = [
+    { id: 'registered', label: 'Registered', empty: 'Nobody is registered right now.' },
+    { id: 'attended', label: 'Attended', empty: 'Nobody has been marked as attended yet.' },
+    { id: 'waitlisted', label: 'Waiting list', empty: 'Nobody is on the waiting list.' },
+];
 
 /** For the creator and administrators: who is coming, who showed up, and calling the event off */
 export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail; now: Date | null; onCancelled?: () => void }) {
     const status = effectiveStatus(event, now ?? new Date(event.startDate));
     const started = status === 'live' || status === 'ended';
     const published = ['upcoming', 'live', 'ended', 'cancelled'].includes(event.status);
-    const attendees = useEventAttendees(event._id, {}, published);
+    const [group, setGroup] = useState<Group>('registered');
+    const attendees = useEventAttendees(event._id, { status: group }, published);
     const mark = useMarkAttendance();
     const cancel = useCancelEvent();
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [confirmCancel, setConfirmCancel] = useState(false);
     const [cancelError, setCancelError] = useState<string | null>(null);
 
-    const rows = useMemo(() => attendees.data?.data ?? [], [attendees.data]);
-    const registered = rows.filter((r) => r.status === 'registered' && r.user);
-    const total = attendees.data?.pagination.total ?? rows.length;
+    const rows = useMemo<Attendee[]>(() => (attendees.data?.pages ?? []).flatMap((p) => p.data), [attendees.data]);
+    const registered = group === 'registered' ? rows.filter((r) => r.user) : [];
+    const total = attendees.data?.pages[0]?.pagination.total ?? rows.length;
+    const current = GROUPS.find((g) => g.id === group)!;
 
     const toggle = (id: string) => setSelected((prev) => {
         const next = new Set(prev);
@@ -57,10 +65,19 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                 <p className={`text-sm ${muted}`}>The attendee list opens once the event is approved and public.</p>
             ) : (
                 <>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="mb-3">
+                        <TabBar
+                            tabs={GROUPS.map((g) => ({ id: g.id, label: g.label }))}
+                            active={group}
+                            onChange={(id) => { setGroup(id as Group); setSelected(new Set()); }}
+                            label="Attendees"
+                            idPrefix="attendees"
+                        />
+                    </div>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2" id="attendees-panel" role="tabpanel" aria-labelledby={`attendees-${group}`}>
                         <p className={`flex items-center gap-1.5 text-sm ${muted}`}>
                             <Users className="h-4 w-4" aria-hidden="true" />
-                            {attendees.isSuccess ? `${total} ${total === 1 ? 'person' : 'people'} signed up` : 'Attendees'}
+                            {attendees.isSuccess ? `${total} ${total === 1 ? 'person' : 'people'} ${group === 'registered' ? 'registered' : group === 'attended' ? 'attended' : 'waiting'}` : 'Attendees'}
                         </p>
                         {started && registered.length > 0 && (
                             <div className="flex items-center gap-3">
@@ -71,7 +88,7 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                                         onChange={() => setSelected(allSelected ? new Set() : new Set(registered.map((r) => r.user!._id)))}
                                         className="h-4 w-4 accent-orange-600"
                                     />
-                                    Select everyone registered
+                                    Select everyone listed
                                 </label>
                                 <button
                                     type="button"
@@ -85,7 +102,7 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                             </div>
                         )}
                     </div>
-                    {!started && <p className={`mb-3 text-sm ${muted}`}>Attendance can be recorded once the event has started. Members earn points when you mark them.</p>}
+                    {!started && group === 'registered' && <p className={`mb-3 text-sm ${muted}`}>Attendance can be recorded once the event has started. Members earn points when you mark them.</p>}
 
                     {attendees.isLoading ? (
                         <div className="space-y-2" role="status" aria-label="Loading attendees">
@@ -97,12 +114,12 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                             <button type="button" className="font-medium underline" onClick={() => void attendees.refetch()}>Try again</button>
                         </div>
                     ) : rows.length === 0 ? (
-                        <p className={`rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm dark:border-neutral-700 ${muted}`}>Nobody has signed up yet.</p>
+                        <p className={`rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm dark:border-neutral-700 ${muted}`}>{current.empty}</p>
                     ) : (
                         <ul className="divide-y divide-gray-200 rounded-xl border border-gray-200 dark:divide-neutral-800 dark:border-neutral-800">
                             {rows.map((r, i) => (
                                 <li key={r.user?._id ?? i} className="flex items-center gap-3 px-3 py-2.5 text-sm">
-                                    {started && r.status === 'registered' && r.user ? (
+                                    {started && group === 'registered' && r.user ? (
                                         <input
                                             type="checkbox"
                                             aria-label={`Mark ${r.user.name || r.user.username} as attended`}
@@ -116,13 +133,23 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                                         {r.user?.name && <span className={`ml-2 font-normal ${muted}`}>@{r.user.username}</span>}
                                     </span>
                                     <span className={`shrink-0 text-xs ${r.status === 'attended' ? 'text-green-800 dark:text-green-300' : muted}`}>
-                                        {STATUS_LABEL[r.status]}{r.status === 'waitlisted' && r.waitlistSeq ? ` #${r.waitlistSeq}` : ''}
+                                        {group === 'waitlisted' ? `#${i + 1}` : r.attendedAt ? 'Attended' : ''}
                                     </span>
                                 </li>
                             ))}
                         </ul>
                     )}
-                    {total > rows.length && <p className={`mt-2 text-xs ${muted}`}>Showing the first {rows.length} of {total}.</p>}
+                    {rows.length > 0 && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                            <p className={`text-xs ${muted}`}>Showing {rows.length} of {total}.</p>
+                            {attendees.hasNextPage && (
+                                <button type="button" className={btnSecondary} disabled={attendees.isFetchingNextPage} onClick={() => void attendees.fetchNextPage()}>
+                                    {attendees.isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                                    Load more
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </>
             )}
 

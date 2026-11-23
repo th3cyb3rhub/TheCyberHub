@@ -130,7 +130,8 @@ const spots = (event: EventDetail, delta: number) =>
 /** What the page shows while the register call is in flight */
 export const optimistic = {
     register: (event: EventDetail): EventDetail => {
-        const toWaitlist = !!event.viewer && !event.viewer.canRegister && event.viewer.canJoinWaitlist;
+        const viewer = event.viewer;
+        const toWaitlist = event.isFull ? event.waitlistEnabled : !!viewer && !viewer.canRegister && viewer.canJoinWaitlist;
         if (toWaitlist) {
             return { ...event, waitlistCount: event.waitlistCount + 1, viewer: withViewer(event, { waitlisted: true, position: event.waitlistCount + 1, canJoinWaitlist: false, canRegister: false }) };
         }
@@ -336,10 +337,15 @@ export const useCancelEvent = () => useModeration((v: { id: string; reason: stri
 export const useDeleteEvent = () => useModeration((v: { id: string }) => api.deleteEvent(v.id), 'Event deleted.');
 export const useToggleFeatured = () => useModeration((v: { id: string; featured: boolean }) => api.updateEvent(v.id, { isFeatured: v.featured }), 'Event updated.');
 
-export function useEventAttendees(id: string | undefined, params: { status?: string; page?: number } = {}, enabled = true) {
-    return useQuery({
+const ATTENDEE_PAGE = 50;
+
+/** One status of an event's attendees, a page at a time */
+export function useEventAttendees(id: string | undefined, params: { status?: 'registered' | 'waitlisted' | 'attended' } = {}, enabled = true) {
+    return useInfiniteQuery({
         queryKey: eventKeys.attendees(id ?? '', params),
-        queryFn: () => api.listAttendees(id as string, { ...params, limit: 100 }),
+        queryFn: ({ pageParam }) => api.listAttendees(id as string, { ...params, page: pageParam, limit: ATTENDEE_PAGE }),
+        initialPageParam: 1,
+        getNextPageParam: (last) => (last.pagination.hasMore ? last.pagination.page + 1 : undefined),
         enabled: !!id && enabled,
         staleTime: 15_000,
     });

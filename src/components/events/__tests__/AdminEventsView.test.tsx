@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { makeEvent } from '@/lib/events/__tests__/fixtures'
+import { makeEvent, viewer } from '@/lib/events/__tests__/fixtures'
 
 const replace = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }))
@@ -69,6 +69,18 @@ describe('review queue', () => {
         expect(approve.mutate).toHaveBeenCalledWith({ id: 'p1' })
         expect(screen.queryByRole('link', { name: /Edit/ })).toBeNull()
         expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull()
+    })
+
+    it('does not let a moderator approve their own submission, but an administrator can', () => {
+        const own = makeEvent({ _id: 'p9', slug: 'mine', title: 'Mine', status: 'pending', viewer: viewer({ canManage: true }) })
+        queue.current = page([own])
+        const { unmount } = render(<AdminEventsView />)
+        expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+        expect(screen.getByTestId('own-submission')).toHaveTextContent('another reviewer')
+        unmount()
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        render(<AdminEventsView />)
+        expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
     })
 
     it('rejects with a reason of at least five characters', () => {

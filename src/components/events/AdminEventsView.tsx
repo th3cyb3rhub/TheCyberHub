@@ -37,6 +37,8 @@ function Row({ event, admin, onAction }: { event: EventSummary; admin: boolean; 
     const feature = useToggleFeatured();
     const status = effectiveStatus(event, new Date());
     const open = status === 'upcoming' || status === 'live';
+    // A moderator does not approve their own submission; for a moderator the viewer block marks it as theirs
+    const own = !admin && !!event.viewer?.canManage;
 
     return (
         <li className={`${card} p-4`} data-testid="queue-row" data-status={event.status}>
@@ -59,9 +61,13 @@ function Row({ event, admin, onAction }: { event: EventSummary; admin: boolean; 
                     <Link href={`/events/${event.slug}`} className={`${btnSecondary} !px-3 !py-2`}><Eye className="h-4 w-4" aria-hidden="true" /> View</Link>
                     {event.status === 'pending' && (
                         <>
-                            <button type="button" className={`${btnPrimary} !px-3 !py-2`} disabled={approve.isPending} onClick={() => approve.mutate({ id: event._id })}>
-                                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />} Approve
-                            </button>
+                            {own ? (
+                                <span className={`text-xs ${muted}`} data-testid="own-submission">Your own event: another reviewer approves it.</span>
+                            ) : (
+                                <button type="button" className={`${btnPrimary} !px-3 !py-2`} disabled={approve.isPending} onClick={() => approve.mutate({ id: event._id })}>
+                                    {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />} Approve
+                                </button>
+                            )}
                             <button type="button" className={`${btnSecondary} !px-3 !py-2`} onClick={() => onAction({ kind: 'reject', event })}>
                                 <XCircle className="h-4 w-4" aria-hidden="true" /> Reject
                             </button>

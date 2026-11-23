@@ -18,7 +18,7 @@ vi.mock('@/hooks/queries/useEvents', () => ({
     useSetReminder: () => idle,
     useEventFeedback: () => ({ isLoading: false, isError: false, data: { feedback: [{ rating: 5, comment: 'Great night', submittedAt: '2026-12-06', author: 'Bob' }], totalReviews: 1, averageRating: 5 } }),
     useSubmitEventFeedback: () => idle,
-    useEventAttendees: () => ({ isLoading: false, isError: false, isSuccess: true, data: { data: [], pagination: { total: 0 } } }),
+    useEventAttendees: () => ({ isLoading: false, isError: false, isSuccess: true, hasNextPage: false, data: { pages: [{ data: [], pagination: { total: 0, hasMore: false } }] } }),
     useMarkAttendance: () => idle,
     useCancelEvent: () => idle,
 }))
