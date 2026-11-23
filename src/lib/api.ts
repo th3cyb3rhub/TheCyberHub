@@ -8,12 +8,20 @@ interface FetchOptions extends RequestInit {
 export class ApiError extends Error {
     status: number;
     code?: string;
-    constructor(message: string, status: number, code?: string) {
+    /** Field level problems of a 400 VALIDATION_ERROR: `[{ field: 'startDate', message: '...' }]` */
+    details?: ApiErrorDetail[];
+    constructor(message: string, status: number, code?: string, details?: ApiErrorDetail[]) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
         this.code = code;
+        this.details = details;
     }
+}
+
+export interface ApiErrorDetail {
+    field?: string;
+    message: string;
 }
 
 // Centralized token access — all token reads/writes go through here
@@ -75,14 +83,23 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
     if (!response.ok) {
         let errorMessage = 'An error occurred while fetching data';
         let errorCode: string | undefined;
+        let errorDetails: ApiErrorDetail[] | undefined;
         try {
             const data = await response.json();
             errorMessage = data.message || data.error?.message || errorMessage;
             if (typeof data.error?.code === 'string') errorCode = data.error.code;
+            if (Array.isArray(data.error?.details)) {
+                errorDetails = data.error.details
+                    .filter((d: unknown): d is { field?: unknown; message: string } => !!d && typeof (d as { message?: unknown }).message === 'string')
+                    .map((d: { field?: unknown; message: string }) => ({
+                        field: typeof d.field === 'string' ? d.field : undefined,
+                        message: d.message,
+                    }));
+            }
         } catch {
             // Ignore JSON parsing errors
         }
-        throw new ApiError(errorMessage, response.status, errorCode);
+        throw new ApiError(errorMessage, response.status, errorCode, errorDetails);
     }
 
     try {
