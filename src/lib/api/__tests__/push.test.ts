@@ -44,6 +44,14 @@ describe('subscribe and unsubscribe', () => {
     })
 })
 
+describe('unsubscribePush with a token', () => {
+    it('sends it explicitly, for sign-out', async () => {
+        fetchApi.mockResolvedValue({ data: { removed: 1 } })
+        await unsubscribePush('e', 'tok')
+        expect(fetchApi.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer tok' })
+    })
+})
+
 describe('pushErrorCode', () => {
     it('reads a code when there is one', () => {
         expect(pushErrorCode(Object.assign(new Error('x'), { code: 'PUSH_LIMIT_REACHED' }))).toBe('PUSH_LIMIT_REACHED')

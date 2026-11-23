@@ -31,7 +31,12 @@ export async function subscribePush(subscription: PushSubscriptionJson): Promise
     return res.data;
 }
 
-export async function unsubscribePush(endpoint: string): Promise<boolean> {
-    const res = await fetchApi('/api/notifications/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
+/** `token` is for sign-out, when the stored token is already gone by the time the request is made */
+export async function unsubscribePush(endpoint: string, token?: string): Promise<boolean> {
+    const res = await fetchApi('/api/notifications/push/subscribe', {
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint }),
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+    });
     return !!res?.data?.removed;
 }

@@ -111,8 +111,14 @@ describe('unsubscribeThisDevice', () => {
         const existing = makeSubscription([1, 2, 3, 4])
         installBrowser(existing)
         await unsubscribeThisDevice()
-        expect(api.unsubscribePush).toHaveBeenCalledWith('https://push.example/1')
+        expect(api.unsubscribePush).toHaveBeenCalledWith('https://push.example/1', undefined)
         expect(existing.unsubscribe).toHaveBeenCalled()
+    })
+
+    it('passes the sign-out token on to the request', async () => {
+        installBrowser(makeSubscription([1, 2, 3, 4]))
+        await unsubscribeThisDevice('tok')
+        expect(api.unsubscribePush).toHaveBeenCalledWith('https://push.example/1', 'tok')
     })
 
     it('still removes it from the browser when the server call fails', async () => {

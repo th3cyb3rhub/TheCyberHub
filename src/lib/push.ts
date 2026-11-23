@@ -62,12 +62,12 @@ export async function subscribeThisDevice(publicKey: string): Promise<void> {
 }
 
 /** Removes this browser's subscription from the server and from the browser */
-export async function unsubscribeThisDevice(): Promise<void> {
+export async function unsubscribeThisDevice(token?: string): Promise<void> {
     const reg = await navigator.serviceWorker.getRegistration('/');
     const subscription = await reg?.pushManager.getSubscription();
     if (!subscription) return;
     try {
-        await unsubscribePush(subscription.endpoint);
+        await unsubscribePush(subscription.endpoint, token);
     } catch {
         // The server drops dead endpoints on its own; the browser side must still go
     }
