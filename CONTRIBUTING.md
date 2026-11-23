@@ -351,6 +351,16 @@ npm run lint
 - Do not make unrelated changes in one PR
 - Do not push directly to `main` or `develop`
 
+## Dependency Security
+
+Run `npm audit` before opening a PR that touches `package.json`; the goal is zero advisories. Fix with `npm audit fix` first. When a patched release is blocked by a pinned transitive dependency, `package.json` carries an `overrides` entry for it. Each entry is there for one reason, so remove it once the parent package ships the fix:
+
+| Override | Why |
+|----------|-----|
+| `next` > `postcss` | `next@15` pins an old `postcss`; the patched 8.5.x is used instead |
+| `@sentry/bundler-plugins` > `glob` | the build plugin pins a `glob` release with a known advisory |
+| `minimatch@^3.1.2` > `brace-expansion` | ESLint's `minimatch@3` pins `brace-expansion@1` below the patched 1.1.22 |
+
 ## Code of Conduct
 
 We are committed to providing a welcoming and inclusive environment. All contributors are expected to:

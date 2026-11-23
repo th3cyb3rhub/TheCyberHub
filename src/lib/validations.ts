@@ -53,9 +53,7 @@ export const registerSchema = z.object({
     email: emailSchema,
     password: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
-    acceptTerms: z.literal(true, {
-        errorMap: () => ({ message: 'You must accept the terms and conditions' }),
-    }),
+    acceptTerms: z.literal(true, { error: 'You must accept the terms and conditions' }),
 }).refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
@@ -155,9 +153,7 @@ export const discussionSchema = z.object({
     content: z.string()
         .min(FORUM_LIMITS.content.min, `Discussion content must be at least ${FORUM_LIMITS.content.min} characters`)
         .max(FORUM_LIMITS.content.max, `Discussion content cannot exceed ${FORUM_LIMITS.content.max} characters`),
-    category: z.enum(FORUM_CATEGORY_SLUGS, {
-        errorMap: () => ({ message: 'Please select a valid category' }),
-    }),
+    category: z.enum(FORUM_CATEGORY_SLUGS, { error: 'Please select a valid category' }),
     tags: forumTagsSchema,
 });
 
@@ -169,9 +165,7 @@ export const replySchema = z.object({
 });
 
 export const voteSchema = z.object({
-    value: z.union([z.literal(1), z.literal(-1)], {
-        errorMap: () => ({ message: 'Vote value must be 1 or -1' }),
-    }),
+    value: z.union([z.literal(1), z.literal(-1)], { error: 'Vote value must be 1 or -1' }),
 });
 
 // ============================================
@@ -295,9 +289,7 @@ export const mentorshipRequestSchema = z.object({
     goals: z.string()
         .min(100, 'Describe your goals (minimum 100 characters)')
         .max(500, 'Goals cannot exceed 500 characters'),
-    skillLevel: z.enum(['beginner', 'intermediate', 'advanced'], {
-        errorMap: () => ({ message: 'Please select your skill level' }),
-    }),
+    skillLevel: z.enum(['beginner', 'intermediate', 'advanced'], { error: 'Please select your skill level' }),
 });
 
 export const mentorshipFeedbackSchema = z.object({
@@ -319,7 +311,7 @@ export const mentorProfileSchema = z.object({
 
 export const internshipApplicationSchema = z.object({
     coverLetter: z.string().min(100, 'Cover letter must be at least 100 characters').max(5000, 'Cover letter cannot exceed 5000 characters'),
-    resume: z.string().url('Please upload your resume'),
+    resume: z.string({ error: 'Please upload your resume' }).url('Please upload your resume'),
     portfolio: urlSchema,
     expectedStartDate: z.string().optional(),
 });

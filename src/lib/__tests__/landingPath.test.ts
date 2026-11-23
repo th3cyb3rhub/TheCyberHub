@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { landingPath, needsWelcome } from '../landingPath'
 
 const NOW = Date.parse('2026-10-18T12:00:00Z')
@@ -22,6 +22,9 @@ describe('needsWelcome', () => {
 })
 
 describe('landingPath', () => {
+    // landingPath reads the real clock, so pin it next to the fixed account dates
+    beforeAll(() => { vi.useFakeTimers(); vi.setSystemTime(NOW) })
+    afterAll(() => { vi.useRealTimers() })
     it('lets a valid ?redirect= win over the welcome flow', () => {
         expect(landingPath(fresh, '/challenges/xss')).toBe('/challenges/xss')
     })
