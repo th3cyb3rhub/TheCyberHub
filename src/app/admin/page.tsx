@@ -29,7 +29,8 @@ import {
     Library,
     FlaskConical,
     Trophy,
-    Briefcase
+    Briefcase,
+    Code2
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -170,6 +171,14 @@ const adminSections = [
         href: '/admin/labs',
         color: 'from-amber-500 to-orange-600',
         minRole: 'admin' as MinRole,
+    },
+    {
+        title: 'Code Review',
+        description: 'Write code review exercises with their answer key and publish them',
+        icon: Code2,
+        href: '/admin/code-review',
+        color: 'from-violet-500 to-purple-600',
+        minRole: 'moderator' as MinRole,
     },
     {
         title: 'Moderation',
