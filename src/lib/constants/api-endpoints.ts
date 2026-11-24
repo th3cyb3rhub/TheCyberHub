@@ -24,7 +24,7 @@ export const API_ENDPOINTS = {
     SEARCH: { BASE: '/api/search' },
     NOTIFICATIONS: { BASE: '/api/notifications', UNREAD: '/api/notifications/unread-count', READ: (id: string) => `/api/notifications/${id}/read`, READ_ALL: '/api/notifications/read-all' },
     BOOKMARKS: { BASE: '/api/bookmarks', COLLECTIONS: '/api/bookmarks/collections' },
-    MENTORSHIP: { BASE: '/api/mentorship', MENTORS: '/api/mentor', REQUESTS: '/api/mentorship-requests' },
+    MENTORSHIP: { BASE: '/api/mentorships', MENTORS: '/api/mentors', REQUESTS: '/api/mentorship-requests', SESSIONS: '/api/sessions' },
     INTERNSHIPS: { BASE: '/api/internships', BY_ID: (id: string) => `/api/internships/${id}`, APPLY: (id: string) => `/api/internships/${id}/apply` },
     LEARNING_PATHS: { BASE: '/api/learning-paths', BY_SLUG: (slug: string) => `/api/learning-paths/${slug}` },
     UPLOAD: { AVATAR: '/api/upload/avatar', MEDIA: '/api/upload/media' },

@@ -79,19 +79,6 @@ export const queryKeys = {
         upcoming: ['events', 'upcoming'] as const,
     },
     
-    // Mentorship
-    mentors: {
-        all: ['mentors'] as const,
-        list: (params?: Record<string, unknown>) => ['mentors', 'list', params] as const,
-        detail: (id: string) => ['mentors', 'detail', id] as const,
-    },
-    mentorships: {
-        all: ['mentorships'] as const,
-        list: (params?: Record<string, unknown>) => ['mentorships', 'list', params] as const,
-        detail: (id: string) => ['mentorships', 'detail', id] as const,
-        requests: ['mentorships', 'requests'] as const,
-    },
-    
     // Blogs
     blogs: {
         all: ['blogs'] as const,

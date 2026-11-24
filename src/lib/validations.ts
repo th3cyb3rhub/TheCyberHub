@@ -244,35 +244,6 @@ export const jobSchema = z.object({
 });
 
 // ============================================
-// Mentorship Schemas
-// ============================================
-
-export const mentorshipRequestSchema = z.object({
-    expertiseAreas: z.array(z.enum([
-        'web-security', 'network-security', 'malware-analysis', 'forensics',
-        'osint', 'cryptography', 'reverse-engineering', 'cloud-security',
-        'mobile-security', 'career-guidance', 'ctf-training', 'pentesting',
-    ])).min(1, 'Select at least one area of expertise'),
-    goals: z.string()
-        .min(100, 'Describe your goals (minimum 100 characters)')
-        .max(500, 'Goals cannot exceed 500 characters'),
-    skillLevel: z.enum(['beginner', 'intermediate', 'advanced'], { error: 'Please select your skill level' }),
-});
-
-export const mentorshipFeedbackSchema = z.object({
-    rating: z.number().int().min(1, 'Rating must be at least 1').max(5, 'Rating cannot exceed 5'),
-    comment: z.string().min(10, 'Feedback must be at least 10 characters').max(1000, 'Feedback cannot exceed 1000 characters'),
-});
-
-export const mentorProfileSchema = z.object({
-    expertise: z.array(z.string()).min(1, 'Select at least one area of expertise'),
-    bio: z.string().min(50, 'Bio must be at least 50 characters').max(2000, 'Bio cannot exceed 2000 characters'),
-    yearsOfExperience: z.number().int().min(0).max(50),
-    availability: z.enum(['available', 'limited', 'unavailable']),
-    maxMentees: z.number().int().min(1).max(10).default(3),
-});
-
-// ============================================
 // Internship Application Schemas
 // ============================================
 
@@ -390,10 +361,6 @@ export type DiscussionInput = DiscussionFormData;
 export type ReplyFormData = z.infer<typeof replySchema>;
 export type JobFormData = z.infer<typeof jobSchema>;
 export type JobInput = JobFormData;
-export type MentorshipRequestFormData = z.infer<typeof mentorshipRequestSchema>;
-export type MentorshipRequestInput = MentorshipRequestFormData;
-export type MentorshipFeedbackFormData = z.infer<typeof mentorshipFeedbackSchema>;
-export type MentorProfileFormData = z.infer<typeof mentorProfileSchema>;
 export type InternshipApplicationFormData = z.infer<typeof internshipApplicationSchema>;
 export type InternshipApplicationInput = InternshipApplicationFormData;
 export type CommentFormData = z.infer<typeof commentSchema>;
