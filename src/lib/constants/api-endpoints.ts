@@ -77,6 +77,18 @@ export const API_ENDPOINTS = {
         HINT: (ref: string) => `/api/labs/${ref}/hint`,
         STOP: (ref: string) => `/api/labs/${ref}/stop`,
     },
+    CODE_REVIEW: {
+        BASE: '/api/code-review',
+        STATS: '/api/code-review/stats',
+        MANAGE: '/api/code-review/manage',
+        MY_PROGRESS: '/api/code-review/progress/me',
+        BY_REF: (ref: string) => `/api/code-review/${ref}`,
+        ATTEMPTS: (ref: string) => `/api/code-review/${ref}/attempts`,
+        HINT: (ref: string, order: number) => `/api/code-review/${ref}/hints/${order}`,
+        SOLUTION: (ref: string) => `/api/code-review/${ref}/solution`,
+        PUBLISH: (ref: string) => `/api/code-review/${ref}/publish`,
+        UNPUBLISH: (ref: string) => `/api/code-review/${ref}/unpublish`,
+    },
     CTF: {
         BASE: '/api/ctf-competitions',
         BY_REF: (ref: string) => `/api/ctf-competitions/${ref}`,

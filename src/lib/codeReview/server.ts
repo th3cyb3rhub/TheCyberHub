@@ -1,0 +1,95 @@
+import { cache } from 'react';
+import { API_URL } from '@/lib/api';
+import { SITE_URL } from '@/lib/events/site';
+import { CODE_REVIEW_CACHE_TAG } from './constants';
+import { cardSchema, detailSchema, paginationSchema, statsSchema } from './schemas';
+import type { CrCard, CrDetail, CrPage, CrStats } from '@/types/codeReview';
+
+export { SITE_URL };
+
+/** Slugs that would shadow a fixed API route: they can never be an exercise */
+const RESERVED = new Set(['manage', 'stats', 'progress', 'attempts']);
+/**
+ * What the API accepts when it reads an exercise: 1 to 80 characters of a to z, 0 to 9 and hyphens
+ * (a slug as written by the author), or a 24 character hex id. The stricter rule for new slugs
+ * belongs to the editor only: exercises saved before it must stay reachable.
+ */
+const READ_REF = /^[a-z0-9-]{1,80}$/;
+
+/** Whether a path segment can address an exercise: anything else is a real 404 without asking the API */
+export function isSnippetRef(value: string): boolean {
+    const ref = value.toLowerCase();
+    return READ_REF.test(ref) && !RESERVED.has(ref);
+}
+
+export type ServerSnippet =
+    | { state: 'ok'; snippet: CrDetail }
+    /** The segment cannot be an exercise reference: a real 404 */
+    | { state: 'invalid' }
+    /** 404 for a visitor: a draft or a wrong slug. Staff may still see it, so the browser asks again with the token. */
+    | { state: 'missing' }
+    /** The API was slow or failed: the browser asks again */
+    | { state: 'error' };
+
+const TIMEOUT_MS = 5000;
+
+const get = (path: string, revalidate: number) => fetch(`${API_URL}${path}`, {
+    next: { revalidate, tags: [CODE_REVIEW_CACHE_TAG] },
+    // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+});
+
+/**
+ * The public view of an exercise, fetched while rendering. No token, so no viewer block: the
+ * browser asks again for the signed-in member. A slow or failing API gives `error`, never an
+ * exception. `cache` makes the page and `generateMetadata` share the one request.
+ */
+export const fetchPublicSnippet = cache(async (slug: string): Promise<ServerSnippet> => {
+    if (!isSnippetRef(slug)) return { state: 'invalid' };
+    try {
+        const res = await get(`/api/code-review/${encodeURIComponent(slug.toLowerCase())}`, 300);
+        if (res.status === 404 || res.status === 400) return { state: 'missing' };
+        if (!res.ok) return { state: 'error' };
+        const body = await res.json();
+        const parsed = detailSchema.safeParse(body?.data);
+        if (!parsed.success) return { state: 'error' };
+        return { state: 'ok', snippet: { ...parsed.data, viewer: null, progress: undefined } as CrDetail };
+    } catch {
+        return { state: 'error' };
+    }
+});
+
+/**
+ * The first page of the plain list (newest first), for the list page to show before the browser
+ * runs. Cards that do not parse are left out; a failing API gives null and the browser asks again.
+ */
+export const fetchSnippetsPage = cache(async (limit = 12): Promise<CrPage<CrCard> | null> => {
+    try {
+        const res = await get(`/api/code-review?limit=${limit}`, 300);
+        if (!res.ok) return null;
+        const body = await res.json();
+        const pagination = paginationSchema.safeParse(body?.pagination);
+        if (!Array.isArray(body?.data) || !pagination.success) return null;
+        const cards: CrCard[] = [];
+        for (const item of body.data) {
+            const parsed = cardSchema.safeParse(item);
+            // A visitor's copy never carries a member's progress
+            if (parsed.success) cards.push({ ...parsed.data, progress: undefined } as CrCard);
+        }
+        return { count: cards.length, data: cards, pagination: pagination.data };
+    } catch {
+        return null;
+    }
+});
+
+/** Totals and the counts for the filters */
+export const fetchSnippetStats = cache(async (): Promise<CrStats | null> => {
+    try {
+        const res = await get('/api/code-review/stats', 300);
+        if (!res.ok) return null;
+        const parsed = statsSchema.safeParse((await res.json())?.data);
+        return parsed.success ? ({ ...parsed.data, viewer: null } as CrStats) : null;
+    } catch {
+        return null;
+    }
+});
