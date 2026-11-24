@@ -40,8 +40,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function InternshipPage({ params }: PageProps) {
     const { id } = await params;
     const result = await fetchPublicCohort(id);
-    // A draft, a switched-off cohort or a wrong id is a real 404
-    if (result.state === 'missing') notFound();
-    // When the API is slow or down the browser asks again, so the page still opens
+    // An id that cannot be a cohort is a real 404
+    if (result.state === 'invalid') notFound();
+    // A draft or a switched-off cohort is hidden from the server's anonymous request, but staff
+    // may open it: the browser asks again with the token and shows "not available" on its own 404.
+    // The same goes for a slow or failing API. Metadata keeps these pages out of search results.
     return <CohortDetailView id={id} initialCohort={result.state === 'ok' ? result.cohort : null} />;
 }

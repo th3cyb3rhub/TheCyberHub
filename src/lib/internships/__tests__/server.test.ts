@@ -18,11 +18,11 @@ describe('fetchPublicCohort', () => {
         expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
     });
 
-    it('says missing for a 404 and for an id that cannot exist, without asking the API for the latter', async () => {
+    it('says missing for a 404 (staff may still open it) and invalid for an id that cannot exist, without asking the API', async () => {
         const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(respond(404, { success: false }));
         expect(await fetchPublicCohort('b'.repeat(24))).toEqual({ state: 'missing' });
         fetchMock.mockClear();
-        expect(await fetchPublicCohort('not-an-id')).toEqual({ state: 'missing' });
+        expect(await fetchPublicCohort('not-an-id')).toEqual({ state: 'invalid' });
         expect(fetchMock).not.toHaveBeenCalled();
     });
 

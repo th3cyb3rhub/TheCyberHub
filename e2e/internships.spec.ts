@@ -134,6 +134,20 @@ test.describe('Internship detail', () => {
         await expect(page.getByRole('heading', { name: 'This program is not available' })).toBeVisible();
     });
 
+    test('staff open a draft from the admin list, and a visitor still gets "not available"', async ({ page, browser }) => {
+        await open(page, MODERATOR, '/admin/internships');
+        await page.getByRole('link', { name: 'Hidden Draft Program' }).click();
+        await expect(page).toHaveURL(new RegExp(`/internships/${DRAFT_ID}$`));
+        await expect(page.getByRole('heading', { name: 'Hidden Draft Program', level: 1 })).toBeVisible();
+        await expect(page.getByText('This program is a draft. Only staff can see it.')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'This program is not available' })).toHaveCount(0);
+
+        const visitor = await (await browser.newContext({ bypassCSP: true })).newPage();
+        await open(visitor, VISITOR, `/internships/${DRAFT_ID}`);
+        await expect(visitor.getByRole('heading', { name: 'This program is not available' })).toBeVisible();
+        await expect(visitor.getByRole('heading', { name: 'Hidden Draft Program', level: 1 })).toHaveCount(0);
+    });
+
     test('a completed program shows what the cohort built', async ({ page }) => {
         await open(page, VISITOR, `/internships/${DONE_ID}`);
         await expect(page.getByRole('heading', { name: 'What this cohort built' })).toBeVisible();

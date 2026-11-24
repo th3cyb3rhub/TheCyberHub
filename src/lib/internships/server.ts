@@ -7,7 +7,9 @@ export { SITE_URL };
 
 export type ServerCohort =
     | { state: 'ok'; cohort: CohortDetail }
-    /** 404: a draft, a switched-off cohort or a wrong id */
+    /** The id cannot be a cohort id: a real 404 */
+    | { state: 'invalid' }
+    /** 404 for a visitor: a draft, a switched-off cohort or a wrong id. Staff may still see it, so the browser asks again with the token. */
     | { state: 'missing' }
     /** The API was slow or failed: the browser asks again */
     | { state: 'error' };
@@ -21,7 +23,7 @@ const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
  */
 export const fetchPublicCohort = cache(async (id: string): Promise<ServerCohort> => {
     // A wrong id is a 404 without asking the API
-    if (!OBJECT_ID.test(id)) return { state: 'missing' };
+    if (!OBJECT_ID.test(id)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/internships/${id}`, {
             next: { revalidate: 60, tags: ['internships'] },
