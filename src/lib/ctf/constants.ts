@@ -1,6 +1,6 @@
 import type { CtfListFilter, CtfStatus } from '@/types/ctf';
 
-/** Every limit mirrors the API (`config/ctf.js`), so a form never sends what the server refuses */
+/** Every limit mirrors the ones the API checks, so a form never sends what the server refuses */
 export const CTF_LIMITS = {
     titleMin: 3,
     titleMax: 100,

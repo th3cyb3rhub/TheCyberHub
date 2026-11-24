@@ -6,7 +6,7 @@ import { CTF_LIMITS } from './constants';
 import type { CtfCompetition, CtfPayload, CtfScoringMode } from '@/types/ctf';
 import { CTF_SCORING_MODES } from '@/types/ctf';
 
-/** Every limit mirrors the API (`config/ctf.js`, `validations/ctf.validation.js`), so a form never sends what the server refuses */
+/** Every limit mirrors the ones the API checks on a write, so a form never sends what the server refuses */
 export const FORM_LIMITS = {
     ...CTF_LIMITS,
     placeMax: 1000,

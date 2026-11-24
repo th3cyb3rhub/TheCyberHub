@@ -18,7 +18,7 @@ export function decayPercent(solvesBefore: number): number {
 }
 
 /**
- * What a solve pays, the same sum as the API (`ctfScoring.service.js`): the base points in a static
+ * What a solve pays, the same sum as the API: the base points in a static
  * competition; in a dynamic one a share by solves before, never below 1 and never below the floor.
  * The API pays and fixes the points: this is only for showing them.
  */

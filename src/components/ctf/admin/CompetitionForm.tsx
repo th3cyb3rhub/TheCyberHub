@@ -189,6 +189,9 @@ export function CompetitionForm({ competition }: { competition?: CtfCompetition 
         if (file.size > FORM_LIMITS.uploadMaxBytes) { setErrors((o) => ({ ...o, image: 'The image is larger than 5 MB. Choose a smaller one.' })); return; }
         setUploading(true);
         try {
+            // The general media upload, not the CTF file upload: that one writes to the bucket for challenge
+            // files (machines, captures, archives), takes no WebP, and its files are not meant to be shown on a
+            // public page. A banner is a public image, which is what the media upload stores.
             const url = await uploadFile(file, 'misc');
             set('image', url);
         } catch (err) {
@@ -230,7 +233,7 @@ export function CompetitionForm({ competition }: { competition?: CtfCompetition 
                     <Field id="shortDescription" label="Summary" error={err('shortDescription')} hint={`${values.shortDescription.trim().length}/${FORM_LIMITS.shortDescriptionMax} characters. One or two lines for the list. Plain text.`}>
                         {(p) => <input {...p} type="text" value={values.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} className={`${input} ${err('shortDescription') ? inputError : ''}`} />}
                     </Field>
-                    <Field id="description" label="Description" required error={err('description')} hint={`${values.description.trim().length}/${FORM_LIMITS.descriptionMax} characters. Plain text, shown on the competition page.`}>
+                    <Field id="description" label="Description" required error={err('description')} hint={`${values.description.trim().length}/${FORM_LIMITS.descriptionMax} characters. Markdown is supported: headings, lists, links and code. Shown on the competition page.`}>
                         {(p) => <textarea {...p} rows={5} value={values.description} onChange={(e) => set('description', e.target.value)} className={`${input} ${err('description') ? inputError : ''}`} />}
                     </Field>
                     <Field id="image" label="Banner image" error={err('image')} hint={`A public http or https link, or upload one (JPEG, PNG, WebP or GIF, up to 5 MB). At most ${FORM_LIMITS.url} characters.`}>

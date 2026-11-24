@@ -172,6 +172,13 @@ describe('CompetitionForm (create)', () => {
         expect(screen.getAllByTestId('set-row')).toHaveLength(1)
     })
 
+    it('says the description takes Markdown (it is rendered as sanitised Markdown) and the summary is plain text', () => {
+        render(<CompetitionForm />)
+        expect(document.getElementById('description-hint')).toHaveTextContent(/Markdown is supported/)
+        expect(document.getElementById('description-hint')).not.toHaveTextContent(/Plain text/)
+        expect(document.getElementById('shortDescription-hint')).toHaveTextContent(/Plain text/)
+    })
+
     it('marks a draft challenge in the picker and lets it be added', () => {
         render(<CompetitionForm />)
         expect(screen.getByTestId('picker')).toHaveTextContent('Draft challenge')
