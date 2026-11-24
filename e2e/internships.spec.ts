@@ -487,6 +487,19 @@ test.describe('Staff: applications', () => {
         await expect(drawer.getByRole('button', { name: 'Accept' })).toBeVisible();
     });
 
+    test('follows the real seats after a 409 INTERNSHIP_FULL: Accept turns off once the cohort is reloaded', async ({ page }) => {
+        const state = await open(page, MODERATOR, `/admin/internships/${OPEN_ID}/applications`, withTwo());
+        await page.getByRole('button', { name: 'Review application from Grace Hopper' }).click();
+        const drawer = page.getByTestId('application-drawer');
+        await expect(drawer.getByRole('button', { name: 'Accept' })).toBeEnabled();
+        // another reviewer takes the last seats while this drawer is open
+        state.cohorts.find((c) => c._id === OPEN_ID)!.acceptedCount = 10;
+        await drawer.getByRole('button', { name: 'Accept' }).click();
+        await drawer.getByTestId('review-confirm-button').click();
+        await expect(drawer.getByTestId('review-error')).toContainText('no seats left');
+        await expect(drawer.getByRole('button', { name: 'Accept' })).toBeDisabled();
+    });
+
     test('turns acceptance off in a cohort that is already full', async ({ page }) => {
         const state = freshState();
         state.applications.push({ ...myApplication({ _id: '8'.repeat(24), cohort: FULL_ID, status: 'pending' }), user: { _id: 'someone', name: 'Pat Doe', username: 'pat', email: 'pat@example.org' } });

@@ -4,6 +4,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import * as api from '@/lib/api/internships';
+import { ApiError } from '@/lib/api';
 import { internshipErrorMessage } from '@/lib/internships/errors';
 import type {
     ApplicationStatus, ApplyPayload, CohortCard, CohortDetail, CohortFilters, CohortPayload, CohortStatus, MyApplication, Page,
@@ -243,7 +244,10 @@ export function useChangeApplicationStatus() {
             // An acceptance takes a seat: the cohort's counters and the public spots change
             refreshCohort(qc, v.cohortId);
         },
-        onError: (_err, v) => {
+        onError: (err, v) => {
+            // The program filled up under the screen (another reviewer took the last seat): the
+            // counters it shows are stale, so the Accept button must follow the real state
+            if (err instanceof ApiError && err.code === 'INTERNSHIP_FULL') refreshCohort(qc, v.cohortId);
             // Another reviewer may have moved it first: reload what the screen shows
             void qc.invalidateQueries({ queryKey: internshipKeys.application(v.id, user?.id ?? null) });
             void qc.invalidateQueries({ queryKey: v.cohortId ? internshipKeys.cohortApplicationsOf(v.cohortId) : [...internshipKeys.admin(), 'applications'] });

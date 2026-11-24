@@ -228,6 +228,26 @@ describe('staff', () => {
         expect(internshipErrorMessage(caught)).toMatch(/already accepted/)
     })
 
+    it('reloads the cohort when accepting finds it full, so the button follows the real seats', async () => {
+        const row = makeRow()
+        const spy = vi.spyOn(qc, 'invalidateQueries')
+        api.changeApplicationStatus.mockRejectedValue(new ApiError('full', 409, 'INTERNSHIP_FULL'))
+        const { result } = renderHook(() => useChangeApplicationStatus(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ id: row._id, cohortId: COHORT_ID, status: 'accepted' }).catch(() => undefined) })
+        const keys = spy.mock.calls.map((c) => c[0]?.queryKey)
+        expect(keys).toContainEqual([...internshipKeys.details(), COHORT_ID])
+        expect(keys).toContainEqual(internshipKeys.lists())
+    })
+
+    it('does not reload the cohort for an error that says nothing about seats', async () => {
+        const row = makeRow()
+        const spy = vi.spyOn(qc, 'invalidateQueries')
+        api.changeApplicationStatus.mockRejectedValue(new ApiError('x', 409, 'INTERNSHIP_INVALID_TRANSITION', undefined, { from: 'accepted', to: 'rejected', allowed: [] }))
+        const { result } = renderHook(() => useChangeApplicationStatus(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ id: row._id, cohortId: COHORT_ID, status: 'rejected' }).catch(() => undefined) })
+        expect(spy.mock.calls.map((c) => c[0]?.queryKey)).not.toContainEqual([...internshipKeys.details(), COHORT_ID])
+    })
+
     it('closes a cohort early by setting its status, then refreshes everything', async () => {
         const spy = vi.spyOn(qc, 'invalidateQueries')
         api.updateCohort.mockResolvedValue(makeCohort({ status: 'closed' }))
