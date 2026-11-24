@@ -146,7 +146,8 @@ test.describe('Lab workspace', () => {
         await page.getByRole('button', { name: 'Open hint 1' }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toContainText('Open hint 1?');
-        await dialog.getByRole('button', { name: 'Keep going' }).or(dialog.getByRole('button', { name: /Cancel/ })).first().click();
+        await expect(dialog).toContainText('you would earn 40 instead of 50');
+        await dialog.getByRole('button', { name: 'Keep it closed' }).click();
         await expect(dialog).toHaveCount(0);
         expect(state.calls.some((c) => c.path.endsWith('/hint'))).toBe(false);
 
@@ -204,8 +205,8 @@ test.describe('Lab workspace', () => {
         state.progress[SQL] = started();
         await open(page, MEMBER, `/labs/${SQL}`, state);
         await page.getByLabel('Flag', { exact: true }).fill('flag{nope}');
-        await page.getByLabel('Flag', { exact: true }).press('Enter');
-        await page.getByLabel('Flag', { exact: true }).press('Enter');
+        // Two submits in the same tick, before the screen has re-rendered
+        await page.getByTestId('flag-form').locator('form').evaluate((form) => { (form as HTMLFormElement).requestSubmit(); (form as HTMLFormElement).requestSubmit(); });
         await expect(page.getByTestId('wrong-notice')).toBeVisible();
         expect(submits(state)).toHaveLength(1);
     });
@@ -266,7 +267,7 @@ test.describe('Lab workspace', () => {
         state.failOnce['POST /submit'] = { status: 409, code: 'LAB_BUSY', message: 'Another answer is being checked.' };
         await open(page, MEMBER, `/labs/${SQL}`, state);
         await sendFlag(page, 'flag{x}');
-        await expect(page.getByTestId('flag-status')).toContainText(/try again|moment|another/i);
+        await expect(page.getByTestId('flag-status')).toContainText(/send it again/i);
         await expect(page.getByLabel('Flag', { exact: true })).toBeEnabled();
     });
 
@@ -314,7 +315,7 @@ test.describe('Lab workspace', () => {
         const file = page.getByTestId('lab-file').getByRole('link').first();
         await expect(file).toHaveAttribute('href', 'https://files.example.org/app.zip');
         await expect(file).toHaveAttribute('rel', 'noopener noreferrer nofollow ugc');
-        await expect(page.getByTestId('lab-file')).toContainText('2.0 KB');
+        await expect(page.getByTestId('lab-file')).toContainText('2 KB');
     });
 
     test('a lab with no target says so', async ({ page }) => {
@@ -434,7 +435,7 @@ test.describe('Labs admin', () => {
         expect(state.calls.some((c) => c.method === 'POST' && c.path === '/')).toBe(false);
 
         await page.getByRole('button', { name: 'Add a flag' }).click();
-        await page.getByLabel('Flag 1', { exact: true }).fill('flag{brand_new}');
+        await page.getByLabel(/^Flag 1\b/).fill('flag{brand_new}');
         await page.getByRole('button', { name: 'Create and publish' }).click();
         await expect(page).toHaveURL(/\/admin\/labs$/);
 
@@ -474,7 +475,7 @@ test.describe('Labs admin', () => {
 
         await page.goto(`/admin/labs/${SQL}/edit`);
         await page.getByRole('button', { name: 'Enter new flags' }).click();
-        await page.getByLabel('Flag 1', { exact: true }).fill('flag{replaced}');
+        await page.getByLabel(/^Flag 1\b/).fill('flag{replaced}');
         await page.getByRole('button', { name: 'Save changes' }).click();
         await expect(page).toHaveURL(/\/admin\/labs$/);
         const second = state.calls.filter((c) => c.method === 'PUT')[1];
