@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Labs | TheCyberHub',
-    description: 'Hands-on cybersecurity labs and virtual environments for practicing penetration testing, security analysis, and ethical hacking.',
+    title: 'Labs',
+    description: 'Guided cybersecurity exercises: read the brief, work on the target in your own tools and submit the flag you find. Hints, points and a leaderboard.',
     openGraph: {
         title: 'Cybersecurity Labs | TheCyberHub',
-        description: 'Hands-on cybersecurity labs for practicing penetration testing and ethical hacking.',
+        description: 'Guided flag exercises for practicing web security, forensics, cryptography and more.',
         type: 'website',
     },
 }

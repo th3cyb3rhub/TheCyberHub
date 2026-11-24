@@ -58,7 +58,7 @@ const quickTools = [
 const learningResources = [
     { title: 'Cheatsheets', href: '/cheatsheets', icon: BookOpen, description: 'Quick reference guides' },
     { title: 'Security Tools', href: '/tools', icon: Wrench, description: 'Explore every security tool' },
-    { title: 'Practice Labs', href: '/labs', icon: Shield, description: 'Hands-on environments' },
+    { title: 'Practice Labs', href: '/labs', icon: Shield, description: 'Guided flag exercises' },
 ];
 
 // Stats cards

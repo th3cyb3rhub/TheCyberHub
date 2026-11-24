@@ -26,7 +26,8 @@ import {
     HardDrive,
     Wrench,
     Route,
-    Library
+    Library,
+    FlaskConical
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -143,6 +144,14 @@ const adminSections = [
         href: '/admin/internships',
         color: 'from-orange-500 to-amber-500',
         minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'Labs',
+        description: 'Write guided exercises, set flags and publish them',
+        icon: FlaskConical,
+        href: '/admin/labs',
+        color: 'from-amber-500 to-orange-600',
+        minRole: 'admin' as MinRole,
     },
     {
         title: 'Moderation',
