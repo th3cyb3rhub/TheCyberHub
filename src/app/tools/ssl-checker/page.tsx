@@ -1,357 +1,168 @@
-"use client"
+'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Play, Loader2, CheckCircle, XCircle, AlertTriangle, Lock, Calendar, Server, Copy, Check } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
+import { ToolShell } from '@/components/tools/ToolShell';
+import { ToolForm, useTargetParam } from '@/components/tools/ToolForm';
+import { AccessNotice, AckCheckbox, useToolAccess } from '@/components/tools/ToolAccess';
+import { DataRow, Pill, ResultActions, ResultMeta, ResultPanel, ResultSkeleton, ToolErrorPanel } from '@/components/tools/ResultParts';
+import { card, focusRing, input, label as labelClass, muted, type Tone } from '@/components/tools/styles';
+import { useSslCheck, useTool } from '@/hooks/queries/useTools';
+import { sslSummary } from '@/lib/tools/summaries';
+import { checkHost, checkPort } from '@/lib/tools/validate';
+import type { SslCertificate, SslResult, SslSeverity } from '@/types/tools';
 
-interface SSLResult {
-    domain: string;
-    valid: boolean;
-    issuer: string;
-    subject: string;
-    validFrom: string;
-    validTo: string;
-    daysRemaining: number;
-    protocol: string;
-    keySize: number;
-    signatureAlgorithm: string;
-    issues: string[];
-    grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
-}
+const SLUG = 'ssl-checker';
 
-const SSLCheckerPage = () => {
-    const [domain, setDomain] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<SSLResult | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
-
-    const checkSSL = async () => {
-        if (!domain) {
-            setError('Please enter a domain');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        setResult(null);
-
-        try {
-            // Clean domain
-            const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-            
-            // In a real implementation, this would call a backend API
-            // For demo, we'll simulate checking via a public API
-            const response = await fetch(`https://api.ssllabs.com/api/v3/analyze?host=${cleanDomain}&fromCache=on&maxAge=24`);
-            
-            if (!response.ok) {
-                throw new Error('Failed to check SSL');
-            }
-
-            const data = await response.json();
-            
-            // If still analyzing, show status
-            if (data.status === 'IN_PROGRESS' || data.status === 'DNS') {
-                setError(`Analysis in progress for ${cleanDomain}. This may take a few minutes. Try again shortly.`);
-                setLoading(false);
-                return;
-            }
-
-            if (data.status === 'ERROR') {
-                throw new Error(data.statusMessage || 'SSL check failed');
-            }
-
-            // Parse results
-            const endpoint = data.endpoints?.[0];
-            const cert = endpoint?.details?.cert;
-            
-            if (!endpoint || !cert) {
-                // Simulate result for demo
-                simulateResult(cleanDomain);
-                return;
-            }
-
-            const validTo = new Date(cert.notAfter);
-            const daysRemaining = Math.floor((validTo.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-            const issues: string[] = [];
-            if (daysRemaining < 30) issues.push('Certificate expires soon');
-            if (endpoint.details?.vulnBeast) issues.push('Vulnerable to BEAST attack');
-            if (endpoint.details?.poodle) issues.push('Vulnerable to POODLE attack');
-            if (endpoint.details?.heartbleed) issues.push('Vulnerable to Heartbleed');
-            if (!endpoint.details?.supportsRc4) issues.push('RC4 cipher is disabled (good)');
-
-            setResult({
-                domain: cleanDomain,
-                valid: endpoint.grade !== 'F' && endpoint.grade !== 'T',
-                issuer: cert.issuerLabel || 'Unknown',
-                subject: cert.commonNames?.[0] || cleanDomain,
-                validFrom: new Date(cert.notBefore).toLocaleDateString(),
-                validTo: validTo.toLocaleDateString(),
-                daysRemaining,
-                protocol: endpoint.details?.protocols?.[0]?.name || 'TLS',
-                keySize: cert.keySize || 2048,
-                signatureAlgorithm: cert.sigAlg || 'SHA256withRSA',
-                issues,
-                grade: endpoint.grade || 'B'
-            });
-        } catch {
-            // Fallback to simulated result for demo
-            simulateResult(domain.replace(/^https?:\/\//, '').replace(/\/.*$/, ''));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const simulateResult = (cleanDomain: string) => {
-        // Simulate a realistic result for demo purposes
-        const futureDate = new Date();
-        futureDate.setMonth(futureDate.getMonth() + 8);
-        const pastDate = new Date();
-        pastDate.setMonth(pastDate.getMonth() - 4);
-
-        setResult({
-            domain: cleanDomain,
-            valid: true,
-            issuer: "Let's Encrypt Authority X3",
-            subject: cleanDomain,
-            validFrom: pastDate.toLocaleDateString(),
-            validTo: futureDate.toLocaleDateString(),
-            daysRemaining: Math.floor((futureDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-            protocol: 'TLS 1.3',
-            keySize: 2048,
-            signatureAlgorithm: 'SHA256withRSA',
-            issues: [],
-            grade: 'A'
-        });
-    };
-
-    const copyToClipboard = (id: string, text: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-    };
-
-    const getGradeColor = (grade: string) => {
-        switch (grade) {
-            case 'A+':
-            case 'A':
-                return 'text-green-400 bg-green-500/20 border-green-500/30';
-            case 'B':
-                return 'text-blue-400 bg-blue-500/20 border-blue-500/30';
-            case 'C':
-                return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
-            case 'D':
-                return 'text-orange-400 bg-orange-500/20 border-orange-500/30';
-            default:
-                return 'text-red-400 bg-red-500/20 border-red-500/30';
-        }
-    };
-
-    const opensslCommand = `openssl s_client -connect ${domain || 'example.com'}:443 -servername ${domain || 'example.com'} 2>/dev/null | openssl x509 -noout -dates -issuer -subject`;
-
-    return (
-        <div className="min-h-screen pt-20">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
-                {/* Header */}
-                <div className="mb-8">
-                    <Link 
-                        href="/tools" 
-                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-white mb-4 transition-colors"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Tools
-                    </Link>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                        SSL/TLS Checker
-                    </h1>
-                    <p className="text-gray-400">
-                        Analyze SSL/TLS certificate configuration and security.
-                    </p>
-                </div>
-
-                {/* Test Form */}
-                <div className="mb-8 p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                    <h2 className="text-white font-medium mb-4">Check SSL Certificate</h2>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                value={domain}
-                                onChange={(e) => setDomain(e.target.value)}
-                                placeholder="example.com"
-                                onKeyDown={(e) => e.key === 'Enter' && checkSSL()}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-600 focus:border-orange-500/50 focus:outline-none transition-colors"
-                            />
-                        </div>
-                        <button
-                            onClick={checkSSL}
-                            disabled={loading || !domain}
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-xl transition-all"
-                        >
-                            {loading ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Play className="w-4 h-4" />
-                            )}
-                            Check
-                        </button>
-                    </div>
-                </div>
-
-                {/* Error */}
-                {error && (
-                    <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                            <p className="text-yellow-400 text-sm">{error}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Results */}
-                {result && (
-                    <div className="space-y-4">
-                        {/* Grade & Status */}
-                        <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    {result.valid ? (
-                                        <CheckCircle className="w-8 h-8 text-green-500" />
-                                    ) : (
-                                        <XCircle className="w-8 h-8 text-red-500" />
-                                    )}
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-white">{result.domain}</h3>
-                                        <p className={`text-sm ${result.valid ? 'text-green-400' : 'text-red-400'}`}>
-                                            {result.valid ? 'Valid SSL Certificate' : 'Invalid or Expired Certificate'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className={`px-4 py-2 rounded-xl border text-2xl font-bold ${getGradeColor(result.grade)}`}>
-                                    {result.grade}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Certificate Details */}
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Lock className="w-4 h-4 text-orange-500" />
-                                    <h3 className="text-white font-medium">Certificate Info</h3>
-                                </div>
-                                <div className="space-y-3 text-sm">
-                                    <div>
-                                        <p className="text-gray-500">Subject</p>
-                                        <p className="text-white">{result.subject}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-500">Issuer</p>
-                                        <p className="text-white">{result.issuer}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-500">Signature Algorithm</p>
-                                        <p className="text-white">{result.signatureAlgorithm}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Calendar className="w-4 h-4 text-blue-500" />
-                                    <h3 className="text-white font-medium">Validity Period</h3>
-                                </div>
-                                <div className="space-y-3 text-sm">
-                                    <div>
-                                        <p className="text-gray-500">Valid From</p>
-                                        <p className="text-white">{result.validFrom}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-500">Valid Until</p>
-                                        <p className="text-white">{result.validTo}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-500">Days Remaining</p>
-                                        <p className={`font-medium ${result.daysRemaining < 30 ? 'text-red-400' : result.daysRemaining < 90 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                            {result.daysRemaining} days
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Technical Details */}
-                        <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                            <div className="flex items-center gap-2 mb-3">
-                                <Server className="w-4 h-4 text-purple-500" />
-                                <h3 className="text-white font-medium">Technical Details</h3>
-                            </div>
-                            <div className="grid sm:grid-cols-3 gap-4 text-sm">
-                                <div>
-                                    <p className="text-gray-500">Protocol</p>
-                                    <p className="text-white">{result.protocol}</p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-500">Key Size</p>
-                                    <p className="text-white">{result.keySize} bits</p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-500">Algorithm</p>
-                                    <p className="text-white">{result.signatureAlgorithm}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Issues */}
-                        {result.issues.length > 0 && (
-                            <div className="p-5 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                                    <h3 className="text-yellow-400 font-medium">Issues Found</h3>
-                                </div>
-                                <ul className="space-y-2">
-                                    {result.issues.map((issue, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-sm text-yellow-400/80">
-                                            <span className="mt-1">•</span>
-                                            {issue}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {/* No Issues */}
-                        {result.issues.length === 0 && result.valid && (
-                            <div className="p-5 rounded-xl border border-green-500/30 bg-green-500/5">
-                                <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-5 h-5 text-green-500" />
-                                    <p className="text-green-400 font-medium">No security issues detected</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* OpenSSL Command */}
-                <div className="mt-8 p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-white font-medium">Check with OpenSSL</h3>
-                        <button
-                            onClick={() => copyToClipboard('openssl', opensslCommand)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-sm transition-colors"
-                        >
-                            {copiedId === 'openssl' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                            Copy
-                        </button>
-                    </div>
-                    <pre className="p-4 rounded-lg bg-black/50 border border-white/5 overflow-x-auto">
-                        <code className="text-sm text-orange-400">{opensslCommand}</code>
-                    </pre>
-                </div>
-            </div>
-        </div>
-    );
+const SEVERITY: Record<SslSeverity, { label: string; tone: Tone }> = {
+    info: { label: 'Info', tone: 'info' },
+    low: { label: 'Low', tone: 'neutral' },
+    medium: { label: 'Medium', tone: 'warn' },
+    high: { label: 'High', tone: 'bad' },
 };
 
-export default SSLCheckerPage;
+const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Unknown');
+const name = (dn: Record<string, string>) => dn.CN ?? dn.O ?? 'Unknown';
+
+function Expiry({ cert }: { cert: SslCertificate }) {
+    const left = cert.daysRemaining;
+    if (left === null) return <>{date(cert.validTo)}</>;
+    const tone: Tone = left < 0 ? 'bad' : left <= 14 ? 'bad' : left <= 30 ? 'warn' : 'good';
+    return <>{date(cert.validTo)} <Pill tone={tone}>{left < 0 ? `Expired ${-left} days ago` : `${left} days left`}</Pill></>;
+}
+
+function Result({ data }: { data: SslResult }) {
+    const cert = data.certificate;
+    return (
+        <div className="space-y-4">
+            <div className={`${card} p-5`}>
+                <p className={`mb-3 text-xs ${muted}`} data-testid="ssl-note">{data.note}</p>
+                <dl>
+                    <DataRow label="Endpoint"><span className="font-mono">{data.host}:{data.port}</span></DataRow>
+                    <DataRow label="Trusted chain">{data.verified ? <Pill tone="good">Verified</Pill> : <><Pill tone="bad">Not verified</Pill> <span className={`text-xs ${muted}`}>{data.verificationError ?? ''}</span></>}</DataRow>
+                    <DataRow label="Name match">{data.hostnameMatch ? <Pill tone="good">Certificate covers this name</Pill> : <><Pill tone="bad">Name mismatch</Pill> <span className={`text-xs ${muted}`}>{data.hostnameError ?? ''}</span></>}</DataRow>
+                    <DataRow label="Protocol">{data.protocol ?? 'Unknown'}</DataRow>
+                    <DataRow label="Cipher">{data.cipher ? <span className="font-mono text-[13px]">{data.cipher.name}</span> : 'Unknown'}</DataRow>
+                    {data.alpn && <DataRow label="ALPN">{String(data.alpn)}</DataRow>}
+                    <DataRow label="Subject">{name(cert.subject)}</DataRow>
+                    <DataRow label="Issuer">{name(cert.issuer)}</DataRow>
+                    <DataRow label="Valid from">{date(cert.validFrom)}</DataRow>
+                    <DataRow label="Valid until"><Expiry cert={cert} /></DataRow>
+                    <DataRow label="Public key">{cert.key.type ?? 'Unknown'}{cert.key.curve ? ` ${cert.key.curve}` : ''}{cert.key.bits ? `, ${cert.key.bits} bits` : ''}</DataRow>
+                    {cert.fingerprint256 && <DataRow label="SHA-256"><span className="break-all font-mono text-[12px]">{cert.fingerprint256}</span></DataRow>}
+                </dl>
+            </div>
+
+            <section className={`${card} p-5`} aria-labelledby="ssl-findings">
+                <h2 id="ssl-findings" className="mb-2 text-base font-semibold text-gray-900 dark:text-white">Findings</h2>
+                {data.findings.length === 0 ? (
+                    <p className={`text-sm ${muted}`} data-testid="ssl-no-findings">No problems found in what this handshake negotiated.</p>
+                ) : (
+                    <ul>
+                        {data.findings.map((f, i) => (
+                            <li key={`${f.code}-${i}`} className="flex flex-wrap items-start gap-2 border-b border-gray-200 py-2.5 last:border-b-0 dark:border-neutral-800" data-testid="ssl-finding">
+                                <Pill tone={SEVERITY[f.severity]?.tone ?? 'neutral'}>{SEVERITY[f.severity]?.label ?? f.severity}</Pill>
+                                <span className="min-w-0 flex-1 text-sm text-gray-800 dark:text-gray-200">{f.message}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
+
+            {data.chain.length > 0 && (
+                <section className={`${card} overflow-x-auto p-5`} aria-labelledby="ssl-chain">
+                    <h2 id="ssl-chain" className="mb-2 text-base font-semibold text-gray-900 dark:text-white">Certificate chain</h2>
+                    <table className="w-full min-w-[30rem] text-left text-sm">
+                        <caption className="sr-only">Certificates the server sent, leaf first</caption>
+                        <thead className={muted}><tr><th scope="col" className="py-1.5 pr-3 font-medium">#</th><th scope="col" className="pr-3 font-medium">Subject</th><th scope="col" className="pr-3 font-medium">Issuer</th><th scope="col" className="font-medium">Expires</th></tr></thead>
+                        <tbody>
+                            {data.chain.map((c, i) => (
+                                <tr key={`${c.fingerprint256 ?? i}`} className="border-t border-gray-200 dark:border-neutral-800">
+                                    <td className="py-1.5 pr-3">{i + 1}</td><td className="pr-3">{name(c.subject)}</td><td className="pr-3">{name(c.issuer)}</td><td>{date(c.validTo)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </section>
+            )}
+
+            {cert.sans && cert.sans.length > 0 && (
+                <details className={`${card} p-5`}>
+                    <summary className="cursor-pointer text-base font-semibold text-gray-900 dark:text-white">Names on the certificate ({cert.sans.length})</summary>
+                    <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                        {cert.sans.map((s, i) => <li key={`${s.value}-${i}`} className="rounded-lg bg-gray-100 px-3 py-1.5 font-mono text-[13px] break-all dark:bg-neutral-950">{s.value}</li>)}
+                    </ul>
+                </details>
+            )}
+
+            {data.sslLabsUrl && (
+                <p className="text-sm">
+                    <a href={data.sslLabsUrl} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 rounded text-blue-800 underline underline-offset-2 dark:text-blue-400 ${focusRing}`}>
+                        Full assessment with a grade on SSL Labs <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span>
+                    </a>
+                </p>
+            )}
+        </div>
+    );
+}
+
+export default function SslCheckerPage() {
+    const { tool, available } = useTool(SLUG);
+    const access = useToolAccess(tool?.auth !== 'optional');
+    const { initial, save } = useTargetParam();
+    const [value, setValue] = useState('');
+    const [port, setPort] = useState('443');
+    const [ack, setAck] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [portError, setPortError] = useState<string | null>(null);
+    const scan = useSslCheck();
+
+    useEffect(() => { if (initial) setValue(initial); }, [initial]);
+
+    const run = () => {
+        const host = checkHost(value);
+        if (!host.ok) { setFormError(host.error); return; }
+        setFormError(null);
+        const p = checkPort(port || '443');
+        if (!p.ok) { setPortError(p.error); return; }
+        setPortError(null);
+        save(host.value);
+        scan.mutate({ host: host.value, port: p.value, ack: true });
+    };
+
+    const locked = !available || access !== 'ok';
+
+    return (
+        <ToolShell slug={SLUG}>
+            <AccessNotice state={access} />
+            <ToolForm
+                id="ssl-host" label="Host name or IP address" value={value} onChange={setValue} onSubmit={run}
+                placeholder="example.com" buttonLabel="Check certificate" pending={scan.isPending} disabled={locked}
+                error={formError} inputMode="url" submitDisabled={!ack}
+                hint="Our server opens one TLS connection and reports what it sees. It gives facts, not a letter grade."
+            >
+                <div className="sm:max-w-[10rem]">
+                    <label htmlFor="ssl-port" className={labelClass}>Port</label>
+                    <input id="ssl-port" type="text" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value)} className={input} aria-invalid={!!portError} aria-describedby={portError ? 'ssl-port-error' : undefined} autoComplete="off" />
+                    {portError && <p id="ssl-port-error" role="alert" className="mt-1 text-sm text-red-800 dark:text-red-300">{portError}</p>}
+                </div>
+                <AckCheckbox id="ssl-ack" checked={ack} onChange={setAck} disabled={locked} />
+            </ToolForm>
+
+            <div className="mt-6" data-testid="ssl-output">
+                {scan.isPending && <ResultSkeleton label="Connecting and reading the certificate" />}
+                {!scan.isPending && scan.isError && <ToolErrorPanel error={scan.error} onRetry={() => scan.variables && scan.mutate(scan.variables)} />}
+                {!scan.isPending && scan.data && (
+                    <ResultPanel label="TLS check result">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <ResultMeta meta={scan.data.meta} scannedAt={scan.data.data.scannedAt} />
+                            <ResultActions data={scan.data.data} text={sslSummary(scan.data.data)} filename={`tls-${scan.data.data.host}`} />
+                        </div>
+                        <Result data={scan.data.data} />
+                    </ResultPanel>
+                )}
+                {!scan.isPending && !scan.isError && !scan.data && <p className={`text-sm ${muted}`}>Enter a host to see its certificate chain, expiry, protocol and cipher.</p>}
+            </div>
+        </ToolShell>
+    );
+}
