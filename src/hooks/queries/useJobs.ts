@@ -41,6 +41,16 @@ const ADMIN_PAGE_SIZE = 20;
 
 type Pages<T> = InfiniteData<JobsPage<T>, number>;
 const nextPage = <T,>(last: JobsPage<T>) => (last.pagination.hasMore ? last.pagination.page + 1 : undefined);
+
+/** Sorts the database sorts in memory: the API answers 400 for a page past `memorySortMaxPage`, so the list stops there */
+export const isMemorySort = (sortBy?: string): boolean => sortBy === 'viewCount' || sortBy === 'title' || sortBy === 'salary.max';
+const reachedSortCap = (filters: JobListFilters, last: JobsPage<unknown>) =>
+    isMemorySort(filters.sortBy) && last.pagination.hasMore && last.pagination.page >= JOB_LIMITS.memorySortMaxPage;
+/** Whether the list ends at the page cap of its sort while the API still has more (the page says so) */
+export const hitSortCap = (filters: JobListFilters, pages: JobsPage<unknown>[] | undefined): boolean => {
+    const last = pages?.[pages.length - 1];
+    return !!last && reachedSortCap(filters, last);
+};
 const noMore = (err: unknown) => !(err instanceof ApiError && err.status >= 400 && err.status < 500);
 
 // ---------------------------------------------------------------------------
@@ -61,7 +71,7 @@ export function useJobs(filters: JobListFilters = {}, initialPage?: JobsPage<Job
         queryKey: jobKeys.list(base, user?.id ?? null),
         queryFn: ({ pageParam }) => api.listJobs({ ...base, page: pageParam }),
         initialPageParam: 1,
-        getNextPageParam: nextPage<JobCard>,
+        getNextPageParam: (last) => (reachedSortCap(base, last) ? undefined : nextPage<JobCard>(last)),
         enabled: !loading,
         staleTime: 60_000,
         initialData: !signedIn ? seed : undefined,
@@ -72,24 +82,29 @@ export function useJobs(filters: JobListFilters = {}, initialPage?: JobsPage<Job
 }
 
 /**
- * One job by id or slug. The copy rendered on the server is public, so it differs by who is looking:
- * - A visitor who is not signed in has the same answer, so it counts as fresh from the moment the
- *   page rendered, and nothing is fetched right after hydration.
- * - A signed-in member only gets it as `placeholderData`: shown while the answer with their own
- *   token is on its way (it carries `viewer`, and the status for the poster), and never taken for
- *   the answer itself (`isPlaceholderData` tells them apart).
+ * One job by id or slug. The copy rendered on the server is public, so it only stands in while the
+ * browser asks for the real one:
+ * - The server's own read counts at most one view per minute per address, so views are counted here,
+ *   from the browser: once per page mount, for this viewer (a member with their token, which also says
+ *   whether they saved the job and own it). The answer is read from the API each time, never from a cache.
+ * - `staleTime: Infinity` and no refetch on focus or reconnect keep it to that one read, so React strict
+ *   mode and a returning tab do not count twice; `gcTime: 0` drops it with the page, so the next visit counts.
+ * - The server copy is only ever `placeholderData` (`isPlaceholderData` tells it from the answer).
+ * The edit screen reads the job without a server copy and keeps the usual refetching: it uses a changed
+ * `updatedAt` to tell the poster the job moved on.
  */
-export function useJob(ref: string, serverJob?: Job | null, initialUpdatedAt?: number, enabled = true) {
+export function useJob(ref: string, serverJob?: Job | null, initialUpdatedAt?: number, enabled = true, options: { pageView?: boolean } = {}) {
     const { user, loading } = useAuth();
-    const signedIn = !!user;
+    const pageView = options.pageView ?? serverJob !== undefined;
+    void initialUpdatedAt;
     return useQuery({
         queryKey: jobKeys.detail(ref, user?.id ?? null),
         queryFn: async () => (await api.getJob(ref)).job,
         enabled: enabled && !!ref && !loading,
-        initialData: !signedIn ? (serverJob ?? undefined) : undefined,
-        initialDataUpdatedAt: initialUpdatedAt,
-        placeholderData: signedIn ? (serverJob ?? undefined) : undefined,
-        staleTime: 30_000,
+        placeholderData: serverJob ?? undefined,
+        ...(pageView
+            ? { staleTime: Infinity, gcTime: 0, refetchOnWindowFocus: false, refetchOnReconnect: false }
+            : { staleTime: 30_000 }),
         retry: (count, err) => noMore(err) && count < 2,
     });
 }
@@ -114,19 +129,22 @@ export const useApplyToJob = useApplyJob;
 
 type Snapshot = [QueryKey, unknown][];
 
-/** Mark a job saved or not in every cached copy: the detail, the lists' `viewer.savedIds`, the saved list */
+/**
+ * Mark a job saved or not in every cached copy: the detail, the lists' `viewer.savedIds`, the saved list.
+ * Only the queries that are about to change are cancelled (a read in flight would overwrite the patch),
+ * never the whole jobs cache.
+ */
 async function patchSaved(qc: QueryClient, jobId: string, saved: boolean): Promise<Snapshot> {
-    await qc.cancelQueries({ queryKey: jobKeys.all });
-    const snapshot: Snapshot = [
-        ...qc.getQueriesData({ queryKey: jobKeys.details() }),
-        ...qc.getQueriesData({ queryKey: jobKeys.lists() }),
-        ...qc.getQueriesData({ queryKey: ['jobs', 'saved'] }),
-    ];
+    const details = qc.getQueriesData<Job>({ queryKey: jobKeys.details() }).filter(([, data]) => data && data._id === jobId && data.viewer);
+    const lists = qc.getQueriesData<Pages<JobCard>>({ queryKey: jobKeys.lists() }).filter(([, data]) => !!data);
+    const savedLists = qc.getQueriesData<Pages<JobCard>>({ queryKey: ['jobs', 'saved'] }).filter(([, data]) => !!data);
+    await Promise.all([...details, ...lists, ...savedLists].map(([key]) => qc.cancelQueries({ queryKey: key, exact: true })));
+    const snapshot: Snapshot = [...details, ...lists, ...savedLists];
 
-    for (const [key, data] of qc.getQueriesData<Job>({ queryKey: jobKeys.details() })) {
-        if (data && data._id === jobId && data.viewer) qc.setQueryData(key, { ...data, viewer: { ...data.viewer, saved } });
+    for (const [key, data] of details) {
+        if (data?.viewer) qc.setQueryData(key, { ...data, viewer: { ...data.viewer, saved } });
     }
-    for (const [key, data] of qc.getQueriesData<Pages<JobCard>>({ queryKey: jobKeys.lists() })) {
+    for (const [key, data] of lists) {
         if (!data) continue;
         qc.setQueryData<Pages<JobCard>>(key, {
             ...data,
@@ -139,9 +157,8 @@ async function patchSaved(qc: QueryClient, jobId: string, saved: boolean): Promi
     }
     if (!saved) {
         // Taking a job off the saved list removes its card at once
-        for (const [key, data] of qc.getQueriesData<Pages<JobCard>>({ queryKey: ['jobs', 'saved'] })) {
-            if (!data) continue;
-            qc.setQueryData<Pages<JobCard>>(key, { ...data, pages: data.pages.map((page) => ({ ...page, data: page.data.filter((j) => j._id !== jobId) })) });
+        for (const [key, data] of savedLists) {
+            if (data) qc.setQueryData<Pages<JobCard>>(key, { ...data, pages: data.pages.map((page) => ({ ...page, data: page.data.filter((j) => j._id !== jobId) })) });
         }
     }
     return snapshot;
@@ -151,20 +168,34 @@ function restore(qc: QueryClient, snapshot: Snapshot | undefined) {
     for (const [key, data] of snapshot ?? []) qc.setQueryData(key, data);
 }
 
-/** Save or unsave a job. The star changes at once; a failure puts it back and says why. */
+/**
+ * Save or unsave a job. The star changes at once; a failure puts it back and says why. A save that
+ * answers 409 means the job is already saved, and an unsave that answers 404 means it is already off
+ * the list: both are what the member asked for, so neither is an error.
+ */
 export function useSaveJob() {
     const qc = useQueryClient();
     const { addToast } = useToast();
     return useMutation<void, unknown, { id: string; saved: boolean }, { snapshot: Snapshot }>({
-        mutationFn: ({ id, saved }) => (saved ? api.saveJob(id) : api.unsaveJob(id)),
+        mutationFn: async ({ id, saved }) => {
+            try {
+                await (saved ? api.saveJob(id) : api.unsaveJob(id));
+            } catch (err) {
+                if (err instanceof ApiError && ((saved && err.status === 409) || (!saved && err.status === 404))) return;
+                throw err;
+            }
+        },
         retry: 0,
         onMutate: async ({ id, saved }) => ({ snapshot: await patchSaved(qc, id, saved) }),
         onError: (err, _v, ctx) => {
             restore(qc, ctx?.snapshot);
             addToast({ variant: 'error', message: jobErrorMessage(err, 'Could not update your saved jobs.') });
         },
-        onSuccess: (_r, { saved }) => {
-            addToast({ variant: 'success', message: saved ? 'Job saved.' : 'Removed from your saved jobs.' });
+        onSuccess: (_r, { saved }) => addToast({ variant: 'success', message: saved ? 'Job saved.' : 'Removed from your saved jobs.' }),
+        // Whatever happened, the next read is the server's word on it
+        onSettled: () => {
+            void qc.invalidateQueries({ queryKey: jobKeys.details() });
+            void qc.invalidateQueries({ queryKey: jobKeys.lists() });
             void qc.invalidateQueries({ queryKey: ['jobs', 'saved'] });
         },
     });

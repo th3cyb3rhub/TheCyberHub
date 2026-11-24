@@ -26,12 +26,39 @@ beforeEach(() => {
 })
 
 describe('JobActions', () => {
-    it('shows a visitor apply, a sign-in link to save, and no report button', () => {
+    it('shows a visitor apply, a sign-in link to save, and no report button', async () => {
+        api.getJob.mockResolvedValue({ job: job(), meta: {} })
         renderWithClient(<JobActions jobRef="senior-pentester-abc123" initialJob={job()} initialUpdatedAt={Date.now()} />)
         expect(screen.getByTestId('apply')).toBeInTheDocument()
         expect(screen.getByRole('link', { name: /Sign in to save/ })).toBeInTheDocument()
         expect(screen.queryByTestId('report-job')).not.toBeInTheDocument()
-        expect(api.getJob).not.toHaveBeenCalled()
+        // The page's view is counted from the browser: one read, even though the server already sent the job
+        await waitFor(() => expect(api.getJob).toHaveBeenCalledTimes(1))
+    })
+
+    it('counts one view per page mount: the three readers of the page share one read', async () => {
+        api.getJob.mockResolvedValue({ job: job(), meta: {} })
+        const client = renderWithClient(
+            <>
+                <JobActions jobRef="senior-pentester-abc123" initialJob={job()} />
+                <JobViewerBanner jobRef="senior-pentester-abc123" initialJob={job()} />
+            </>,
+        )
+        await waitFor(() => expect(api.getJob).toHaveBeenCalledTimes(1))
+        // A returning tab does not read it again
+        window.dispatchEvent(new Event('focus'))
+        document.dispatchEvent(new Event('visibilitychange'))
+        await new Promise((r) => setTimeout(r, 30))
+        expect(api.getJob).toHaveBeenCalledTimes(1)
+        client.unmount()
+    })
+
+    it('shows a moderator who is not the poster no Edit link on the job page', async () => {
+        auth.current = { user: { id: 'm1', role: 'moderator' }, loading: false, refreshUser: vi.fn() }
+        api.getJob.mockResolvedValue({ job: job({ viewer: { saved: false, isOwner: false } }), meta: {} })
+        renderWithClient(<JobActions jobRef="senior-pentester-abc123" initialJob={job()} />)
+        await waitFor(() => expect(screen.getByTestId('save-job')).toBeEnabled())
+        expect(screen.queryByRole('link', { name: /Edit/ })).not.toBeInTheDocument()
     })
 
     it('asks again with the member token and shows the saved state from that answer, not from the page', async () => {

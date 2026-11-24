@@ -23,7 +23,7 @@ const revalidate = vi.hoisted(() => ({ refreshPublicJobs: vi.fn() }))
 vi.mock('@/lib/jobs/revalidate', () => revalidate)
 
 import {
-    jobKeys, useAdminJobs, useApproveJob, useBulkApprove, useEmployerJobs, useJob, useJobAction, useJobs, useReportJob, useSaveAndSubmitJob, useSaveJob,
+    hitSortCap, isMemorySort, jobKeys, useAdminJobs, useApproveJob, useBulkApprove, useEmployerJobs, useJob, useJobAction, useJobs, useReportJob, useSaveAndSubmitJob, useSaveJob,
 } from '../useJobs'
 
 let qc: QueryClient
@@ -123,6 +123,70 @@ describe('public reads', () => {
     })
 })
 
+describe('a job page counts one view from the browser', () => {
+    it('asks once for the viewer even when a server copy is there, and shows that copy until the answer', async () => {
+        auth.current = { user: null, loading: false, refreshUser: vi.fn() }
+        let release: (v: unknown) => void = () => undefined
+        api.getJob.mockReturnValue(new Promise((resolve) => { release = resolve }))
+        const server = job({ title: 'From the server' })
+        const { result } = renderHook(() => useJob('a-job', server, Date.now()), { wrapper })
+        expect(result.current.data?.title).toBe('From the server')
+        expect(result.current.isPlaceholderData).toBe(true)
+        await act(async () => { release({ job: job({ title: 'From the browser' }), meta: {} }) })
+        await waitFor(() => expect(result.current.isPlaceholderData).toBe(false))
+        expect(result.current.data?.title).toBe('From the browser')
+        expect(api.getJob).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not read again when two parts of the page, a refocus or a remount in strict mode ask', async () => {
+        api.getJob.mockResolvedValue({ job: job(), meta: {} })
+        const { result } = renderHook(() => { useJob('a-job', job()); return useJob('a-job', job()) }, { wrapper, reactStrictMode: true })
+        await waitFor(() => expect(result.current.isPlaceholderData).toBe(false))
+        window.dispatchEvent(new Event('focus'))
+        await new Promise((r) => setTimeout(r, 30))
+        expect(api.getJob).toHaveBeenCalledTimes(1)
+    })
+
+    it('drops the answer with the page so the next visit is counted', async () => {
+        api.getJob.mockResolvedValue({ job: job(), meta: {} })
+        const first = renderHook(() => useJob('a-job', job()), { wrapper })
+        await waitFor(() => expect(first.result.current.isPlaceholderData).toBe(false))
+        first.unmount()
+        await waitFor(() => expect(qc.getQueryData(jobKeys.detail('a-job', 'u1'))).toBeUndefined())
+        const second = renderHook(() => useJob('a-job', job()), { wrapper })
+        await waitFor(() => expect(second.result.current.isPlaceholderData).toBe(false))
+        expect(api.getJob).toHaveBeenCalledTimes(2)
+    })
+})
+
+describe('the sort cap', () => {
+    it('knows which sorts the API holds in memory', () => {
+        expect(isMemorySort('viewCount')).toBe(true)
+        expect(isMemorySort('title')).toBe(true)
+        expect(isMemorySort('salary.max')).toBe(true)
+        expect(isMemorySort('createdAt')).toBe(false)
+        expect(isMemorySort(undefined)).toBe(false)
+    })
+
+    it('stops offering more pages at page 50 for those sorts, and says so', async () => {
+        const at = (n: number) => ({ ...page([card()], true), pagination: { page: n, limit: 20, total: 5000, totalPages: 250, pages: 250, hasMore: true } })
+        api.listJobs.mockResolvedValue(at(50))
+        const { result } = renderHook(() => useJobs({ sortBy: 'viewCount' }), { wrapper })
+        await waitFor(() => expect(result.current.data?.pages).toHaveLength(1))
+        // The page the API reports is 50 here, so the pager must not ask for 51
+        expect(result.current.hasNextPage).toBe(false)
+        expect(hitSortCap({ sortBy: 'viewCount' }, result.current.data?.pages)).toBe(true)
+        expect(hitSortCap({ sortBy: 'createdAt' }, result.current.data?.pages)).toBe(false)
+    })
+
+    it('keeps paging on the default sort', async () => {
+        api.listJobs.mockResolvedValue({ ...page([card()], true), pagination: { page: 50, limit: 20, total: 5000, totalPages: 250, pages: 250, hasMore: true } })
+        const { result } = renderHook(() => useJobs({}), { wrapper })
+        await waitFor(() => expect(result.current.data?.pages).toHaveLength(1))
+        expect(result.current.hasNextPage).toBe(true)
+    })
+})
+
 describe('the poster own list', () => {
     it('uses the mine route through the API client, never the old employer route', async () => {
         api.listMyJobs.mockResolvedValue(page([card()]))
@@ -146,13 +210,64 @@ describe('save', () => {
         qc.setQueryData(jobKeys.list({}, 'u1'), { pages: [{ ...page([card()]), viewer: { savedIds: [] } }], pageParams: [1] })
     }
 
-    it('marks the job saved at once in the detail and in the list', async () => {
+    it('marks the job saved at once in the detail and in the list, before the server answers', async () => {
         seed()
+        let done: () => void = () => undefined
+        api.saveJob.mockReturnValue(new Promise<void>((resolve) => { done = resolve }))
+        const { result } = renderHook(() => useSaveJob(), { wrapper })
+        let settled: Promise<unknown> = Promise.resolve()
+        act(() => { settled = result.current.mutateAsync({ id: 'j1', saved: true }) })
+        await waitFor(() => expect((qc.getQueryData(jobKeys.detail('a-job', 'u1')) as { viewer: { saved: boolean } }).viewer.saved).toBe(true))
+        const savedIds = () => (qc.getQueryData(jobKeys.list({}, 'u1')) as { pages: { viewer: { savedIds: string[] } }[] }).pages[0].viewer.savedIds
+        expect(savedIds()).toContain('j1')
+        expect(toast.addToast).not.toHaveBeenCalled()
+        await act(async () => { done(); await settled })
+        expect(api.saveJob).toHaveBeenCalledWith('j1')
+        expect(toast.addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
+    })
+
+    it('counts "already saved" (409) on save as saved, and "not saved" (404) on unsave as removed', async () => {
+        seed()
+        api.saveJob.mockRejectedValue(new ApiError('already', 409, 'JOB_ALREADY_SAVED'))
+        const { result } = renderHook(() => useSaveJob(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ id: 'j1', saved: true }) })
+        expect(toast.addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
+        expect(toast.addToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' }))
+
+        toast.addToast.mockClear()
+        api.unsaveJob.mockRejectedValue(new ApiError('not saved', 404, 'SAVED_JOB_NOT_FOUND'))
+        await act(async () => { await result.current.mutateAsync({ id: 'j1', saved: false }) })
+        expect(toast.addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
+        expect(toast.addToast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' }))
+    })
+
+    it('still reports a 404 on save and a 409 on unsave as the errors they are', async () => {
+        seed()
+        api.saveJob.mockRejectedValue(new ApiError('gone', 404, 'JOB_NOT_FOUND'))
+        const { result } = renderHook(() => useSaveJob(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ id: 'j1', saved: true }).catch(() => undefined) })
+        expect(toast.addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' }))
+    })
+
+    it('stops only the reads it is about to patch, not every jobs query, and reads the details and lists again after', async () => {
+        seed()
+        // An unrelated read in flight (the poster list) must not be cancelled by a save
+        const mine = new Promise(() => undefined)
+        void qc.prefetchQuery({ queryKey: jobKeys.myList('', 'u1'), queryFn: () => mine })
+        const cancel = vi.spyOn(qc, 'cancelQueries')
+        const invalidate = vi.spyOn(qc, 'invalidateQueries')
         api.saveJob.mockResolvedValue(undefined)
         const { result } = renderHook(() => useSaveJob(), { wrapper })
         await act(async () => { await result.current.mutateAsync({ id: 'j1', saved: true }) })
-        expect(api.saveJob).toHaveBeenCalledWith('j1')
-        expect(toast.addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }))
+        const cancelled = cancel.mock.calls.map(([f]) => JSON.stringify(f?.queryKey))
+        expect(cancelled).not.toContain(JSON.stringify(jobKeys.all))
+        expect(cancelled).not.toContain(JSON.stringify(jobKeys.myList('', 'u1')))
+        expect(cancelled).toContain(JSON.stringify(jobKeys.detail('a-job', 'u1')))
+        expect(cancelled).toContain(JSON.stringify(jobKeys.list({}, 'u1')))
+        const invalidated = invalidate.mock.calls.map(([f]) => JSON.stringify(f?.queryKey))
+        expect(invalidated).toContain(JSON.stringify(jobKeys.details()))
+        expect(invalidated).toContain(JSON.stringify(jobKeys.lists()))
+        expect(qc.getQueryState(jobKeys.myList('', 'u1'))?.fetchStatus).toBe('fetching')
     })
 
     it('puts the old state back and says why when the call fails', async () => {

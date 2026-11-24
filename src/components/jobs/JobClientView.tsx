@@ -29,7 +29,8 @@ export function JobMissing() {
  * reviewers can read, so it needs their token. The same page, asked for again.
  */
 export function JobClientView({ slug }: { slug: string }) {
-    const query = useJob(slug);
+    // This page is drawn in the browser, so this read is also the one that counts the view
+    const query = useJob(slug, undefined, undefined, true, { pageView: true });
     if (query.isLoading || query.isPending) {
         return <div className={pageBg}><div className="mx-auto max-w-5xl px-4 pb-16 pt-24 sm:px-6"><DetailSkeleton /></div></div>;
     }

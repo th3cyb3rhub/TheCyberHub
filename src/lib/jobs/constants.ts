@@ -28,6 +28,8 @@ export const JOB_LIMITS = {
     reportDetails: 500,
     pageDefault: 20,
     pageMax: 50,
+    /** Sorts the database cannot serve from an index sort in memory, so the API refuses a page past this one */
+    memorySortMaxPage: 50,
     /** The farthest end date an employer may choose; staff may go further */
     maxExpiryDays: 90,
     openJobsUnverified: 10,
