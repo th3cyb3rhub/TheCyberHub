@@ -9,7 +9,7 @@ import { useViewerZone } from '@/lib/events/clock';
 import { fieldErrors } from '@/lib/events/errors';
 import { safeMeetingUrl } from '@/lib/mentorship/display';
 import { mentorshipErrorMessage } from '@/lib/mentorship/errors';
-import { issuesByField, LIMITS, sessionFormSchema } from '@/lib/mentorship/schemas';
+import { issuesByField, LIMITS, sameMinute, sessionFormSchema } from '@/lib/mentorship/schemas';
 import { browserTimeZone, clockRange, formatMoment, isValidTimeZone, sessionInstant, sessionTimes, toLocalParts } from '@/lib/mentorship/time';
 import type { Mentorship, MentorshipSession } from '@/types/mentorship';
 import { FeedbackDialog } from './FeedbackDialog';
@@ -45,14 +45,24 @@ export function SessionFormDialog({ open, onOpenChange, mentorship, session }: {
     const shown = { ...server, ...problems };
 
     const submit = () => {
-        const parsed = sessionFormSchema(new Date()).safeParse({ ...form, duration: Number(form.duration) });
+        const stored = session ? new Date(session.scheduledAt) : undefined;
+        const parsed = sessionFormSchema(new Date(), { unchangedInstant: stored }).safeParse({ ...form, duration: Number(form.duration) });
         if (!parsed.success) { setProblems(issuesByField(parsed.error)); return; }
         setProblems({});
         const at = sessionInstant(parsed.data.date, parsed.data.time, parsed.data.timezone);
         if (!at) return;
-        const input = { title: parsed.data.title, scheduledAt: at.toISOString(), timezone: parsed.data.timezone, duration: parsed.data.duration, meetingUrl: parsed.data.meetingUrl, description: parsed.data.description };
-        if (session) update.mutate({ id: session._id, input }, { onSuccess: () => onOpenChange(false) });
-        else create.mutate(input, { onSuccess: () => onOpenChange(false) });
+        const base = { title: parsed.data.title, duration: parsed.data.duration, meetingUrl: parsed.data.meetingUrl, description: parsed.data.description };
+        if (session && stored) {
+            // Only what moved is sent, so changing the title of a session that is about to start is not refused for its time
+            const input = {
+                ...base,
+                ...(!sameMinute(at, stored) ? { scheduledAt: at.toISOString() } : {}),
+                ...(parsed.data.timezone !== session.timezone ? { timezone: parsed.data.timezone } : {}),
+            };
+            update.mutate({ id: session._id, input }, { onSuccess: () => onOpenChange(false) });
+        } else {
+            create.mutate({ ...base, scheduledAt: at.toISOString(), timezone: parsed.data.timezone }, { onSuccess: () => onOpenChange(false) });
+        }
     };
 
     return (

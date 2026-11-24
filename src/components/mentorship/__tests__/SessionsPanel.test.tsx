@@ -116,3 +116,46 @@ describe('SessionFormDialog', () => {
         expect(create.mutate.mock.calls[0][0]).toMatchObject({ title: 'Kickoff call', scheduledAt: `${day}T03:30:00.000Z`, timezone: 'Asia/Kolkata', duration: 60 })
     })
 })
+
+describe('editing a session', () => {
+    const soon = new Date(Date.now() + 2 * 60_000)
+    const stored = (over = {}) => makeSession({ scheduledAt: soon.toISOString(), endsAt: new Date(soon.getTime() + 3_600_000).toISOString(), timezone: 'UTC', ...over })
+
+    it('sends only the new title when the time did not move, even when it starts in two minutes', () => {
+        render(<SessionFormDialog open onOpenChange={vi.fn()} mentorship={mentorship} session={stored()} />)
+        fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'A better title' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(update.mutate).toHaveBeenCalledTimes(1)
+        const input = update.mutate.mock.calls[0][0].input
+        expect(input).toMatchObject({ title: 'A better title' })
+        expect(input).not.toHaveProperty('scheduledAt')
+        expect(input).not.toHaveProperty('timezone')
+    })
+
+    it('sends the instant when the time moved, and still holds a moved time to the lead time', () => {
+        const farther = new Date(Date.now() + 10 * 86_400_000)
+        render(<SessionFormDialog open onOpenChange={vi.fn()} mentorship={mentorship} session={stored()} />)
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(update.mutate).not.toHaveBeenCalled()
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: farther.toISOString().slice(0, 10) } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(update.mutate.mock.calls[0][0].input).toHaveProperty('scheduledAt')
+    })
+
+    it('sends only the zone when the zone changed but the instant is the same', () => {
+        render(<SessionFormDialog open onOpenChange={vi.fn()} mentorship={mentorship} session={stored({ timezone: 'Asia/Kolkata' })} />)
+        // Re-read the same instant in another zone: pick UTC, then enter what UTC shows for that moment
+        fireEvent.change(screen.getByLabelText('Time zone'), { target: { value: 'UTC' } })
+        const date = (screen.getByLabelText('Date') as HTMLInputElement).value
+        const time = (screen.getByLabelText('Start time') as HTMLInputElement).value
+        const asUtc = new Date(soon)
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: asUtc.toISOString().slice(0, 10) } })
+        fireEvent.change(screen.getByLabelText('Start time'), { target: { value: asUtc.toISOString().slice(11, 16) } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(date && time).toBeTruthy()
+        const input = update.mutate.mock.calls[0][0].input
+        expect(input).toMatchObject({ timezone: 'UTC' })
+        expect(input).not.toHaveProperty('scheduledAt')
+    })
+})

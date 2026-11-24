@@ -108,7 +108,11 @@ export function isHttpsLink(value: string): boolean {
     }
 }
 
-export const sessionFormSchema = (now: Date = new Date()) => z.object({
+/** The form works in whole minutes, so a stored time with seconds still counts as unchanged */
+export const sameMinute = (a: Date, b: Date) => Math.floor(a.getTime() / 60_000) === Math.floor(b.getTime() / 60_000);
+
+/** `unchangedInstant`: an edit that keeps the stored time is not held to the lead-time and horizon rules */
+export const sessionFormSchema = (now: Date = new Date(), options: { unchangedInstant?: Date } = {}) => z.object({
     title: z.string().trim()
         .min(LIMITS.sessionTitle.min, `Give the session a title of at least ${LIMITS.sessionTitle.min} characters`)
         .max(LIMITS.sessionTitle.max, `A title cannot exceed ${LIMITS.sessionTitle.max} characters`),
@@ -124,6 +128,7 @@ export const sessionFormSchema = (now: Date = new Date()) => z.object({
 }).superRefine((value, ctx) => {
     if (!value.date || !value.time || !isValidTimeZone(value.timezone)) return;
     const instant = sessionInstant(value.date, value.time, value.timezone);
+    if (instant && options.unchangedInstant && sameMinute(instant, options.unchangedInstant)) return;
     const window = sessionWindow(instant, now);
     if (window === 'invalid') ctx.addIssue({ code: 'custom', path: ['time'], message: 'That time does not exist in this time zone (the clocks change then). Pick another time.' });
     else if (window === 'too-soon') ctx.addIssue({ code: 'custom', path: ['time'], message: 'A session must start at least 5 minutes from now.' });
