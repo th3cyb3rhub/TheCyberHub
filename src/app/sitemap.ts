@@ -1,3 +1,4 @@
+import { fetchMentorIdsForSitemap } from '@/lib/mentorship/server'
 import { MetadataRoute } from 'next'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
@@ -196,13 +197,6 @@ const staticRoutes = [
     {
         url: '/events/calendar',
         changeFrequency: 'daily' as const,
-        priority: 0.6,
-    },
-
-    // Mentorship
-    {
-        url: '/mentorship',
-        changeFrequency: 'weekly' as const,
         priority: 0.6,
     },
 
@@ -475,5 +469,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Approved events: every public one except those that were cancelled
     const eventPages = await eventSitemapEntries(baseUrl)
 
-    return [...staticPages, ...jobPages, ...eventPages]
+    // Approved mentors. Private mentorship pages are never listed.
+    const mentorPages: MetadataRoute.Sitemap = (await fetchMentorIdsForSitemap()).map((mentor) => ({
+        url: `${baseUrl}/mentorship/mentor/${mentor.id}`,
+        lastModified: mentor.updatedAt ? new Date(mentor.updatedAt) : currentDate,
+        changeFrequency: 'weekly' as const,
+        priority: 0.5,
+    }))
+
+    return [...staticPages, ...jobPages, ...eventPages, ...mentorPages]
 }
