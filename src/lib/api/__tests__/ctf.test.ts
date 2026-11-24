@@ -68,3 +68,15 @@ describe('a real 429 body through fetchApi into the flag form', () => {
         expect(next).toEqual({ phase: 'waiting', until: 60_000 })
     })
 })
+
+describe('leaveTeam', () => {
+    it('reads "disbanded" from the message, the only place the API says it', async () => {
+        const { leaveTeam } = await import('../ctf')
+        fetchMock.mockResolvedValueOnce(json(200, { success: true, message: 'Team disbanded' }))
+        expect(await leaveTeam('winter-ctf')).toEqual({ disbanded: true })
+        fetchMock.mockResolvedValueOnce(json(200, { success: true, message: 'Left team successfully' }))
+        expect(await leaveTeam('winter-ctf')).toEqual({ disbanded: false })
+        fetchMock.mockResolvedValueOnce(json(200, { success: true }))
+        expect(await leaveTeam('winter-ctf')).toEqual({ disbanded: false })
+    })
+})

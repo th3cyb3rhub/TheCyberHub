@@ -31,7 +31,7 @@ export default async function CompetitionPage({ params, searchParams }: PageProp
         <CompetitionView
             slug={slug.toLowerCase()}
             initialCompetition={result.state === 'ok' ? result.competition : null}
-            initialUpdatedAt={Date.now()}
+            initialUpdatedAt={result.state === 'ok' ? result.fetchedAt : 0}
             initialTab={Array.isArray(tab) ? tab[0] : tab}
         />
     );

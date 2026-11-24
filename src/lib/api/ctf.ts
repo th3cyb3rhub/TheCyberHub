@@ -109,7 +109,11 @@ export async function joinTeam(slug: string, inviteCode: string): Promise<CtfTea
 
 export async function leaveTeam(slug: string): Promise<{ disbanded: boolean }> {
     const body = await send(E.TEAM_LEAVE(ref(slug)), 'DELETE');
-    return { disbanded: /disbanded/i.test(String(body?.message ?? '')) };
+    // The API has no field for this: the response is only `{ success, message }`, with the message
+    // "Team disbanded" when the last member left and "Left team successfully" otherwise. The screen
+    // only uses it to pick a toast, and the team cache is refetched either way, so a changed wording
+    // costs a less exact toast and nothing else. Match the whole phrase, not a loose word.
+    return { disbanded: /^team disbanded$/i.test(String(body?.message ?? '').trim()) };
 }
 
 export async function kickMember(slug: string, memberId: string): Promise<void> {

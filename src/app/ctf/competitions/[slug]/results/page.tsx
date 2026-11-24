@@ -28,5 +28,5 @@ export default async function ResultsPage({ params }: PageProps) {
     if (result.state === 'invalid') notFound();
     // 409 (not ended), 404 (a draft only staff can open) and a failing API are all answered by the
     // browser, which asks again with the token: the page is HTTP 200 and says what is going on.
-    return <ResultsView slug={slug.toLowerCase()} initialResults={result.state === 'ok' ? result.results : null} initialUpdatedAt={Date.now()} />;
+    return <ResultsView slug={slug.toLowerCase()} initialResults={result.state === 'ok' ? result.results : null} initialUpdatedAt={result.state === 'ok' ? result.fetchedAt : 0} />;
 }

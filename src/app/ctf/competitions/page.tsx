@@ -27,8 +27,8 @@ export default async function CompetitionsPage({ searchParams }: { searchParams:
     const filter = parseFilter((await searchParams).status);
     // Fail-soft: a slow or failing API gives null, and the browser asks again
     const page = await fetchCompetitionsPage(filter, 1, CTF_LIMITS.pageDefault);
-    // When this copy was built: the browser treats it as that old, not as new
-    const builtAt = Date.now();
+    // When the API produced this copy: the browser treats it as that old, not as new
+    const builtAt = page?.fetchedAt ?? 0;
     return (
         <div className={pageBg}>
             <div className={pageWrap}>

@@ -8,7 +8,7 @@ import { ctfCardSchema, ctfDetailSchema, ctfResultsSchema } from './schemas';
 export { SITE_URL };
 
 /**
- * What the API accepts for a competition slug (its slugParam): 1 to 80 characters of a to z, 0 to 9
+ * What the API accepts for a competition slug: 1 to 80 characters of a to z, 0 to 9
  * and hyphens. Anything else can never be a competition: a real 404 without asking the API.
  */
 const SLUG = /^[a-z0-9-]{1,80}$/;
@@ -17,8 +17,19 @@ export const isCtfSlug = (value: string): boolean => SLUG.test(value.toLowerCase
 
 const TIMEOUT_MS = 5000;
 
+/**
+ * When the API produced a response, from its `Date` header (a cached copy keeps the original), as
+ * milliseconds since the epoch; 0 when it is missing, which the browser reads as "old, ask again".
+ * This is what the page passes as the age of the data it rendered. It is the API's moment, not the
+ * moment this render ran: a copy cached for a minute is a minute old.
+ */
+export function fetchedAtOf(res: Pick<Response, 'headers'>): number {
+    const stamp = Date.parse(res.headers.get('date') ?? '');
+    return Number.isFinite(stamp) ? stamp : 0;
+}
+
 export type ServerCompetition =
-    | { state: 'ok'; competition: CtfCompetition }
+    | { state: 'ok'; competition: CtfCompetition; /** When the API produced it, 0 when unknown */ fetchedAt: number }
     /** The segment cannot be a slug: a real 404 */
     | { state: 'invalid' }
     /** 404 for a visitor: a draft or a wrong slug. Staff may still see it, so the browser asks again with the token. */
@@ -43,14 +54,16 @@ export const fetchPublicCompetition = cache(async (slug: string): Promise<Server
         const body = await res.json();
         const parsed = ctfDetailSchema.safeParse(body?.data);
         if (!parsed.success) return { state: 'error' };
-        return { state: 'ok', competition: parsed.data as CtfCompetition };
+        return { state: 'ok', competition: parsed.data as CtfCompetition, fetchedAt: fetchedAtOf(res) };
     } catch {
         return { state: 'error' };
     }
 });
 
+export type ServerCompetitionsPage = CtfPage<CtfCompetitionCard> & { fetchedAt: number };
+
 /** One page of the public list for a tab. Cards that do not parse are left out; a failing API gives null. */
-export const fetchCompetitionsPage = cache(async (filter: CtfListFilter = 'all', page = 1, limit = 12): Promise<CtfPage<CtfCompetitionCard> | null> => {
+export const fetchCompetitionsPage = cache(async (filter: CtfListFilter = 'all', page = 1, limit = 12): Promise<ServerCompetitionsPage | null> => {
     try {
         const qs = new URLSearchParams({ limit: String(limit) });
         const status = LIST_FILTER_QUERY[filter];
@@ -78,6 +91,7 @@ export const fetchCompetitionsPage = cache(async (filter: CtfListFilter = 'all',
                 total: pagination.total,
                 pages: Number(pagination.pages) || 1,
             },
+            fetchedAt: fetchedAtOf(res),
         };
     } catch {
         return null;
@@ -85,7 +99,7 @@ export const fetchCompetitionsPage = cache(async (filter: CtfListFilter = 'all',
 });
 
 export type ServerResults =
-    | { state: 'ok'; results: CtfResults }
+    | { state: 'ok'; results: CtfResults; fetchedAt: number }
     | { state: 'invalid' }
     /** 409: the competition has not ended */
     | { state: 'not-ready' }
@@ -106,7 +120,7 @@ export const fetchPublicResults = cache(async (slug: string): Promise<ServerResu
         const body = await res.json();
         const parsed = ctfResultsSchema.safeParse(body?.data);
         if (!parsed.success) return { state: 'error' };
-        return { state: 'ok', results: parsed.data as unknown as CtfResults };
+        return { state: 'ok', results: parsed.data as unknown as CtfResults, fetchedAt: fetchedAtOf(res) };
     } catch {
         return { state: 'error' };
     }
