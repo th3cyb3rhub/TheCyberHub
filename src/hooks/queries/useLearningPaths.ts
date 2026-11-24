@@ -132,26 +132,58 @@ function refreshAggregates(qc: QueryClient) {
 
 interface TickVariables { slug: string; nodeId: string; done: boolean; title?: string }
 
+/**
+ * Ticks of one path run one after another (a quick A then B reaches the API in that order) and each
+ * undoes only itself when it fails, from the cache as it is now. A stale snapshot would also undo
+ * a later tick that is still on its way.
+ */
+const tickQueues = new Map<string, Promise<unknown>>();
+const ticksPending = new Map<string, number>();
+
+function enqueueTick<T>(slug: string, run: () => Promise<T>): Promise<T> {
+    const previous = tickQueues.get(slug) ?? Promise.resolve();
+    const next = previous.then(run, run);
+    const tail = next.catch(() => undefined);
+    tickQueues.set(slug, tail);
+    void tail.then(() => { if (tickQueues.get(slug) === tail) tickQueues.delete(slug); });
+    return next;
+}
+
+const pendingFor = (slug: string) => ticksPending.get(slug) ?? 0;
+
 /** Tick or untick a step. The first tick joins the path (the API does that), so it works before enrolling. */
 export function useTickNode() {
     const qc = useQueryClient();
     const { addToast } = useToast();
-    return useMutation<ProgressChange, unknown, TickVariables, { snapshot: DetailSnapshot }>({
-        mutationFn: ({ slug, nodeId, done }) => (done ? api.completeNode(slug, nodeId) : api.uncompleteNode(slug, nodeId)),
+    return useMutation<ProgressChange, unknown, TickVariables>({
+        mutationFn: ({ slug, nodeId, done }) => enqueueTick(slug, () => (done ? api.completeNode(slug, nodeId) : api.uncompleteNode(slug, nodeId))),
         retry: 0,
-        onMutate: async ({ slug, nodeId, done }) => ({ snapshot: await patchDetails(qc, slug, (d) => applyTick(d, nodeId, done)) }),
-        onError: (err, { slug }, ctx) => {
-            restore(qc, ctx?.snapshot);
+        onMutate: async ({ slug, nodeId, done }) => {
+            ticksPending.set(slug, pendingFor(slug) + 1);
+            await patchDetails(qc, slug, (d) => applyTick(d, nodeId, done));
+        },
+        onError: (err, { slug, nodeId, done }) => {
+            // Take back this tick only; ticks that came after it stay
+            for (const [key, data] of detailEntries(qc, slug)) {
+                if (data) qc.setQueryData<LearningDetail>(key, applyTick(data, nodeId, !done));
+            }
             addToast({ variant: 'error', message: learningErrorMessage(err) });
-            // Another tab may have changed things: show the truth
-            void qc.invalidateQueries({ queryKey: [...learningKeys.details(), slug] });
+            // Another tab may have changed things: show the truth, once the last tick has landed
+            if (pendingFor(slug) <= 1) void qc.invalidateQueries({ queryKey: [...learningKeys.details(), slug] });
         },
         onSuccess: (change, { slug, title }) => {
-            for (const [key, data] of detailEntries(qc, slug)) {
-                if (data) qc.setQueryData<LearningDetail>(key, applyServerProgress(data, change));
+            // The answer of a tick that is not the last one would not know about the later ticks
+            if (pendingFor(slug) <= 1) {
+                for (const [key, data] of detailEntries(qc, slug)) {
+                    if (data) qc.setQueryData<LearningDetail>(key, applyServerProgress(data, change));
+                }
             }
             for (const message of rewardMessages(change, title)) addToast({ variant: 'success', message });
             refreshAggregates(qc);
+        },
+        onSettled: (_data, _err, { slug }) => {
+            const left = pendingFor(slug) - 1;
+            if (left > 0) ticksPending.set(slug, left); else ticksPending.delete(slug);
         },
     });
 }

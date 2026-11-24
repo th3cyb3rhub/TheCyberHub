@@ -70,6 +70,47 @@ describe('ticking a step', () => {
         expect(qc.getQueryState(key)?.isInvalidated).toBe(true)
     })
 
+    it('keeps a later tick when an earlier one fails, and sends them in order', async () => {
+        qc.setQueryData(key, makeDetail())
+        let failA: (e: unknown) => void = () => {}
+        api.completeNode.mockImplementation((_slug: string, id: string) => id === 'b'
+            ? new Promise((_, rej) => { failA = rej })
+            : Promise.resolve({ ...progress({ completedModules: ['a', 'c'], percent: 67 }), changed: true, completedNow: false, rewards: { pointsAwarded: 0, badges: [] }, next: null }))
+        const { result } = renderHook(() => useTickNode(), { wrapper })
+
+        act(() => { result.current.mutate({ slug: 'web-hacking', nodeId: 'b', done: true }) })
+        act(() => { result.current.mutate({ slug: 'web-hacking', nodeId: 'c', done: true }) })
+        await waitFor(() => expect(read()?.viewer?.progress?.completedModules).toEqual(expect.arrayContaining(['a', 'b', 'c'])))
+        expect(api.completeNode).toHaveBeenCalledTimes(1)
+        expect(api.completeNode.mock.calls[0][1]).toBe('b')
+
+        await act(async () => { failA(new ApiError('gone', 404, 'MODULE_NOT_FOUND')) })
+        await waitFor(() => expect(api.completeNode).toHaveBeenCalledTimes(2))
+        expect(api.completeNode.mock.calls[1][1]).toBe('c')
+        await waitFor(() => expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' })))
+        const done = read()?.viewer?.progress?.completedModules ?? []
+        expect(done).toContain('c')
+        expect(done).not.toContain('b')
+    })
+
+    it('does not let an earlier answer wipe a tick that is still pending', async () => {
+        qc.setQueryData(key, makeDetail())
+        let okA: (v: unknown) => void = () => {}
+        let okB: (v: unknown) => void = () => {}
+        api.completeNode.mockImplementation((_slug: string, id: string) => new Promise((r) => { if (id === 'b') okA = r; else okB = r }))
+        const { result } = renderHook(() => useTickNode(), { wrapper })
+
+        act(() => { result.current.mutate({ slug: 'web-hacking', nodeId: 'b', done: true }) })
+        act(() => { result.current.mutate({ slug: 'web-hacking', nodeId: 'c', done: true }) })
+        await waitFor(() => expect(api.completeNode).toHaveBeenCalledTimes(1))
+        await act(async () => { okA({ ...progress({ completedModules: ['a', 'b'], percent: 50 }), changed: true, completedNow: false, rewards: { pointsAwarded: 0, badges: [] }, next: null }) })
+        await waitFor(() => expect(api.completeNode).toHaveBeenCalledTimes(2))
+        expect(read()?.viewer?.progress?.completedModules).toContain('c')
+
+        await act(async () => { okB({ ...progress({ completedModules: ['a', 'b', 'c'], percent: 75 }), changed: true, completedNow: false, rewards: { pointsAwarded: 0, badges: [] }, next: null }) })
+        await waitFor(() => expect(read()?.viewer?.progress?.percent).toBe(75))
+    })
+
     it('leaves an anonymous page alone', async () => {
         const anon = makeDetail({ viewer: null })
         qc.setQueryData(key, anon)
