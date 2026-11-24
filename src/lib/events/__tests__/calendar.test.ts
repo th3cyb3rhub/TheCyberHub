@@ -149,7 +149,7 @@ describe('events on days', () => {
         const early = item({ id: 'a', title: 'A', startDate: '2026-12-01T08:00:00.000Z', endDate: '2026-12-01T09:00:00.000Z' })
         const allDay = item({ id: 'd', title: 'Day', isAllDay: true, timezone: 'UTC', startDate: '2026-12-01T00:00:00.000Z', endDate: '2026-12-02T00:00:00.000Z' })
         const map = bucketByDay([early, multi, allDay], 'UTC', '2026-12-01', '2026-12-31')
-        expect([...map.keys()]).toEqual(['2026-12-01', '2026-12-02'])
+        expect(Array.from(map.keys())).toEqual(['2026-12-01', '2026-12-02'])
         expect(map.get('2026-12-01')!.map((e) => e.item.id)).toEqual(['d', 'm', 'a'])
         expect(map.get('2026-12-01')!.find((e) => e.item.id === 'm')!.continued).toBe(true)
     })
