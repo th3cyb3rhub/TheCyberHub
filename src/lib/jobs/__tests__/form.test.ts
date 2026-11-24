@@ -85,8 +85,42 @@ describe('job payload', () => {
         expect(body.applyEmail).toBe('')
         expect(body.location).toBe('')
         expect(body.applicationDeadline).toBeNull()
-        expect(body.salary).toEqual({})
         expect(body).not.toHaveProperty('saveAsDraft')
+    })
+
+    describe('clearing the pay of a job that had some', () => {
+        const had = { salaryMin: '90000', salaryMax: '120000' }
+        it('sends `salary: null` when both figures were emptied', () => {
+            const body = toJobPayload(valid({ salaryMin: '', salaryMax: '' }), { edit: true, previous: had })
+            expect(body.salary).toBeNull()
+            expect(JSON.parse(JSON.stringify(body))).toHaveProperty('salary', null)
+        })
+
+        it('removes only the figure that was emptied', () => {
+            expect(toJobPayload(valid({ salaryMin: '', salaryMax: '120000' }), { edit: true, previous: had }).salary).toEqual({ min: null, max: 120000, currency: 'USD', period: 'yearly' })
+            expect(toJobPayload(valid({ salaryMin: '90000', salaryMax: '' }), { edit: true, previous: had }).salary).toEqual({ min: 90000, max: null, currency: 'USD', period: 'yearly' })
+        })
+
+        it('sends both figures when both are there', () => {
+            expect(toJobPayload(valid({ salaryMin: '80000', salaryMax: '100000' }), { edit: true, previous: had }).salary).toEqual({ min: 80000, max: 100000, currency: 'USD', period: 'yearly' })
+        })
+
+        it('sends nothing about the pay of a job that had none and still has none', () => {
+            const body = toJobPayload(valid({ salaryMin: '', salaryMax: '' }), { edit: true, previous: { salaryMin: '', salaryMax: '' } })
+            expect(body).not.toHaveProperty('salary')
+        })
+
+        it('does not send null for a figure the job never had', () => {
+            expect(toJobPayload(valid({ salaryMin: '', salaryMax: '120000' }), { edit: true, previous: { salaryMin: '', salaryMax: '100000' } }).salary).toEqual({ max: 120000, currency: 'USD', period: 'yearly' })
+        })
+
+        it('clears whatever the job had when the form does not know what it started from', () => {
+            expect(toJobPayload(valid({ salaryMin: '', salaryMax: '' }), { edit: true }).salary).toBeNull()
+        })
+
+        it('never sends null on a new job', () => {
+            expect(toJobPayload(valid({ salaryMin: '', salaryMax: '' })).salary).toBeUndefined()
+        })
     })
 
     it('sets the end date from a number of days, a minute short of the day', () => {

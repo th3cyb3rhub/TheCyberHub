@@ -170,6 +170,11 @@ export const expiryFromDays = (days: number, now: number = Date.now()): string =
 export interface PayloadOptions extends JobFormOptions {
     /** An edit sends every field (empty ones clear), a new job only the ones that are filled */
     edit?: boolean;
+    /**
+     * The values the form started from, for an edit: a pay figure is only cleared (sent as `null`) when the
+     * job had it. Without them an edit that has no pay clears whatever the job had.
+     */
+    previous?: Pick<JobFormValues, 'salaryMin' | 'salaryMax'>;
     saveAsDraft?: boolean;
     now?: number;
 }
@@ -178,7 +183,7 @@ export interface PayloadOptions extends JobFormOptions {
  * The request body for a job. An employer's `company*` fields and `isFeatured` are never sent: the
  * API reads the company from the company record and drops them anyway.
  */
-export function toJobPayload(values: JobFormValues, { admin = false, edit = false, saveAsDraft = false, now = Date.now() }: PayloadOptions = {}): JobPayload {
+export function toJobPayload(values: JobFormValues, { admin = false, edit = false, saveAsDraft = false, now = Date.now(), previous }: PayloadOptions = {}): JobPayload {
     const min = wholeNumber(values.salaryMin);
     const max = wholeNumber(values.salaryMax);
     const hasPay = min !== null || max !== null;
@@ -203,9 +208,19 @@ export function toJobPayload(values: JobFormValues, { admin = false, edit = fals
         payload.applyUrl = applyUrl;
         payload.applyEmail = applyEmail;
         payload.applicationDeadline = values.applicationDeadline ? `${values.applicationDeadline}T23:59:59.000Z` : null;
-        payload.salary = hasPay
-            ? { ...(min !== null ? { min } : {}), ...(max !== null ? { max } : {}), currency: values.salaryCurrency.trim().toUpperCase(), period: values.salaryPeriod }
-            : {};
+        // Emptying a pay field clears it: `salary: null` removes the whole pay, a figure sent as `null` removes just that one
+        const hadMin = previous ? wholeNumber(previous.salaryMin) !== null : true;
+        const hadMax = previous ? wholeNumber(previous.salaryMax) !== null : true;
+        if (hasPay) {
+            payload.salary = {
+                ...(min !== null ? { min } : hadMin ? { min: null } : {}),
+                ...(max !== null ? { max } : hadMax ? { max: null } : {}),
+                currency: values.salaryCurrency.trim().toUpperCase(),
+                period: values.salaryPeriod,
+            };
+        } else if (hadMin || hadMax) {
+            payload.salary = null;
+        }
     } else {
         if (location) payload.location = location;
         if (applyUrl) payload.applyUrl = applyUrl;

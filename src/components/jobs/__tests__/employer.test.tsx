@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
@@ -287,6 +287,78 @@ describe('JobForm', () => {
         expect(screen.getByText(/sends a live job back to review/)).toBeInTheDocument()
     })
 
+    it('lists everything an applicant reads in the edit warning, so no reviewed field is a surprise', () => {
+        renderWithClient(<JobForm job={job({ status: 'approved' })} />)
+        const warning = screen.getByText(/sends a live job back to review/)
+        for (const word of ['title', 'description', 'how to apply', 'requirements', 'responsibilities', 'benefits', 'pay', 'longer end date']) expect(warning).toHaveTextContent(word)
+    })
+
+    it('says what sent a saved live job back to review in the same words', async () => {
+        api.updateJob.mockResolvedValue(job({ status: 'pending' }))
+        renderWithClient(<JobForm job={job({ status: 'approved' })} />)
+        await userEvent.type(screen.getByLabelText(/Job title/), ' II')
+        await userEvent.click(screen.getByTestId('save-job-form'))
+        await waitFor(() => expect(toast.addToast).toHaveBeenCalledWith({ variant: 'success', message: expect.stringMatching(/requirements.*benefits.*pay/) }))
+    })
+
+    it('clears the whole pay with salary null, and one figure with null for that figure', async () => {
+        api.updateJob.mockResolvedValue(job({ status: 'draft' }))
+        const withPay = job({ status: 'draft', salary: { min: 60000, max: 90000, currency: 'EUR', period: 'yearly' } })
+        const { unmount } = renderWithClient(<JobForm job={withPay} />)
+        await userEvent.clear(screen.getByLabelText('Lowest pay'))
+        await userEvent.clear(screen.getByLabelText('Highest pay'))
+        await userEvent.click(screen.getByTestId('save-job-form'))
+        await waitFor(() => expect(api.updateJob).toHaveBeenCalledTimes(1))
+        expect(api.updateJob.mock.calls[0][1]).toHaveProperty('salary', null)
+        unmount()
+
+        api.updateJob.mockClear()
+        renderWithClient(<JobForm job={withPay} />)
+        await userEvent.clear(screen.getByLabelText('Highest pay'))
+        await userEvent.click(screen.getByTestId('save-job-form'))
+        await waitFor(() => expect(api.updateJob).toHaveBeenCalledTimes(1))
+        expect(api.updateJob.mock.calls[0][1].salary).toMatchObject({ min: 60000, max: null })
+    })
+
+    it('shows the spinner on the button that was pressed only', async () => {
+        let done: (j: unknown) => void = () => undefined
+        api.createJob.mockReturnValue(new Promise((resolve) => { done = resolve }))
+        renderWithClient(<JobForm />)
+        await fillRequired()
+        await userEvent.click(screen.getByTestId('save-job-form'))
+        await waitFor(() => expect(api.createJob).toHaveBeenCalled())
+        expect(screen.getByTestId('save-job-form').querySelector('svg.animate-spin')).not.toBeNull()
+        expect(screen.getByTestId('save-draft').querySelector('svg.animate-spin')).toBeNull()
+        expect(screen.getByTestId('save-draft')).toBeDisabled()
+        done(job({ status: 'pending' }))
+    })
+
+    it('shows the spinner on Save as draft, not on Post job', async () => {
+        let done: (j: unknown) => void = () => undefined
+        api.createJob.mockReturnValue(new Promise((resolve) => { done = resolve }))
+        renderWithClient(<JobForm />)
+        await fillRequired()
+        await userEvent.click(screen.getByTestId('save-draft'))
+        await waitFor(() => expect(api.createJob).toHaveBeenCalled())
+        expect(screen.getByTestId('save-draft').querySelector('svg.animate-spin')).not.toBeNull()
+        expect(screen.getByTestId('save-job-form').querySelector('svg.animate-spin')).toBeNull()
+        done(job({ status: 'draft' }))
+    })
+
+    it('says a job past its end date cannot be edited, and points to the dashboard to reopen it', async () => {
+        api.updateJob.mockRejectedValue(new ApiError('x', 409, 'JOB_EXPIRED'))
+        renderWithClient(<JobForm job={job({ status: 'draft' })} />)
+        await userEvent.click(screen.getByTestId('save-job-form'))
+        const banner = await screen.findByTestId('form-banner')
+        expect(banner).toHaveTextContent(/end date has already passed/)
+        expect(within(banner).getByRole('link', { name: /reopen/i })).toHaveAttribute('href', '/employer')
+    })
+
+    it('tells the poster of a rejected job it goes back to a reviewer, never straight to live', () => {
+        renderWithClient(<JobForm job={job({ status: 'rejected', moderation: { reason: 'No', locked: true } })} />)
+        expect(screen.getByTestId('rejected-note')).toHaveTextContent(/goes back to a reviewer/)
+    })
+
     it('shows the company fields to administrators only', () => {
         const { unmount } = renderWithClient(<JobForm />)
         expect(screen.queryByText(/Company \(administrators/)).not.toBeInTheDocument()
@@ -319,6 +391,23 @@ describe('EditJobView', () => {
         renderWithClient(<EditJobView />)
         expect(await screen.findByLabelText(/Job title/)).toHaveValue('Senior Pentester')
         expect(api.getJob).toHaveBeenCalledWith('j1')
+    })
+
+    it('keeps what was typed when a refetch finds a newer updatedAt, and offers a reload instead', async () => {
+        api.getJob.mockResolvedValue({ job: job({ status: 'draft', updatedAt: '2026-01-01T00:00:00.000Z', viewer: { saved: false, isOwner: true } }), meta: {} })
+        const { qc } = renderWithClient(<EditJobView />)
+        const title = await screen.findByLabelText(/Job title/)
+        await userEvent.type(title, ' (remote)')
+        expect(screen.queryByTestId('job-changed')).not.toBeInTheDocument()
+
+        api.getJob.mockResolvedValue({ job: job({ status: 'rejected', title: 'Set by a reviewer', updatedAt: '2026-01-02T00:00:00.000Z', viewer: { saved: false, isOwner: true } }), meta: {} })
+        await act(async () => { await qc.invalidateQueries({ queryKey: ['jobs', 'detail'] }) })
+        expect(await screen.findByTestId('job-changed')).toHaveTextContent(/changed since you opened it/)
+        expect(screen.getByLabelText(/Job title/)).toHaveValue('Senior Pentester (remote)')
+
+        await userEvent.click(screen.getByTestId('reload-job'))
+        await waitFor(() => expect(screen.getByLabelText(/Job title/)).toHaveValue('Set by a reviewer'))
+        expect(screen.queryByTestId('job-changed')).not.toBeInTheDocument()
     })
 
     it('says the same for a job that is not found and one that is not theirs', async () => {

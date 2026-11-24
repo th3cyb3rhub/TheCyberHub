@@ -33,8 +33,11 @@ function Section({ title, description, children }: { title: string; description?
     );
 }
 
+/** What an unverified company's edit of a live job sends back to review: everything an applicant reads or follows */
+const REVIEWED_CHANGES = 'the title, the description, how to apply, the requirements, the responsibilities, the benefits, the pay or a longer end date';
+
 const doneMessage = (status: JobStatus | undefined, requeued: boolean): string => {
-    if (requeued) return 'Saved. A change to the title, description or apply link sent it back to review, so it is not public until a reviewer approves it again.';
+    if (requeued) return `Saved. A change to ${REVIEWED_CHANGES} sent it back to review, so it is not public until a reviewer approves it again.`;
     if (status === 'approved') return 'Your job is live.';
     if (status === 'pending') return 'Sent for review. You will be told when a reviewer decides.';
     if (status === 'draft') return 'Draft saved. Send it for review when it is ready.';
@@ -73,6 +76,8 @@ export function JobForm({ job, admin = false, accountEmail, companyName }: Props
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [banner, setBanner] = useState<{ message: string; link?: { href: string; label: string } } | null>(null);
     const [saved, setSaved] = useState(false);
+    // Which button is working, so only that one shows the spinner (the others are only disabled)
+    const [running, setRunning] = useState<'draft' | 'send' | 'save' | 'resubmit' | null>(null);
     const bannerRef = useRef<HTMLDivElement>(null);
     const formRef = useRef<HTMLFormElement>(null);
 
@@ -96,6 +101,7 @@ export function JobForm({ job, admin = false, accountEmail, companyName }: Props
         setErrors(fields);
         let link: { href: string; label: string } | undefined;
         if (err instanceof ApiError && (err.code === 'COMPANY_REJECTED' || err.code === 'COMPANY_REQUIRED')) link = { href: '/employer/company', label: 'Open your company profile' };
+        if (err instanceof ApiError && err.code === 'JOB_EXPIRED') link = { href: '/employer', label: 'Go to the dashboard to reopen it' };
         setBanner({ message: Object.keys(fields).length ? 'Some fields need attention. The server checked them again.' : jobErrorMessage(err), link });
         window.setTimeout(() => {
             const first = Object.keys(fields)[0];
@@ -117,21 +123,24 @@ export function JobForm({ job, admin = false, accountEmail, companyName }: Props
             }, 0);
             return;
         }
+        setRunning(mode);
         try {
             if (!job) {
                 const made = await create.mutateAsync(toJobPayload(values, { admin, saveAsDraft: mode === 'draft' }));
                 addToast({ variant: 'success', message: doneMessage(made.status, false) });
             } else if (mode === 'resubmit') {
-                const done = await resubmit.mutateAsync({ id: job._id, payload: toJobPayload(values, { admin, edit: true }) });
+                const done = await resubmit.mutateAsync({ id: job._id, payload: toJobPayload(values, { admin, edit: true, previous: initial }) });
                 addToast({ variant: 'success', message: doneMessage(done.status, false) });
             } else {
-                const done = await update.mutateAsync({ id: job._id, payload: toJobPayload(values, { admin, edit: true }) });
+                const done = await update.mutateAsync({ id: job._id, payload: toJobPayload(values, { admin, edit: true, previous: initial }) });
                 addToast({ variant: 'success', message: doneMessage(done.status, job.status === 'approved' && done.status === 'pending') });
             }
             setSaved(true);
             router.push('/employer');
         } catch (err) {
             fail(err);
+        } finally {
+            setRunning(null);
         }
     };
 
@@ -163,12 +172,12 @@ export function JobForm({ job, admin = false, accountEmail, companyName }: Props
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" data-testid="rejected-note">
                     <p className="font-medium">A reviewer did not approve this job.</p>
                     {job?.moderation?.reason && <p className="mt-1">Reason: {job.moderation.reason}</p>}
-                    <p className="mt-1">Fix what the reviewer pointed out, then save and resubmit it.</p>
+                    <p className="mt-1">Fix what the reviewer pointed out, then save and resubmit it. A job a reviewer turned down goes back to a reviewer, even if your company is verified: it is never published straight away.</p>
                 </div>
             )}
             {edit && (status === 'approved' || status === 'pending') && (
                 <p className={`rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/60 ${muted}`}>
-                    Changing the title, the description or how to apply sends a live job back to review unless your company is verified.
+                    Changing {REVIEWED_CHANGES} sends a live job back to review unless your company is verified.
                 </p>
             )}
             {!edit && companyName && (
@@ -277,17 +286,17 @@ export function JobForm({ job, admin = false, accountEmail, companyName }: Props
                 <Link href="/employer" className={btnSecondary}>Cancel</Link>
                 {!edit && (
                     <button type="button" className={btnSecondary} disabled={pending} onClick={() => void run('draft')} data-testid="save-draft">
-                        {create.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Save as draft
+                        {running === 'draft' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Save as draft
                     </button>
                 )}
                 {edit && (status === 'draft' || status === 'rejected') && (
                     <button type="button" className={btnPrimary} disabled={pending} onClick={() => void run('resubmit')} data-testid="save-resubmit">
-                        {resubmit.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                        {running === 'resubmit' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
                         {status === 'rejected' ? 'Save and resubmit' : 'Save and send for review'}
                     </button>
                 )}
                 <button type="submit" className={edit && (status === 'draft' || status === 'rejected') ? btnSecondary : btnPrimary} disabled={pending} data-testid="save-job-form">
-                    {(create.isPending && !pending) || update.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : edit ? <Save className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                    {running === 'send' || running === 'save' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : edit ? <Save className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
                     {edit ? 'Save changes' : 'Post job'}
                 </button>
             </div>
