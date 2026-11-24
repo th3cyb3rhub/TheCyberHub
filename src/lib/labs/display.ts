@@ -24,7 +24,10 @@ export const isLabSort = (v: unknown): v is keyof typeof SORT_LABELS => isIn(LAB
 export const isLabStatus = (v: unknown): v is LabStatus => isIn(LAB_STATUSES, v);
 
 /** `web-security` as "Web security". Unknown categories are still readable. */
+const ACRONYMS: Record<string, string> = { osint: 'OSINT', iot: 'IoT' };
+
 export function categoryLabel(category: string): string {
+    if (ACRONYMS[category]) return ACRONYMS[category];
     const text = category.replace(/-/g, ' ').trim();
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
 }

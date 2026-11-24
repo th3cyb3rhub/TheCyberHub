@@ -71,7 +71,7 @@ export function LabsLeaderboard({ category, onCategoryChange }: { category: LabC
             ) : board.isError ? (
                 <ErrorState error={board.error} onRetry={() => void board.refetch()} title="Could not load the leaderboard" />
             ) : rows.length === 0 ? (
-                <EmptyState icon={Trophy} title="No completions yet" description={category ? `Nobody has completed a ${categoryLabel(category).toLowerCase()} lab yet. Be the first.` : 'Nobody has completed a lab yet. Be the first.'} actionLabel="Browse labs" actionHref="/labs" />
+                <EmptyState icon={Trophy} title="No completions yet" description={category ? `Nobody has completed a lab in ${categoryLabel(category)} yet. Be the first.` : 'Nobody has completed a lab yet. Be the first.'} actionLabel="Browse labs" actionHref="/labs" />
             ) : (
                 <div className={`${card} overflow-x-auto`} data-testid="labs-board">
                     <table className="w-full text-left">

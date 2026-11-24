@@ -29,9 +29,8 @@ function InstructionsEditor({ value, onChange, error }: { value: string; onChang
     const tab = (active: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium ${active ? 'bg-orange-700 text-white' : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-neutral-800'}`;
     return (
         <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-200" id="instructions-label">Instructions</span>
-                <div role="group" aria-label="Instructions view" className="flex gap-1 rounded-xl border border-gray-200 p-1 dark:border-neutral-800">
+            <div className="mb-2 flex items-center justify-end gap-2">
+                                <div role="group" aria-label="Instructions view" className="flex gap-1 rounded-xl border border-gray-200 p-1 dark:border-neutral-800">
                     <button type="button" aria-pressed={!preview} onClick={() => setPreview(false)} className={tab(!preview)}>Write</button>
                     <button type="button" aria-pressed={preview} onClick={() => setPreview(true)} className={tab(preview)}>Preview</button>
                 </div>
@@ -43,7 +42,7 @@ function InstructionsEditor({ value, onChange, error }: { value: string; onChang
                 </div>
             ) : (
                 <Field id="instructions" label="Instructions" error={error} hint={`${value.length}/${FORM_LIMITS.instructions} characters. Markdown: headings, lists, links, code fences. A payload in a code fence is shown as text.`}>
-                    {(p) => <textarea {...p} rows={14} value={value} onChange={(e) => onChange(e.target.value)} className={`${input} font-mono text-xs sm:text-sm ${error ? inputError : ''}`} aria-labelledby="instructions-label" />}
+                    {(p) => <textarea {...p} rows={14} value={value} onChange={(e) => onChange(e.target.value)} className={`${input} font-mono text-xs sm:text-sm ${error ? inputError : ''}`} />}
                 </Field>
             )}
         </div>

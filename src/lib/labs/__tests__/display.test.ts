@@ -41,6 +41,9 @@ describe('display helpers', () => {
         expect(formatBytes(5 * 1024 * 1024)).toBe('5 MB')
         expect(formatBytes(null)).toBeNull()
         expect(categoryLabel('web-security')).toBe('Web security')
+        expect(categoryLabel('osint')).toBe('OSINT')
+        expect(categoryLabel('iot-security')).toBe('Iot security')
+        expect(categoryLabel('iot')).toBe('IoT')
         expect(shortDigest('a'.repeat(64))).toBe(`${'a'.repeat(10)}...${'a'.repeat(8)}`)
     })
 
