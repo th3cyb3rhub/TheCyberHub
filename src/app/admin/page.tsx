@@ -24,7 +24,9 @@ import {
     Target,
     BarChart3,
     HardDrive,
-    Wrench
+    Wrench,
+    Route,
+    Library
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -60,6 +62,22 @@ const adminSections = [
         icon: MessageSquare,
         href: '/admin/forum',
         color: 'from-purple-500 to-pink-500',
+        minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'Roadmaps and Paths',
+        description: 'Write, review and publish roadmaps and learning paths',
+        icon: Route,
+        href: '/admin/learning-paths',
+        color: 'from-sky-500 to-blue-600',
+        minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'Resource Library',
+        description: 'Review submitted resources, reports and broken links',
+        icon: Library,
+        href: '/admin/resources',
+        color: 'from-teal-500 to-emerald-600',
         minRole: 'moderator' as MinRole,
     },
     {

@@ -10,7 +10,7 @@ import {
     useCreatePath, useDeletePath, useEditorPath, useFeaturePath, useLearningPaths, usePathTransition, useRequestPathChanges, useUpdatePath,
 } from '@/hooks/queries/useLearningPaths';
 import { getEditorPath } from '@/lib/api/learning';
-import { emptyPathValues, keyFromTitle, moveNode, newNode, pathInput, removeNode, renameKey, valuesEqual, valuesFromPath, type EditorNodeValues } from '@/lib/learning/editor';
+import { emptyPathValues, moveNode, newNode, pathInput, removeNode, renameKey, valuesEqual, valuesFromPath, type EditorNodeValues } from '@/lib/learning/editor';
 import { CATEGORY_LABELS, DIFFICULTY_LABELS, KIND_LABELS, STATUS_LABELS } from '@/lib/learning/display';
 import { fieldErrors, isConflict, learningErrorMessage } from '@/lib/learning/errors';
 import { LIMITS, pathEditorSchema, requestChangesSchema, zodFieldErrors, type PathEditorValues } from '@/lib/learning/schemas';
