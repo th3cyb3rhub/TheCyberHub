@@ -134,7 +134,7 @@ export interface Prerequisite {
     completed?: boolean;
 }
 
-export interface LearningDetail extends LearningCard {
+export interface LearningDetail extends Omit<LearningCard, 'viewer'> {
     description: string;
     seo?: { metaDescription?: string };
     prerequisites: Prerequisite[];

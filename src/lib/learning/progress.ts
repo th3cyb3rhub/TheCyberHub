@@ -154,3 +154,13 @@ export function groupByStage(detail: Pick<LearningDetail, 'modules' | 'stages'>)
         .map((s) => ({ title: s.title, nodes: s.moduleIds.map((id) => byId.get(id)).filter((n): n is LearningNode => !!n) }))
         .filter((s) => s.nodes.length > 0);
 }
+
+/** What to tell the member after a tick: points, unlocked badges, a finished path */
+export function rewardMessages(change: { rewards?: { pointsAwarded?: number; badges?: { name: string }[] }; completedNow?: boolean }, pathTitle?: string): string[] {
+    const out: string[] = [];
+    if (change.completedNow) out.push(pathTitle ? `You completed ${pathTitle}. Your certificate is ready.` : 'You completed this roadmap. Your certificate is ready.');
+    const points = change.rewards?.pointsAwarded ?? 0;
+    if (points > 0) out.push(`You earned ${points} ${points === 1 ? 'point' : 'points'}.`);
+    for (const badge of change.rewards?.badges ?? []) out.push(`Badge unlocked: ${badge.name}.`);
+    return out;
+}
