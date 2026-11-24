@@ -332,6 +332,13 @@ html[data-theme="light"] ::selection {
   animation: shimmer 1.5s infinite;
 }
 
+/* Progressive entrance: content is visible by default and only animates when motion is welcome */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-enter {
+    animation: fade-in-up 0.4s ease-out backwards;
+  }
+}
+
 /* Staggered card animation delays */
 .animate-stagger-1 { animation-delay: 0.05s; }
 .animate-stagger-2 { animation-delay: 0.1s; }
