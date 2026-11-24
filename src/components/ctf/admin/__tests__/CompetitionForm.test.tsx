@@ -164,7 +164,7 @@ describe('CompetitionForm (create)', () => {
         expect(screen.getAllByTestId('set-row').map((r) => r.getAttribute('data-id'))).toEqual(['p2', 'p1'])
         fireEvent.click(screen.getByRole('button', { name: 'Move Cookie Monster up' }))
         expect(screen.getAllByTestId('set-row').map((r) => r.getAttribute('data-id'))).toEqual(['p1', 'p2'])
-        expect(screen.getByRole('button', { name: 'Cookie Monster is in the set' })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Cookie Monster is in the set' })).toHaveAttribute('aria-disabled', 'true')
         fillBasics()
         submit()
         expect(call(create)[0].challenges).toEqual(['p1', 'p2'])
@@ -335,8 +335,8 @@ describe('challenge set of a saved competition', () => {
         const rows = screen.getAllByTestId('set-row')
         expect(rows.map((r) => r.getAttribute('data-id'))).toEqual(['ch1', 'ch2'])
         expect(rows[1]).toHaveTextContent('4 solves: it cannot be removed')
-        expect(screen.getByRole('button', { name: 'Padding Oracle has solves and cannot be removed' })).toBeDisabled()
-        expect(screen.getByRole('button', { name: 'Remove Cookie Monster' })).toBeEnabled()
+        expect(screen.getByRole('button', { name: 'Padding Oracle has solves and cannot be removed' })).toHaveAttribute('aria-disabled', 'true')
+        expect(screen.getByRole('button', { name: 'Remove Cookie Monster' })).not.toHaveAttribute('aria-disabled')
     })
 
     it('reorders and removes with the API calls, at once', () => {

@@ -637,7 +637,7 @@ test.describe('Admin: create and edit', () => {
         const state = await open(page, ADMIN, `/admin/ctf/${LIVE}/edit`);
         await expect(page.getByTestId('set-row')).toHaveCount(3);
         // ch-1 and ch-2 have solves: they cannot go
-        await expect(page.getByRole('button', { name: 'Cookie Monster has solves and cannot be removed' })).toBeDisabled();
+        await expect(page.getByRole('button', { name: 'Cookie Monster has solves and cannot be removed' })).toHaveAttribute('aria-disabled', 'true');
         await page.getByRole('button', { name: 'Remove Hidden Strings' }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Remove challenge' }).click();
         await expect(page.getByTestId('set-row')).toHaveCount(2);
