@@ -151,6 +151,22 @@ describe('series occurrences', () => {
         expect(within(rows[1]).getByRole('button', { name: /Delete Plain/ })).toBeInTheDocument()
     })
 
+    it('offers delete for a series date that is not upcoming or live (pending, ended, cancelled)', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        const mk = (id: string, status: string, over: Record<string, unknown> = {}) => makeEvent({ _id: id, slug: id, title: `T ${id}`, status, seriesId: '64b000000000000000000009', viewer: undefined, ...over } as never)
+        queue.current = page([
+            mk('p', 'pending'),
+            mk('c', 'cancelled'),
+            mk('e', 'upcoming', { startDate: '2020-01-01T10:00:00Z', endDate: '2020-01-01T11:00:00Z', endsAt: '2020-01-01T11:00:00Z' }),
+            mk('u', 'upcoming', { startDate: '2099-01-01T10:00:00Z', endDate: '2099-01-01T11:00:00Z', endsAt: '2099-01-01T11:00:00Z' }),
+        ])
+        render(<AdminEventsView />)
+        expect(screen.getByRole('button', { name: 'Delete T p' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Delete T c' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Delete T e' })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Delete T u' })).not.toBeInTheDocument()
+    })
+
     it('explains that only this date is cancelled', () => {
         useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
         queue.current = page([occurrence])

@@ -86,7 +86,7 @@ function Row({ event, admin, onAction }: { event: EventSummary; admin: boolean; 
                             {open && (
                                 <button type="button" className={`${btnSecondary} !px-3 !py-2`} onClick={() => onAction({ kind: 'cancel', event })}><Ban className="h-4 w-4" aria-hidden="true" /> {event.seriesId ? 'Cancel this occurrence' : 'Cancel'}</button>
                             )}
-                            {!event.seriesId && (
+                            {(!event.seriesId || !open) && (
                                 <button type="button" className={`${btnSecondary} !px-3 !py-2 text-red-800 dark:text-red-300`} onClick={() => onAction({ kind: 'delete', event })} aria-label={`Delete ${event.title}`}>
                                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                                 </button>
