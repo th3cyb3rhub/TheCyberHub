@@ -169,6 +169,11 @@ const staticRoutes = [
         changeFrequency: 'daily' as const,
         priority: 0.6,
     },
+    {
+        url: '/events/archive',
+        changeFrequency: 'daily' as const,
+        priority: 0.6,
+    },
 
     // Internships
     {

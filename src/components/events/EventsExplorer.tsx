@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CalendarDays, Loader2, Plus, Search, Sparkles, X } from 'lucide-react';
+import { Archive, CalendarDays, Loader2, Plus, Search, Sparkles, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/context/AuthContext';
 import { useEventList, useEventPage } from '@/hooks/queries/useEvents';
@@ -154,6 +154,13 @@ export function EventsExplorer() {
                 </div>
 
                 <div id="events-scope-panel" role="tabpanel" aria-labelledby={`events-scope-${tab}`}>
+                    {tab === 'past' && (
+                        <p className={`mb-4 flex flex-wrap items-center gap-x-2 text-sm ${muted}`}>
+                            <Archive className="h-4 w-4" aria-hidden="true" />
+                            Looking for a recording or slides?
+                            <Link href="/events/archive" className="font-medium text-orange-800 underline hover:text-orange-900 dark:text-orange-300">Browse the event archive</Link>
+                        </p>
+                    )}
                     {featured.length > 0 && (
                         <section aria-labelledby="featured-heading" className="mb-10">
                             <h2 id="featured-heading" className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">

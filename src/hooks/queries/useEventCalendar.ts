@@ -25,13 +25,14 @@ export function useEventsCalendar(range: { from: string; to: string } | null, ca
 const ARCHIVE_PAGE = 12;
 
 /** Past events, newest first, with "load more" (the API sends `hasMore`, not a total) */
-export function useEventArchives(filters: ArchiveFilters) {
+export function useEventArchives(filters: ArchiveFilters, { enabled = true }: { enabled?: boolean } = {}) {
     const base = { limit: ARCHIVE_PAGE, ...filters };
     return useInfiniteQuery({
         queryKey: eventKeys.archives(base),
         queryFn: ({ pageParam }) => api.listArchives({ ...base, page: pageParam }),
         initialPageParam: 1,
         getNextPageParam: (last: ArchivePage) => (last.pagination.hasMore ? last.pagination.page + 1 : undefined),
+        enabled,
         staleTime: 60_000,
         placeholderData: keepPreviousData,
     });
