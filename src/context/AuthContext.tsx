@@ -88,7 +88,6 @@ interface AuthContextType {
     loginWithGoogle: (idToken: string) => Promise<TwoFactorChallenge | void>;
     loginWithGithub: (code: string) => Promise<TwoFactorChallenge | void>;
     updateBookmarks: (data: Partial<NonNullable<User['bookmarks']>>) => Promise<void>;
-    updateProgress: (payload: { roadmapId: string; completedSteps: string[]; percent: number }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -479,25 +478,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (result.data) setUser(result.data);
     };
 
-    const updateProgress = async (payload: { roadmapId: string; completedSteps: string[]; percent: number }) => {
-        const response = await fetch(`${API_URL}/api/auth/progress`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Progress update failed');
-        }
-
-        if (result.data) setUser(result.data);
-    };
-
     return (
         <AuthContext.Provider value={{
             user,
@@ -517,7 +497,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             loginWithGoogle,
             loginWithGithub,
             updateBookmarks,
-            updateProgress,
         }}>
             {children}
         </AuthContext.Provider>

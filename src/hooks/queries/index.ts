@@ -7,6 +7,7 @@ export * from './useFeed';
 export * from './useLeaderboard';
 export * from './useInternships';
 export * from './useLearningPaths';
+export * from './useResources';
 export * from './useSearch';
 export * from './useDailyChallenge';
 export * from './useStreak';

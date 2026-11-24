@@ -54,7 +54,9 @@ const searchItems: SearchItem[] = [
     { id: 'sql-injection-cs', title: 'SQL Injection', description: 'SQLi cheatsheet', href: '/cheatsheets/sql-injection', category: 'resource', icon: <Database className="w-4 h-4" />, keywords: ['sql', 'injection'] },
     { id: 'xss-cs', title: 'XSS', description: 'Cross-site scripting cheatsheet', href: '/cheatsheets/xss', category: 'resource', icon: <Code2 className="w-4 h-4" />, keywords: ['xss', 'scripting'] },
     { id: 'reverse-shells-cs', title: 'Reverse Shells', description: 'Reverse shell cheatsheet', href: '/cheatsheets/reverse-shells', category: 'resource', icon: <Terminal className="w-4 h-4" />, keywords: ['shell', 'reverse'] },
-    { id: 'roadmaps', title: 'Roadmaps', description: 'Learning paths', href: '/roadmaps', category: 'resource', icon: <Map className="w-4 h-4" />, keywords: ['learn', 'path', 'career'] },
+    { id: 'roadmaps', title: 'Roadmaps', description: 'Step by step career roadmaps', href: '/roadmaps', category: 'resource', icon: <Map className="w-4 h-4" />, keywords: ['learn', 'path', 'career'] },
+    { id: 'learning-paths', title: 'Learning Paths', description: 'Guided courses for every level', href: '/learning-paths', category: 'resource', icon: <BookOpen className="w-4 h-4" />, keywords: ['course', 'learn', 'guided'] },
+    { id: 'resource-library', title: 'Resource Library', description: 'Community picked articles, videos and tools', href: '/resources', category: 'resource', icon: <BookOpen className="w-4 h-4" />, keywords: ['resources', 'library', 'links', 'books', 'videos'] },
     { id: 'blog', title: 'Blog', description: 'Community articles', href: '/blog', category: 'resource', icon: <FileText className="w-4 h-4" />, keywords: ['articles', 'posts', 'write'] },
     
     // Pages

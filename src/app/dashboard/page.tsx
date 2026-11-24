@@ -33,6 +33,7 @@ import AchievementsPanel from '@/components/badges/AchievementsPanel';
 import ChecklistCard from '@/components/onboarding/ChecklistCard';
 import SuggestedFollows from '@/components/onboarding/SuggestedFollows';
 import { useOnboarding } from '@/hooks/queries';
+import { DashboardLearning } from '@/components/learning/DashboardLearning';
 const DailyChallenge = lazy(() => import('@/components/DailyChallenge'));
 
 interface ChallengeSummary {
@@ -55,7 +56,6 @@ const quickTools = [
 
 // Learning resources
 const learningResources = [
-    { title: 'Cybersecurity Roadmap', href: '/roadmaps', icon: Map, description: 'Start your security journey' },
     { title: 'Cheatsheets', href: '/cheatsheets', icon: BookOpen, description: 'Quick reference guides' },
     { title: 'Security Tools', href: '/tools', icon: Wrench, description: 'Explore every security tool' },
     { title: 'Practice Labs', href: '/labs', icon: Shield, description: 'Hands-on environments' },
@@ -405,14 +405,11 @@ const DashboardPage = () => {
                             </div>
                         </div>
 
-                        {/* Learning Resources */}
-                        <div>
-                            <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-                                <BookOpen className="w-5 h-5 text-blue-500" />
-                                Continue Learning
-                            </h2>
-                            <div className="space-y-3">
-                                {learningResources.map((resource, i) => (
+                        {/* Learning: the member's own roadmaps first, then quick links */}
+                        <DashboardLearning
+                            fallback={
+                                <>
+                                    {learningResources.map((resource, i) => (
                                     <Link
                                         key={i}
                                         href={resource.href}
@@ -432,8 +429,9 @@ const DashboardPage = () => {
                                         <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-orange-500 transition-colors" />
                                     </Link>
                                 ))}
-                            </div>
-                        </div>
+                                </>
+                            }
+                        />
                     </div>
 
                     {/* Challenges */}

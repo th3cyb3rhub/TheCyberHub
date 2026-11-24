@@ -32,6 +32,7 @@ import {
     ChevronRight,
     Zap,
     FlaskConical,
+    Library,
 } from 'lucide-react';
 import { useNotificationSocket } from '@/context/NotificationProvider';
 import { NavDropdownItem } from '@/components/navbar/MobileMenu';
@@ -93,6 +94,7 @@ const Navbar = () => {
         { title: "Jobs", href: "/jobs", icon: <Briefcase className="w-4 h-4" />, description: "Cybersecurity careers" },
         { title: "Blog", href: "/blog", icon: <BookOpen className="w-4 h-4" />, description: "Tutorials & writeups" },
         { title: "Labs", href: "/labs", icon: <FlaskConical className="w-4 h-4" />, description: "Hands-on practice environments" },
+        { title: "Resource Library", href: "/resources", icon: <Library className="w-4 h-4" />, description: "Community picked articles, videos and tools" },
     ];
 
     // --- Hacker/Cyberpunk nav link with animated underline ---

@@ -502,7 +502,7 @@ const WebSecurityCheatsheet = () => {
                                 <p className="text-sm text-blue-400 font-medium mb-2">Need More Resources?</p>
                                 <p className="text-sm text-gray-400">
                                     Check out our <a href="/tools" className="text-orange-400 hover:text-orange-300">security tools</a>,{' '}
-                                    <a href="/roadmaps" className="text-orange-400 hover:text-orange-300">learning roadmaps</a>, and{' '}
+                                    <Link href="/roadmaps" className="text-orange-400 hover:text-orange-300">learning roadmaps</Link>, and{' '}
                                     <Link href="/blog" className="text-orange-400 hover:text-orange-300">blog posts</Link> for in-depth tutorials.
                                 </p>
                             </div>

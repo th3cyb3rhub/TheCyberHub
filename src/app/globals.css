@@ -657,3 +657,21 @@ html[data-theme="light"] .event-md code {
 html[data-theme="light"] .event-md hr {
   border-color: rgba(0, 0, 0, 0.12) !important;
 }
+
+/* ============================
+   Printing a certificate: the page chrome stays out of the printout
+   ============================ */
+@media print {
+  body[data-print-certificate] .fixed,
+  body[data-print-certificate] nav,
+  body[data-print-certificate] footer,
+  body[data-print-certificate] a[href="#main-content"],
+  body[data-print-certificate] [data-print-hide] {
+    display: none !important;
+  }
+
+  body[data-print-certificate],
+  body[data-print-certificate] .cyberhub-bg {
+    background: #fff !important;
+  }
+}
