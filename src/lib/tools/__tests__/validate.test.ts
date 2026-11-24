@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-    checkCveId, checkDnsName, checkDomain, checkHost, checkHttpUrl, checkIp, checkOrigins, checkPort, checkSubdomainList, cleanHostInput, isDomainName, isIPv4, isIPv6,
+    checkCveId, checkDnsName, checkDomain, checkHost, checkHttpUrl, checkIp, checkOrigins, checkPort, checkSubdomainList, cleanHostInput, isDomainName, isIPv4, isIPv6, urlWithoutQuery,
 } from '../validate'
 
 describe('cleanHostInput', () => {
@@ -96,5 +96,14 @@ describe('other inputs', () => {
         expect(checkSubdomainList('not a host!')).toMatchObject({ ok: false })
         const many = Array.from({ length: 21 }, (_, i) => `h${i}.example.com`).join('\n')
         expect(checkSubdomainList(many)).toMatchObject({ ok: false })
+    })
+})
+
+describe('urlWithoutQuery', () => {
+    it('keeps origin and path and drops query and fragment', () => {
+        expect(urlWithoutQuery('https://example.com/a/b?token=secret#frag')).toBe('https://example.com/a/b')
+        expect(urlWithoutQuery('https://example.com/?x=1')).toBe('https://example.com')
+        expect(urlWithoutQuery('http://example.com:8080/p')).toBe('http://example.com:8080/p')
+        expect(urlWithoutQuery('nonsense')).toBe('')
     })
 })

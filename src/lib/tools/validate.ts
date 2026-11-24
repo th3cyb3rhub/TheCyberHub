@@ -127,3 +127,13 @@ export function checkSubdomainList(raw: string): Checked<string[]> {
     if (bad) return { ok: false, error: `"${bad.slice(0, 60)}" is not a valid host name.` };
     return { ok: true, value: list };
 }
+
+/** An address reduced to origin and path: the query and fragment may hold tokens, so they never go into the page address */
+export function urlWithoutQuery(value: string): string {
+    try {
+        const url = new URL(value);
+        return `${url.origin}${url.pathname === '/' ? '' : url.pathname}`;
+    } catch {
+        return '';
+    }
+}

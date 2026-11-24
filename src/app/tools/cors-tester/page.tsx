@@ -7,7 +7,7 @@ import { AccessNotice, AckCheckbox, useToolAccess } from '@/components/tools/Too
 import { DataRow, Pill, ResultActions, ResultMeta, ResultPanel, ResultSkeleton, ToolErrorPanel } from '@/components/tools/ResultParts';
 import { card, input, label as labelClass, muted, type Tone } from '@/components/tools/styles';
 import { useCorsScan, useTool } from '@/hooks/queries/useTools';
-import { checkHttpUrl, checkOrigins } from '@/lib/tools/validate';
+import { checkHttpUrl, checkOrigins, urlWithoutQuery } from '@/lib/tools/validate';
 import type { CorsResult, CorsSeverity } from '@/types/tools';
 
 const SLUG = 'cors-tester';
@@ -104,7 +104,7 @@ export default function CorsTesterPage() {
         setFormError(null);
         if (!list.ok) { setOriginError(list.error); return; }
         setOriginError(null);
-        save(url.value);
+        save(urlWithoutQuery(url.value));
         scan.mutate({ url: url.value, origins: list.value, ack: true });
     };
 

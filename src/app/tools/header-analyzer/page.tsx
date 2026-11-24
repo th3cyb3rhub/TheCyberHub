@@ -9,7 +9,7 @@ import { DataRow, Pill, ResultActions, ResultMeta, ResultPanel, ResultSkeleton, 
 import { card, muted, type Tone } from '@/components/tools/styles';
 import { useHeaderScan, useTool } from '@/hooks/queries/useTools';
 import { headersSummary } from '@/lib/tools/summaries';
-import { checkHttpUrl } from '@/lib/tools/validate';
+import { checkHttpUrl, urlWithoutQuery } from '@/lib/tools/validate';
 import type { CheckStatus, HeaderCheck, HeadersResult } from '@/types/tools';
 
 const SLUG = 'header-analyzer';
@@ -82,8 +82,8 @@ function Result({ data }: { data: HeadersResult }) {
                     <table className="w-full text-left text-sm">
                         <thead className={muted}><tr><th className="py-1.5 pr-3 font-medium">Name</th><th className="pr-3 font-medium">Secure</th><th className="pr-3 font-medium">HttpOnly</th><th className="font-medium">SameSite</th></tr></thead>
                         <tbody>
-                            {data.cookies.map((c) => (
-                                <tr key={c.name} className="border-t border-gray-200 dark:border-neutral-800">
+                            {data.cookies.map((c, i) => (
+                                <tr key={`${i}-${c.name}`} className="border-t border-gray-200 dark:border-neutral-800">
                                     <td className="py-1.5 pr-3 font-mono text-[13px]">{c.name}</td>
                                     <td className="pr-3">{c.secure ? 'Yes' : 'No'}</td>
                                     <td className="pr-3">{c.httpOnly ? 'Yes' : 'No'}</td>
@@ -121,7 +121,7 @@ export default function HeaderAnalyzerPage() {
         if (!checked.ok) { setFormError(checked.error); return; }
         if (!ack) { setFormError('Confirm that you may test this target first.'); return; }
         setFormError(null);
-        save(checked.value);
+        save(urlWithoutQuery(checked.value));
         scan.mutate({ url: checked.value, ack: true });
     };
 

@@ -137,6 +137,9 @@ export function ToolErrorPanel({ error, onRetry, retrying = false, retryLabel = 
 }) {
     const info = useMemo(() => toolErrorInfo(error), [error]);
     const pathname = usePathname();
+    // Come back with the target in the address; read after mount so no Suspense is needed
+    const [back, setBack] = useState(pathname);
+    useEffect(() => { setBack(`${pathname}${window.location.search}`); }, [pathname]);
     const left = useCountdown(info.retryAfter, error);
     const waiting = left > 0;
     const canRetry = !!onRetry && !['login', 'verify', 'validation', 'blocked', 'opted_out', 'not_found', 'not_supported'].includes(info.kind);
@@ -154,7 +157,7 @@ export function ToolErrorPanel({ error, onRetry, retrying = false, retryLabel = 
                         <p className="mt-2 text-sm font-medium" aria-live="off" data-testid="retry-countdown">Try again in {formatWait(left)}</p>
                     )}
                     <div className="mt-3 flex flex-wrap gap-2">
-                        {info.kind === 'login' && <Link href={`/auth?redirect=${encodeURIComponent(pathname)}`} className={btnPrimary}>Sign in</Link>}
+                        {info.kind === 'login' && <Link href={`/auth?redirect=${encodeURIComponent(back)}`} className={btnPrimary}>Sign in</Link>}
                         {canRetry && (
                             <button type="button" className={btnSecondary} onClick={onRetry} disabled={waiting || retrying}>
                                 {retrying ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -201,10 +204,11 @@ export function Code({ children }: { children: React.ReactNode }) {
     return <pre className={codeBlock}><code>{children}</code></pre>;
 }
 
-/** The result panel: announces itself to assistive technology when its content arrives */
+/** The result panel: a short status line tells assistive technology the result arrived, instead of reading it all out */
 export function ResultPanel({ children, label }: { children: React.ReactNode; label: string }) {
     return (
-        <section aria-label={label} aria-live="polite" aria-busy={false} className="mt-6" data-testid="result-panel">
+        <section aria-label={label} className="mt-6" data-testid="result-panel">
+            <p role="status" className="sr-only">{label} ready</p>
             {children}
         </section>
     );

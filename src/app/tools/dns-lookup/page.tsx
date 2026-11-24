@@ -41,7 +41,7 @@ function extra(record: DnsRecord | string): string {
 }
 
 function TypeSection({ type, entry }: { type: string; entry: DnsTypeResult }) {
-    const status = STATUS_TEXT[entry.status];
+    const status = STATUS_TEXT[entry.status] ?? { label: entry.status ? String(entry.status) : 'Unknown', tone: 'neutral' as const };
     return (
         <section className={`${card} p-4`} aria-labelledby={`dns-${type}`} data-testid={`dns-${type}`} data-status={entry.status}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

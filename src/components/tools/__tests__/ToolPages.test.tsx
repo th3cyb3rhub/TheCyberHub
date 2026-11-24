@@ -276,6 +276,46 @@ describe('cve search', () => {
     })
 })
 
+describe('review fixes', () => {
+    it('does not put the query of a checked URL into the address bar', async () => {
+        auth.value.user = { id: 'u1', isVerified: true }
+        api.scanHeaders.mockResolvedValue({ data: headersResult, meta: { cached: false } })
+        renderWithQuery(<HeaderAnalyzerPage />)
+        await userEvent.type(await screen.findByRole('textbox', { name: /url to check/i }), 'https://example.com/path?token=secret')
+        await userEvent.click(screen.getByRole('checkbox', { name: /i own this target/i }))
+        await userEvent.click(screen.getByRole('button', { name: /analyze headers/i }))
+        await waitFor(() => expect(api.scanHeaders).toHaveBeenCalledWith({ url: 'https://example.com/path?token=secret', ack: true }, expect.anything()))
+        expect(window.location.search).toBe('?target=https%3A%2F%2Fexample.com%2Fpath')
+        expect(window.location.href).not.toContain('secret')
+    })
+
+    it('shows an unknown DNS status as it is instead of crashing', async () => {
+        api.lookupDns.mockResolvedValue({ data: { name: 'example.com', kind: 'domain', exists: null, results: { A: { status: 'weird', records: [] } } }, meta: { cached: false } })
+        renderWithQuery(<DnsPage />)
+        await userEvent.type(await screen.findByRole('textbox', { name: /domain name or ip/i }), 'example.com')
+        await userEvent.click(screen.getByRole('button', { name: /look up/i }))
+        expect(await screen.findByTestId('dns-A')).toHaveTextContent('weird')
+    })
+
+    it('stops the CVE pager at 100 pages and says to narrow the search', async () => {
+        api.searchCves.mockResolvedValue({ data: { items: [{ id: 'CVE-2020-0001', summary: 'x', cvss: null, published: null, knownExploited: false }], total: 5000, page: 1, pageSize: 20, source: 'nvd' }, meta: { cached: false } })
+        renderWithQuery(<CveSearchPage />)
+        await userEvent.type(await screen.findByRole('textbox', { name: /cve id or keyword/i }), 'linux')
+        await userEvent.click(screen.getByRole('button', { name: /search/i }))
+        expect(await screen.findByTestId('cve-narrow')).toHaveTextContent(/narrow your search/i)
+        expect(screen.getAllByText(/Page 1 of 100/).length).toBeGreaterThan(0)
+    })
+
+    it('keeps the target in the sign-in link of an error', async () => {
+        window.history.replaceState(null, '', '/tools/whois-lookup?target=example.com')
+        api.lookupWhois.mockRejectedValue(apiError(401, 'AUTH_TOKEN_INVALID'))
+        renderWithQuery(<WhoisPage />)
+        await userEvent.click(await screen.findByRole('button', { name: /look up/i }))
+        const link = await screen.findByRole('link', { name: 'Sign in' })
+        expect(link.getAttribute('href')).toContain(encodeURIComponent('?target=example.com'))
+    })
+})
+
 describe('subdomain takeover', () => {
     it('tells the visitor it can take up to a minute while it runs, and sends the ack', async () => {
         auth.value.user = { id: 'u1', isVerified: true }
