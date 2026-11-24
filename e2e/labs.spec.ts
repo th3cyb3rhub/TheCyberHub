@@ -100,8 +100,9 @@ test.describe('Labs list', () => {
         await mockLabsApi(page, VISITOR);
         await page.route('**/api/labs?**', (route) => route.fulfill({ status: 500, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ success: false, error: { code: 'X', message: 'Boom' } }) }));
         await page.goto('/labs?difficulty=easy');
-        await expect(page.getByRole('alert').first()).toBeVisible();
-        await expect(page.getByRole('button', { name: /Try again/ })).toBeVisible();
+        // The app retries a failing read a few times (1s, 2s, 4s) before it gives up and shows the error
+        await expect(page.getByRole('button', { name: /Try again/ })).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByRole('alert').filter({ hasText: /\S/ }).first()).toBeVisible();
     });
 
     test('only admins and owners get the manage link', async ({ page, browser }) => {
