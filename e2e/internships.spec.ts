@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-    CLOSED_ID, DONE_ID, DRAFT_ID, FULL_ID, MEMBER, MINE_ID, MODERATOR, OPEN_ID, Q_FILE, Q_PICK, Q_TEXT, THEIRS_ID, VISITOR,
+    CLOSED_ID, DONE_ID, DRAFT_ID, FULL_ID, MEMBER, MODERATOR, OPEN_ID, Q_FILE, Q_PICK, Q_TEXT, THEIRS_ID, VISITOR,
     freshState, iso, mockInternshipsApi, myApplication, type MockState, type Role,
 } from './internships-mocks';
 
