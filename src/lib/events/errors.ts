@@ -82,5 +82,6 @@ export function exportErrorMessage(err: unknown): string {
 /** Calendar feed calls: the same words for any failure, without hints about the address */
 export function calendarFeedErrorMessage(err: unknown): string {
     if (err instanceof ApiError && err.status === 401) return 'Sign in again to manage your calendar feed.';
+    if (err instanceof ApiError && err.status === 503) return 'Calendar feed is not available right now. Please try again later.';
     return eventErrorMessage(err, 'Could not update your calendar feed. Please try again.');
 }
