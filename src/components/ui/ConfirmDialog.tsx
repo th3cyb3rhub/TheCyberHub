@@ -36,18 +36,18 @@ export function ConfirmDialog({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-            <div className="relative bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
                 <div className="flex items-start gap-3">
                     <div className="flex-shrink-0 p-2 bg-red-500/10 rounded-full">
-                        <AlertTriangle className="h-5 w-5 text-red-400" />
+                        <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                     </div>
                     <div>
-                        <h3 id="confirm-title" className="text-lg font-semibold text-white">{title}</h3>
-                        <p className="mt-1 text-sm text-gray-400">{description}</p>
+                        <h3 id="confirm-title" className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+                        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={onCancel} className="px-4 py-2 text-sm rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors">
+                    <button onClick={onCancel} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
                         {cancelText}
                     </button>
                     <button onClick={onConfirm} className={`px-4 py-2 text-sm rounded-lg text-white transition-colors ${variantStyles[variant]}`}>

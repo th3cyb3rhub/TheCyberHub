@@ -1,9 +1,16 @@
 import { fetchMentorIdsForSitemap } from '@/lib/mentorship/server'
 import { MetadataRoute } from 'next'
+import { FALLBACK_TOOLS, toolHref } from '@/lib/tools/registry'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 // Define your static routes
+const toolRoutes = FALLBACK_TOOLS.map((tool) => ({
+    url: toolHref(tool.slug),
+    changeFrequency: 'monthly' as const,
+    priority: tool.popular ? 0.8 : 0.7,
+}))
+
 const staticRoutes = [
     {
         url: '',
@@ -22,26 +29,6 @@ const staticRoutes = [
     },
     {
         url: '/tools',
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    },
-    {
-        url: '/tools/jwt-analyzer',
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    },
-    {
-        url: '/tools/subfinder',
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    },
-    {
-        url: '/tools/ssl-scanner',
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
-    },
-    {
-        url: '/tools/port-scanner',
         changeFrequency: 'monthly' as const,
         priority: 0.8,
     },
@@ -268,102 +255,7 @@ const staticRoutes = [
         priority: 0.4,
     },
 
-    // Tools (individual pages)
-    {
-        url: '/tools/cors-tester',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/cve-search',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/dns-lookup',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/encoder-decoder',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/exploit-db',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/google-dork',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/hash-analyzer',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/ip-lookup',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/password-generator',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/reverse-shell',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/ssl-checker',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/whois-lookup',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/header-analyzer',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/text-diff',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/markdown-editor',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/xss-payloads',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/sql-injection',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/ssrf-tester',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/tools/sub-takeover',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
+    // Tool pages come from the tools registry (see toolRoutes above)
 
     // Cheatsheets (individual pages)
     {
@@ -441,7 +333,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const currentDate = new Date()
 
     // Static pages
-    const staticPages = staticRoutes.map(route => ({
+    const staticPages = [...staticRoutes, ...toolRoutes].map(route => ({
         url: `${baseUrl}${route.url}`,
         lastModified: currentDate,
         changeFrequency: route.changeFrequency,

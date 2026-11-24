@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { fetchApi } from '@/lib/api';
+import { FALLBACK_TOOLS, toolHref } from '@/lib/tools/registry';
+import { ToolIcon } from '@/components/tools/ToolIcon';
 import {
     Search,
     Wrench,
@@ -13,13 +15,9 @@ import {
     Calendar,
     Code2,
     Command,
-    Hash,
     Globe,
-    Key,
     Terminal,
     Database,
-    Lock,
-    Radio,
     Shield,
     CornerDownLeft,
     Flag
@@ -38,25 +36,17 @@ interface SearchItem {
 
 // All searchable items
 const searchItems: SearchItem[] = [
-    // Tools
-    { id: 'google-dork', title: 'Google Dork', description: 'Advanced Google search operators', href: '/tools/google-dork', category: 'tool', icon: <Search className="w-4 h-4" />, keywords: ['search', 'recon', 'osint'] },
-    { id: 'jwt-analyzer', title: 'JWT Analyzer', description: 'Decode and analyze JWT tokens', href: '/tools/jwt-analyzer', category: 'tool', icon: <Key className="w-4 h-4" />, keywords: ['token', 'auth', 'decode'] },
-    { id: 'subfinder', title: 'Subdomain Finder', description: 'Discover subdomains via CT logs', href: '/tools/subfinder', category: 'tool', icon: <Globe className="w-4 h-4" />, keywords: ['subdomain', 'recon', 'enumeration'] },
-    { id: 'encoder-decoder', title: 'Encoder/Decoder', description: 'Base64, URL, HTML encoding', href: '/tools/encoder-decoder', category: 'tool', icon: <Terminal className="w-4 h-4" />, keywords: ['encode', 'decode', 'base64', 'url'] },
-    { id: 'hash-analyzer', title: 'Hash Analyzer', description: 'Identify and analyze hash types', href: '/tools/hash-analyzer', category: 'tool', icon: <Hash className="w-4 h-4" />, keywords: ['hash', 'md5', 'sha', 'crack'] },
-    { id: 'password-generator', title: 'Password Generator', description: 'Generate secure passwords', href: '/tools/password-generator', category: 'tool', icon: <Key className="w-4 h-4" />, keywords: ['password', 'secure', 'random'] },
-    { id: 'ip-lookup', title: 'IP Lookup', description: 'Get IP geolocation info', href: '/tools/ip-lookup', category: 'tool', icon: <Globe className="w-4 h-4" />, keywords: ['ip', 'geolocation', 'network'] },
-    { id: 'whois-lookup', title: 'WHOIS Lookup', description: 'Domain registration info', href: '/tools/whois-lookup', category: 'tool', icon: <Globe className="w-4 h-4" />, keywords: ['whois', 'domain', 'registration'] },
-    { id: 'dns-lookup', title: 'DNS Lookup', description: 'Query DNS records', href: '/tools/dns-lookup', category: 'tool', icon: <Globe className="w-4 h-4" />, keywords: ['dns', 'records', 'mx', 'txt'] },
-    { id: 'header-analyzer', title: 'Header Analyzer', description: 'Analyze HTTP security headers', href: '/tools/header-analyzer', category: 'tool', icon: <Shield className="w-4 h-4" />, keywords: ['headers', 'http', 'security'] },
-    { id: 'text-diff', title: 'Text Diff', description: 'Compare two texts', href: '/tools/text-diff', category: 'tool', icon: <FileText className="w-4 h-4" />, keywords: ['diff', 'compare', 'text'] },
-    { id: 'reverse-shell', title: 'Reverse Shell Generator', description: 'Generate reverse shell payloads', href: '/tools/reverse-shell', category: 'tool', icon: <Terminal className="w-4 h-4" />, keywords: ['shell', 'payload', 'pentest'] },
-    { id: 'xss-payloads', title: 'XSS Payloads', description: 'XSS payload collection', href: '/tools/xss-payloads', category: 'tool', icon: <Code2 className="w-4 h-4" />, keywords: ['xss', 'payload', 'injection'] },
-    { id: 'sql-injection', title: 'SQL Injection Payloads', description: 'SQLi payloads for testing', href: '/tools/sql-injection', category: 'tool', icon: <Database className="w-4 h-4" />, keywords: ['sql', 'sqli', 'injection', 'database'] },
-    { id: 'cors-tester', title: 'CORS Tester', description: 'Test CORS configurations', href: '/tools/cors-tester', category: 'tool', icon: <Globe className="w-4 h-4" />, keywords: ['cors', 'cross-origin', 'headers'] },
-    { id: 'ssl-checker', title: 'SSL/TLS Checker', description: 'Analyze SSL certificates', href: '/tools/ssl-checker', category: 'tool', icon: <Lock className="w-4 h-4" />, keywords: ['ssl', 'tls', 'certificate', 'https'] },
-    { id: 'port-scanner', title: 'Port Scanner', description: 'Scan for open ports', href: '/tools/port-scanner', category: 'tool', icon: <Radio className="w-4 h-4" />, keywords: ['port', 'scan', 'nmap', 'network'] },
-    
+    // Tools: the same registry the tools index and the home section read
+    ...FALLBACK_TOOLS.map((tool): SearchItem => ({
+        id: tool.slug,
+        title: tool.name,
+        description: tool.description,
+        href: toolHref(tool.slug),
+        category: 'tool',
+        icon: <ToolIcon name={tool.icon} className="w-4 h-4" />,
+        keywords: tool.keywords,
+    })),
+
     // Resources
     { id: 'cheatsheets', title: 'Cheatsheets', description: 'Quick reference guides', href: '/cheatsheets', category: 'resource', icon: <BookOpen className="w-4 h-4" />, keywords: ['cheat', 'reference', 'guide'] },
     { id: 'linux-commands', title: 'Linux Commands', description: 'Linux command cheatsheet', href: '/cheatsheets/linux-commands', category: 'resource', icon: <Terminal className="w-4 h-4" />, keywords: ['linux', 'bash', 'commands'] },

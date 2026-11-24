@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { FALLBACK_TOOLS } from '@/lib/tools/registry';
 import {
     Terminal,
     Flag,
@@ -20,9 +21,9 @@ const FeaturesSection = () => {
         {
             icon: <Terminal className="w-6 h-6" />,
             title: "Security Tools",
-            description: "22+ tools including subdomain finder, JWT analyzer, hash cracker, and more.",
+            description: `${FALLBACK_TOOLS.length} tools including a subdomain finder, JWT analyzer, DNS and CVE lookups, and more.`,
             href: "/tools",
-            stats: "22+ tools",
+            stats: `${FALLBACK_TOOLS.length} tools`,
             color: "orange"
         },
         {

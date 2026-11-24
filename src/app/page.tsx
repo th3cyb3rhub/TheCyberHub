@@ -10,11 +10,11 @@ import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
     title: 'TheCyberHub - Learn, Practice, Master Cybersecurity',
-    description: 'Your all-in-one cybersecurity platform. Access 22+ security tools, CTF challenges, cheatsheets, internships, and a growing community of security enthusiasts.',
+    description: 'Your all-in-one cybersecurity platform. Access security tools, CTF challenges, cheatsheets, internships, and a growing community of security enthusiasts.',
     keywords: ['cybersecurity', 'security tools', 'CTF', 'hacking', 'penetration testing', 'cheatsheets', 'internships'],
     openGraph: {
         title: 'TheCyberHub - Learn, Practice, Master Cybersecurity',
-        description: 'Your all-in-one cybersecurity platform. Access 22+ security tools, CTF challenges, cheatsheets, internships, and a growing community of security enthusiasts.',
+        description: 'Your all-in-one cybersecurity platform. Access security tools, CTF challenges, cheatsheets, internships, and a growing community of security enthusiasts.',
         type: 'website',
     },
 }

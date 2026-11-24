@@ -1,5 +1,6 @@
 "use client"
 
+import { FALLBACK_TOOLS } from '@/lib/tools/registry';
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -88,7 +89,7 @@ const Navbar = () => {
     ];
 
     const resourceLinks: NavDropdownItem[] = [
-        { title: "Security Tools", href: "/tools", icon: <Wrench className="w-4 h-4" />, description: "22+ pentesting & recon tools" },
+        { title: "Security Tools", href: "/tools", icon: <Wrench className="w-4 h-4" />, description: `${FALLBACK_TOOLS.length} security tools and lookups` },
         { title: "Jobs", href: "/jobs", icon: <Briefcase className="w-4 h-4" />, description: "Cybersecurity careers" },
         { title: "Blog", href: "/blog", icon: <BookOpen className="w-4 h-4" />, description: "Tutorials & writeups" },
         { title: "Labs", href: "/labs", icon: <FlaskConical className="w-4 h-4" />, description: "Hands-on practice environments" },
@@ -98,7 +99,7 @@ const Navbar = () => {
     const navLink = (href: string, icon: React.ReactNode, label: string) => (
         <Link key={href} href={href} className="group/navlink relative inline-flex items-center gap-1.5 h-10 px-3 text-[13px] font-medium tracking-wide uppercase transition-all duration-200">
             <span className={isActive(href) ? 'text-orange-400' : 'text-gray-500 group-hover/navlink:text-orange-400 transition-colors duration-200'}>{icon}</span>
-            <span className={isActive(href) ? 'text-white' : 'text-gray-400 group-hover/navlink:text-white transition-colors duration-200'}>{label}</span>
+            <span className={isActive(href) ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 group-hover/navlink:text-gray-900 dark:group-hover/navlink:text-white transition-colors duration-200'}>{label}</span>
             {/* Animated underline */}
             <span className={`absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-orange-500 to-orange-400 rounded-full transition-all duration-300 ${isActive(href) ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0 group-hover/navlink:opacity-100 group-hover/navlink:scale-x-100'}`} />
             {/* Active glow */}
@@ -110,7 +111,7 @@ const Navbar = () => {
     const dropdownTrigger = (label: string, icon: React.ReactNode, hrefs: string[]) => {
         const active = hrefs.some(h => isActive(h));
         return (
-            <NavigationMenuTrigger className={`group relative bg-transparent !px-3 h-10 text-[13px] font-medium tracking-wide uppercase transition-all duration-200 ${active ? 'text-white' : 'text-gray-400 hover:text-white'}`}>
+            <NavigationMenuTrigger className={`group relative bg-transparent !px-3 h-10 text-[13px] font-medium tracking-wide uppercase transition-all duration-200 ${active ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}>
                 <span className={`mr-1.5 ${active ? 'text-orange-400' : 'text-gray-500 group-hover:text-orange-400 transition-colors'}`}>{icon}</span>
                 {label}
                 {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" />}
@@ -211,7 +212,7 @@ const Navbar = () => {
                                 <div className="absolute inset-0 rounded-full bg-orange-500/30 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                             </div>
                             <div className="flex items-baseline gap-0">
-                                <span className="text-[15px] font-bold text-gray-200 dark:text-gray-200 tracking-tight font-mono">
+                                <span className="text-[15px] font-bold text-gray-900 dark:text-gray-200 tracking-tight font-mono">
                                     <span className="text-orange-500">$</span> TheCyber
                                 </span>
                                 <span className="text-[15px] font-bold text-orange-500 tracking-tight font-mono">Hub</span>
