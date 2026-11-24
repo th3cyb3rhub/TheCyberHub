@@ -1,7 +1,7 @@
 import type { CtfChallenge, CtfCompetitionCard, CtfPrize, CtfScoringMode } from '@/types/ctf';
 import { DECAY_TABLE, DYNAMIC_FLOOR_PERCENT } from './constants';
 
-export { safeHref, hostOf, formatBytes, categoryLabel, DIFFICULTY_LABELS } from '@/lib/labs/display';
+export { safeHref, hostOf, formatBytes, categoryLabel, excerpt } from '@/lib/labs/display';
 
 const DIFFICULTY_NAMES: Record<string, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard', insane: 'Insane', expert: 'Expert' };
 

@@ -7,6 +7,7 @@ import { useNotificationSocket } from '@/context/NotificationProvider';
 import { useDocumentVisible } from '@/hooks/useDocumentVisible';
 import * as api from '@/lib/api/ctf';
 import { ApiError } from '@/lib/api';
+import { CTF_LIMITS } from '@/lib/ctf/constants';
 import { isStaleState } from '@/lib/ctf/errors';
 import { refreshPublicCtf } from '@/lib/ctf/revalidate';
 import { isPlayable } from '@/lib/ctf/status';
@@ -41,7 +42,7 @@ export const ctfKeys = {
     picker: (search: string, userId: string | null = null) => ['ctf', 'picker', userId, search] as const,
 };
 
-export const CTF_PAGE_SIZE = 12;
+export const CTF_PAGE_SIZE = CTF_LIMITS.pageDefault;
 const ADMIN_PAGE_SIZE = 20;
 
 type Pages<T> = InfiniteData<CtfPage<T>, number>;
