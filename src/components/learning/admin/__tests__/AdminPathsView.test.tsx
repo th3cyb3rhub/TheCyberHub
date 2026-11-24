@@ -1,7 +1,8 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { makeDetail } from '@/lib/learning/__tests__/fixtures'
+import type { LearningCard } from '@/types/learning'
+import { makeCard } from '@/lib/learning/__tests__/fixtures'
 
 const replace = vi.fn()
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }))
@@ -13,10 +14,7 @@ vi.mock('@/hooks/queries/useLearningPaths', () => ({ useAdminPaths: (...args: un
 
 import { AdminPathsView } from '../AdminPathsView'
 
-const card = (over = {}) => {
-    const { modules: _m, stages: _s, prerequisites: _p, description: _d, archived: _a, viewer: _v, ...rest } = makeDetail()
-    return { ...rest, status: 'draft', createdBy: { id: 'u1', username: 'ada' }, updatedAt: '2026-11-20T10:00:00Z', ...over }
-}
+const card = (over: Partial<LearningCard> = {}) => ({ ...makeCard(), status: 'draft' as const, createdBy: { id: 'u1', username: 'ada' }, updatedAt: '2026-11-20T10:00:00Z', ...over })
 const page = (data: unknown[], counts?: Record<string, number>, extra = {}) => ({
     isLoading: false, isError: false, error: null, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
     data: { pages: [{ data, counts, pagination: { page: 1, limit: 20, total: data.length, totalPages: 1, hasMore: false } }] }, ...extra,

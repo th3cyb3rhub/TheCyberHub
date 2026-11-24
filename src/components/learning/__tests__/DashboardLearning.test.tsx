@@ -1,17 +1,14 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { makeDetail, node, progress } from '@/lib/learning/__tests__/fixtures'
+import { makeCard, node, progress } from '@/lib/learning/__tests__/fixtures'
 
 const summary = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 vi.mock('@/hooks/queries/useLearningPaths', () => ({ useLearningSummary: () => summary.current }))
 
 import { DashboardLearning } from '../DashboardLearning'
 
-const card = () => {
-    const { modules: _m, stages: _s, prerequisites: _p, description: _d, archived: _a, viewer: _v, ...rest } = makeDetail()
-    return { ...rest, viewer: null }
-}
+const card = () => makeCard()
 const fallback = <a href="/cheatsheets">Cheatsheets</a>
 
 beforeEach(() => {

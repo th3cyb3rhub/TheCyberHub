@@ -1,7 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { makeDetail, progress } from '@/lib/learning/__tests__/fixtures'
+import type { LearningCard } from '@/types/learning'
+import { makeCard, progress } from '@/lib/learning/__tests__/fixtures'
 
 const replace = vi.fn()
 const search = vi.hoisted(() => ({ value: '' }))
@@ -22,10 +23,7 @@ vi.mock('@/hooks/queries/useLearningPaths', () => ({
 
 import { LearningCatalog } from '../LearningCatalog'
 
-const card = (over = {}) => {
-    const { modules: _m, stages: _s, prerequisites: _p, description: _d, archived: _a, viewer: _v, ...rest } = makeDetail()
-    return { ...rest, viewer: null, ...over }
-}
+const card = (over: Partial<LearningCard> = {}) => ({ ...makeCard(), ...over })
 const page = (data: unknown[], extra = {}) => ({
     isLoading: false, isError: false, error: null, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
     data: { pages: [{ data, pagination: { page: 1, limit: 12, total: data.length, totalPages: 1, hasMore: false } }] }, ...extra,

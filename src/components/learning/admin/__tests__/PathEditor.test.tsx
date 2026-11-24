@@ -38,6 +38,7 @@ const loaded = (data?: EditorPath, extra = {}) => ({ data, isLoading: false, isE
 
 beforeEach(() => {
     vi.clearAllMocks()
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
     useAuth.mockReturnValue({ user: { id: 'm1', role: 'admin' }, loading: false })
     editor.current = loaded(path())
 })

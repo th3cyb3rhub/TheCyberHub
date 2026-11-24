@@ -16,8 +16,8 @@ describe('catalogue query', () => {
         expect(api.catalogueQuery({ page: 1, sort: 'popular', search: '  ', category: '' })).toBe('')
     })
     it('writes only what is set', () => {
-        const p = new URLSearchParams(api.catalogueQuery({ kind: 'roadmap', category: 'web-security', difficulty: 'beginner', search: ' xss ', sort: 'new', featured: true, page: 2, limit: 12 }))
-        expect(Object.fromEntries(p)).toEqual({ kind: 'roadmap', category: 'web-security', difficulty: 'beginner', search: 'xss', sort: 'new', featured: 'true', page: '2', limit: '12' })
+        const p = new URLSearchParams(api.catalogueQuery({ kind: 'roadmap', category: 'offensive', difficulty: 'beginner', search: ' xss ', sort: 'new', featured: true, page: 2, limit: 12 }))
+        expect(Object.fromEntries(p)).toEqual({ kind: 'roadmap', category: 'offensive', difficulty: 'beginner', search: 'xss', sort: 'new', featured: 'true', page: '2', limit: '12' })
     })
 })
 

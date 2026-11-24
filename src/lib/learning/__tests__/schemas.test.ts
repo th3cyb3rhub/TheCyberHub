@@ -93,7 +93,7 @@ describe('pathEditorSchema', () => {
         if (!r2.success) expect(zodFieldErrors(r2.error)).toHaveProperty(['modules.1.requires']);
     });
     it('checks item references by kind', () => {
-        const bad = valid();
+        const bad = valid() as unknown as { modules: { items: { kind: string; ref: string; title: string; optional: boolean }[] }[] };
         bad.modules[1].items = [{ kind: 'resource', ref: 'not-an-id', title: '', optional: false }, { kind: 'external', ref: 'javascript:alert(1)', title: '', optional: false }];
         const r = pathEditorSchema.safeParse(bad);
         expect(r.success).toBe(false);

@@ -1,4 +1,4 @@
-import type { LearningDetail, LearningNode, LearningProgress, PathViewer } from '@/types/learning';
+import type { LearningCard, LearningDetail, LearningNode, LearningProgress, PathViewer } from '@/types/learning';
 import type { Resource } from '@/types/resource';
 
 export const node = (over: Partial<LearningNode> & { id: string }): LearningNode => ({
@@ -36,3 +36,13 @@ export const makeResource = (over: Partial<Resource> = {}): Resource => ({
     linkStatus: 'ok', submittedBy: { username: 'sam', avatar: null, id: 'u9' }, createdAt: '2026-10-01T10:00:00Z', approvedAt: '2026-10-02T10:00:00Z',
     status: 'approved', viewer: null, ...over,
 });
+
+/** A catalogue card: the detail without its steps and with an anonymous viewer block */
+export const makeCard = (over: Partial<LearningCard> = {}): LearningCard => {
+    const d = makeDetail();
+    return {
+        id: d.id, slug: d.slug, title: d.title, kind: d.kind, shortDescription: d.shortDescription, category: d.category, difficulty: d.difficulty,
+        estimatedDuration: d.estimatedDuration, skills: d.skills, moduleCount: d.moduleCount, requiredCount: d.requiredCount, enrollmentCount: d.enrollmentCount,
+        completionCount: d.completionCount, isFeatured: d.isFeatured, publishedAt: d.publishedAt, viewer: null, ...over,
+    };
+};
