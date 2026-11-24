@@ -167,6 +167,28 @@ describe('FlagForm', () => {
         send()
         await act(async () => { lastCall()[1].onError?.(new ApiError('done', 409, 'LAB_ALREADY_COMPLETED')) })
         expect(screen.getByRole('heading', { name: 'Lab completed' })).toBeInTheDocument()
+        // The 409 did not say how many points: never "0 points"
+        expect(screen.getByTestId('points-earned')).toHaveTextContent('You have already completed this lab.')
+        expect(screen.getByTestId('points-earned')).not.toHaveTextContent(/0 points|earned/)
+    })
+
+    it('uses the points the 409 reports for an already completed lab', async () => {
+        render(<FlagForm lab={lab({ points: 50 })} />)
+        type('x')
+        send()
+        await act(async () => { lastCall()[1].onError?.(new ApiError('done', 409, 'LAB_ALREADY_COMPLETED', undefined, { status: 'completed', pointsEarned: 40 })) })
+        expect(screen.getByTestId('points-earned')).toHaveTextContent('You earned 40 points of 50')
+    })
+
+    it('shows a badge without a rarity as its name only, with no empty brackets', async () => {
+        render(<FlagForm lab={lab()} />)
+        type('x')
+        send()
+        await act(async () => {
+            lastCall()[1].onSuccess?.({ correct: true, attempts: 1, status: 'completed', pointsEarned: 40, completedAt: '2030-01-01T00:00:00Z', newBadges: [{ code: 'b', name: 'Plain badge', icon: null, rarity: null }] })
+        })
+        expect(screen.getByTestId('new-badges')).toHaveTextContent('Plain badge')
+        expect(screen.getByTestId('new-badges').textContent).not.toContain('()')
     })
 
     it('shows the completed state for a lab that is completed on load', () => {

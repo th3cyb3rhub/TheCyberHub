@@ -10,7 +10,7 @@ import { DifficultyBadge } from './StatusBadges';
 import { ViewerTime } from '@/components/internships/ViewerTime';
 
 /** What the member sees once the lab is done: the points, any new badge and a lab to do next */
-export function CompletedPanel({ lab, pointsEarned, badges = [], justNow = false }: { lab: LabDetail; pointsEarned: number; badges?: LabBadge[]; justNow?: boolean }) {
+export function CompletedPanel({ lab, pointsEarned, badges = [], justNow = false }: { lab: LabDetail; pointsEarned: number | null; badges?: LabBadge[]; justNow?: boolean }) {
     const cards = useNextLabCards(lab.category, true);
     const next = cards.data ? pickNextLab(cards.data, lab) : null;
     const completedAt = lab.viewer?.completedAt ?? null;
@@ -21,8 +21,12 @@ export function CompletedPanel({ lab, pointsEarned, badges = [], justNow = false
                 {justNow ? 'Flag accepted' : 'Lab completed'}
             </h2>
             <p className="text-sm text-green-950 dark:text-green-100" data-testid="points-earned">
-                You earned <strong>{pointsText(pointsEarned)}</strong>
-                {lab.points > pointsEarned && <> of {lab.points} (hints you opened took the rest off)</>}.
+                {pointsEarned === null ? (
+                    <>You have already completed this lab.</>
+                ) : (
+                    <>You earned <strong>{pointsText(pointsEarned)}</strong>
+                    {lab.points > pointsEarned && <> of {lab.points} (hints you opened took the rest off)</>}.</>
+                )}
                 {completedAt && !justNow && <> Finished <ViewerTime iso={completedAt} kind="moment" />.</>}
             </p>
             <p className={`mt-1 text-xs ${muted}`}>Points are paid once, so sending the flag again changes nothing.</p>
@@ -33,7 +37,7 @@ export function CompletedPanel({ lab, pointsEarned, badges = [], justNow = false
                     <ul className="flex flex-wrap gap-2">
                         {badges.map((b) => (
                             <li key={b.code} className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-sm text-gray-900 dark:border-green-500/30 dark:bg-neutral-900 dark:text-white">
-                                {b.name} <span className={`text-xs ${muted}`}>({b.rarity})</span>
+                                {b.name}{b.rarity && <span className={`text-xs ${muted}`}> ({b.rarity})</span>}
                             </li>
                         ))}
                     </ul>

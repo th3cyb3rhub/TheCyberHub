@@ -27,7 +27,8 @@ export type FlagState =
     | { phase: 'submitting' }
     | { phase: 'locked'; until: number; attempts?: number }
     | { phase: 'success'; pointsEarned: number; badges: LabBadge[]; attempts: number }
-    | { phase: 'completed' };
+    /** `pointsEarned` is what the 409 says the member earned, or null when it did not say */
+    | { phase: 'completed'; pointsEarned: number | null };
 
 export type FlagAction =
     | { type: 'invalid'; message: string }
@@ -61,7 +62,10 @@ export function flagReducer(state: FlagState, action: FlagAction): FlagState {
             if (state.phase !== 'submitting') return state;
             const err = action.error;
             if (err instanceof ApiError) {
-                if (err.code === 'LAB_ALREADY_COMPLETED') return { phase: 'completed' };
+                if (err.code === 'LAB_ALREADY_COMPLETED') {
+                    const earned = err.meta?.pointsEarned;
+                    return { phase: 'completed', pointsEarned: typeof earned === 'number' && Number.isFinite(earned) && earned >= 0 ? earned : null };
+                }
                 if (err.code === 'LAB_LOCKED') {
                     const until = lockedUntilFromError(err, action.now);
                     if (until) return { phase: 'locked', until };

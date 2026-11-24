@@ -19,7 +19,7 @@ describe('flag form state machine', () => {
         expect(flagReducer(submitting, { type: 'submit' })).toBe(submitting)
         const locked: FlagState = { phase: 'locked', until: NOW + 1000 }
         expect(flagReducer(locked, { type: 'submit' })).toBe(locked)
-        const done: FlagState = { phase: 'completed' }
+        const done: FlagState = { phase: 'completed', pointsEarned: null }
         expect(flagReducer(done, { type: 'submit' })).toBe(done)
     })
 
@@ -66,7 +66,11 @@ describe('flag form state machine', () => {
     })
 
     it('ends in the completed state when the lab was already completed', () => {
-        expect(flagReducer(submitting, { type: 'failed', error: new ApiError('x', 409, 'LAB_ALREADY_COMPLETED') })).toEqual({ phase: 'completed' })
+        expect(flagReducer(submitting, { type: 'failed', error: new ApiError('x', 409, 'LAB_ALREADY_COMPLETED') })).toEqual({ phase: 'completed', pointsEarned: null })
+        const withPoints = new ApiError('x', 409, 'LAB_ALREADY_COMPLETED', undefined, { status: 'completed', pointsEarned: 40 })
+        expect(flagReducer(submitting, { type: 'failed', error: withPoints })).toEqual({ phase: 'completed', pointsEarned: 40 })
+        const junk = new ApiError('x', 409, 'LAB_ALREADY_COMPLETED', undefined, { pointsEarned: '40' })
+        expect(flagReducer(submitting, { type: 'failed', error: junk })).toEqual({ phase: 'completed', pointsEarned: null })
     })
 
     it('shows any other failure as a message and stays open', () => {

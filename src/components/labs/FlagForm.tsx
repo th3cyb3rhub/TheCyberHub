@@ -66,7 +66,10 @@ export function FlagForm({ lab, onUnlocked }: { lab: LabDetail; onUnlocked?: () 
         return <CompletedPanel lab={lab} pointsEarned={state.pointsEarned} badges={state.badges} justNow />;
     }
     if (state.phase === 'completed' || viewer?.myStatus === 'completed') {
-        return <CompletedPanel lab={lab} pointsEarned={viewer?.pointsAwarded ?? 0} />;
+        // After a 409 the screen knows it is done before the refetch brings the points: use what the
+        // 409 said, and until then say nothing about the amount rather than "0 points"
+        const earned = viewer?.myStatus === 'completed' ? viewer.pointsAwarded : state.phase === 'completed' ? state.pointsEarned : null;
+        return <CompletedPanel lab={lab} pointsEarned={earned} />;
     }
 
     const locked = state.phase === 'locked';
