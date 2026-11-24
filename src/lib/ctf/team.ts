@@ -1,4 +1,4 @@
-import type { CtfCompetitionCard, CtfStatus, CtfTeam } from '@/types/ctf';
+import type { CtfCompetitionCard, CtfMe, CtfStatus, CtfTeam } from '@/types/ctf';
 import { isOpenForRoster } from './status';
 import { isFull } from './display';
 
@@ -68,3 +68,10 @@ export const teamTooSmall = (team: Pick<CtfTeam, 'members'> | null, minTeamSize:
 export const normaliseInvite = (raw: string) => raw.replace(/\s+/g, '').toUpperCase();
 
 export const ROSTER_LOCKED_TEXT = 'Your team has solved a challenge, so the roster is fixed until the competition ends: nobody can leave or be removed.';
+
+/** A solo player who has solved something cannot withdraw while the competition runs (the API answers CTF_MEMBER_HAS_SOLVES) */
+export function unregisterLocked(me: Pick<CtfMe, 'solveCount'> | null | undefined, status: CtfStatus): boolean {
+    return !!me && me.solveCount > 0 && (status === 'live' || status === 'frozen');
+}
+
+export const UNREGISTER_LOCKED_TEXT = 'You have solved a challenge, so you stay registered until the competition ends. Otherwise a solved challenge could be counted again for someone else.';

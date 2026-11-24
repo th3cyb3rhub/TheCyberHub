@@ -102,7 +102,7 @@ export function ctfErrorMessage(err: unknown, fallback = 'Something went wrong. 
 /** Whether the error means "the page shows an old state": the screen should show the truth again */
 const STALE_CODES = new Set([
     'CTF_NOT_FOUND', 'CTF_CHALLENGE_NOT_FOUND', 'CTF_NOT_STARTED', 'CTF_ENDED', 'CTF_CANCELLED', 'CTF_ALREADY_SOLVED',
-    'CTF_TEAM_REQUIRED', 'CTF_TEAM_TOO_SMALL', 'CTF_TEAM_HAS_SOLVES', 'CTF_NOT_IN_TEAM', 'CTF_ALREADY_IN_TEAM', 'CTF_NOT_CAPTAIN', 'CTF_MEMBER_NOT_FOUND', 'CTF_TEAM_FULL',
+    'CTF_TEAM_REQUIRED', 'CTF_TEAM_TOO_SMALL', 'CTF_TEAM_HAS_SOLVES', 'CTF_NOT_IN_TEAM', 'CTF_MEMBER_HAS_SOLVES', 'CTF_ALREADY_IN_TEAM', 'CTF_NOT_CAPTAIN', 'CTF_MEMBER_NOT_FOUND', 'CTF_TEAM_FULL',
 ]);
 export const isStaleState = (err: unknown): boolean => err instanceof ApiError && !!err.code && STALE_CODES.has(err.code);
 

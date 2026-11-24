@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { makeCompetition, makeMe, makeTeam, soloBoard, teamBoard } from '@/lib/ctf/__tests__/fixtures'
 import type { CtfLeaderboard } from '@/types/ctf'
 
-const auth = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }))
+const auth = vi.hoisted(() => ({ user: null as { id: string; username: string; role?: string } | null }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: auth.user, loading: false }) }))
 const board = vi.hoisted(() => ({ data: undefined as CtfLeaderboard | undefined, isLoading: false, isError: false, error: null as unknown, isFetching: false, refetch: vi.fn() }))
 const me = vi.hoisted(() => ({ data: undefined as unknown }))
@@ -61,11 +61,21 @@ describe('ScoreboardPanel', () => {
         expect(screen.getByRole('table', { name: /frozen/ })).toBeInTheDocument()
     })
 
-    it('tells staff they see the live board while the competition is frozen', () => {
+    it.each(['admin', 'owner'])('tells an %s they see the live board while the competition is frozen', (role) => {
+        auth.user = { id: 'a1', username: 'root', role }
         board.data = soloBoard({ frozen: false })
-        renderPanel({ status: 'frozen' })
+        renderPanel({ status: 'frozen', signedIn: true })
         expect(screen.queryByTestId('frozen-note')).toBeNull()
-        expect(screen.getByText(/because you are staff/)).toBeInTheDocument()
+        expect(screen.getByTestId('staff-live-note')).toHaveTextContent(/because you are an administrator/)
+    })
+
+    it.each([null, 'user', 'moderator'])('does not claim a live board for a viewer with role %s', (role) => {
+        // The page clock can say "frozen" a moment before the server does: that is no staff privilege
+        auth.user = role ? { id: 'u1', username: 'viewer', role } : null
+        board.data = soloBoard({ frozen: false })
+        renderPanel({ status: 'frozen', signedIn: !!role })
+        expect(screen.queryByTestId('staff-live-note')).toBeNull()
+        expect(screen.queryByText(/because you are/)).toBeNull()
     })
 
     it('highlights the signed-in player and shows their standing', () => {

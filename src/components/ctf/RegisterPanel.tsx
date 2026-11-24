@@ -6,8 +6,9 @@ import { btnPrimary, btnSecondary, muted } from '@/components/events/styles';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/context/ToastContext';
 import { useRegisterCtf, useUnregisterCtf } from '@/hooks/queries/useCtf';
-import { ctfErrorMessage } from '@/lib/ctf/errors';
+import { ctfErrorCode, ctfErrorMessage } from '@/lib/ctf/errors';
 import { isFull } from '@/lib/ctf/display';
+import { UNREGISTER_LOCKED_TEXT, unregisterLocked } from '@/lib/ctf/team';
 import type { CtfCompetition, CtfMe, CtfStatus } from '@/types/ctf';
 
 /**
@@ -38,10 +39,12 @@ export function RegisterPanel({ competition, status, me, signedIn }: { competiti
         setError(null);
         unregister.mutate({ slug: competition.slug }, {
             onSuccess: () => addToast({ variant: 'info', message: 'You are no longer registered.' }),
-            onError: (err) => setError(ctfErrorMessage(err)),
+            // The page did not know about the solve yet (another tab, a slow refresh): say it in the player's own terms
+            onError: (err) => setError(ctfErrorCode(err) === 'CTF_MEMBER_HAS_SOLVES' ? UNREGISTER_LOCKED_TEXT : ctfErrorMessage(err)),
         });
     };
 
+    const locked = unregisterLocked(me, status);
     const closed = !competition.registrationOpen;
     const full = isFull(competition);
 
@@ -52,9 +55,16 @@ export function RegisterPanel({ competition, status, me, signedIn }: { competiti
                     <p className="inline-flex items-center gap-1.5 text-sm font-medium text-green-800 dark:text-green-300">
                         <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> You are registered
                     </p>
-                    <button type="button" className={`${btnSecondary} !px-3 !py-1.5`} onClick={() => setConfirm(true)} disabled={busy}>
+                    <button
+                        type="button"
+                        className={`${btnSecondary} !px-3 !py-1.5 ${locked ? 'cursor-not-allowed opacity-60' : ''}`}
+                        onClick={() => { if (!locked && !busy) setConfirm(true); }}
+                        aria-disabled={locked || busy ? true : undefined}
+                        aria-describedby={locked ? 'unregister-locked-note' : undefined}
+                    >
                         {unregister.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserMinus className="h-4 w-4" aria-hidden="true" />} Unregister
                     </button>
+                    {locked && <p id="unregister-locked-note" className={`basis-full text-xs ${muted}`} data-testid="unregister-locked">{UNREGISTER_LOCKED_TEXT}</p>}
                 </div>
             ) : closed || full ? (
                 <p className={`text-sm ${muted}`} data-testid="register-closed">{closed ? 'Registration is closed for this competition.' : 'This competition is full.'}</p>
@@ -68,7 +78,7 @@ export function RegisterPanel({ competition, status, me, signedIn }: { competiti
                 open={confirm}
                 variant="warning"
                 title="Unregister from this competition?"
-                description="You will not get its reminders. A player who has already solved a challenge cannot unregister while the competition runs."
+                description="You will not get its reminders."
                 confirmText="Unregister"
                 onCancel={() => setConfirm(false)}
                 onConfirm={doUnregister}

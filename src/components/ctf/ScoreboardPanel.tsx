@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/context/AuthContext';
 import { useCtfLeaderboard, useCtfLiveBoard, useCtfMe } from '@/hooks/queries/useCtf';
 import { scoreText } from '@/lib/ctf/display';
+import { isCtfWriter } from '@/lib/ctf/roles';
 import { isMyEntry, liveText, type LiveMode } from '@/lib/ctf/scoreboard';
 import { isPlayable } from '@/lib/ctf/status';
 import type { CtfCompetition, CtfStatus } from '@/types/ctf';
@@ -54,8 +55,9 @@ export function ScoreboardPanel({ competition, status, signedIn }: { competition
                     </span>
                 </p>
             )}
-            {!data?.frozen && status === 'frozen' && (
-                <p className={`mb-4 text-sm ${muted}`}>You see the live board because you are staff. Everybody else sees it frozen.</p>
+            {/* Only admins and owners get the live board during a freeze; a moderator sees the frozen one like everybody else */}
+            {!data?.frozen && status === 'frozen' && isCtfWriter(user?.role) && (
+                <p className={`mb-4 text-sm ${muted}`} data-testid="staff-live-note">You see the live board because you are an administrator. Everybody else sees it frozen.</p>
             )}
 
             {signedIn && me && (
