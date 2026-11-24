@@ -6,6 +6,12 @@ import { makeEvent, viewer } from '@/lib/events/__tests__/fixtures'
 const attendees = vi.hoisted(() => ({ byStatus: {} as Record<string, unknown>, asked: [] as unknown[] }))
 const mark = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const cancel = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+const exporter = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, isError: false, error: null as unknown }))
+const undo = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+vi.mock('@/hooks/queries/useEventCalendar', () => ({
+    useExportAttendees: () => exporter,
+    useUndoAttendance: () => undo,
+}))
 vi.mock('@/hooks/queries/useEvents', () => ({
     useEventAttendees: (_id: string, params: { status: string }) => { attendees.asked.push(params); return attendees.byStatus[params.status] },
     useMarkAttendance: () => mark,
