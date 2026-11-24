@@ -47,6 +47,8 @@ export interface MockState {
     pageCap: number;
     /** How long a lock lasts, in seconds (the real API: 900) */
     lockSeconds: number;
+    /** The API clock runs this far ahead of the browser (ms): every instant it sends is shifted, the waits in seconds are not */
+    clockSkewMs: number;
     /** `METHOD path-suffix` to an error answered once */
     failOnce: Record<string, { status: number; code?: string; message?: string; details?: { field: string; message: string }[]; meta?: Record<string, unknown> }>;
     calls: { method: string; path: string; query?: string; body?: Record<string, unknown> }[];
@@ -78,6 +80,7 @@ export function freshState(over: Partial<MockState> = {}): MockState {
         progress: {},
         pageCap: 100,
         lockSeconds: 900,
+        clockSkewMs: 0,
         failOnce: {},
         calls: [],
         ...over,
@@ -151,7 +154,7 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
         timeSpent: Math.max(0, Math.round(((p.completedAt ? Date.parse(p.completedAt) : Date.now()) - Date.parse(p.startedAt)) / 1000)),
         lockedUntil: lockedUntil(p), lockedForSeconds: lockedForSeconds(p),
     });
-    const lockedUntil = (p?: ProgressRec) => (p?.lockedUntil && p.lockedUntil > Date.now() ? new Date(p.lockedUntil).toISOString() : null);
+    const lockedUntil = (p?: ProgressRec) => (p?.lockedUntil && p.lockedUntil > Date.now() ? new Date(p.lockedUntil + state.clockSkewMs).toISOString() : null);
     // The API counts the wait in whole seconds, rounded up, next to the instant
     const lockedForSeconds = (p?: ProgressRec) => (p?.lockedUntil && p.lockedUntil > Date.now() ? Math.ceil((p.lockedUntil - Date.now()) / 1000) : null);
     const detail = (l: LabRec) => {

@@ -78,8 +78,10 @@ test.describe('Labs list', () => {
         await expect(page.getByTestId('lab-card').first()).toBeVisible();
         await page.getByLabel('Search labs').fill('x');
         await expect(page.getByText('Type at least 2 characters to search.')).toBeVisible();
-        await page.waitForTimeout(600);
-        expect(state.calls.some((c) => c.query?.includes('q=x'))).toBe(false);
+        // Once a valid search has gone through the same debounce, the one-letter text had its chance to be sent
+        await page.getByLabel('Search labs').fill('sq');
+        await expect.poll(() => state.calls.some((c) => /(^|&)q=sq(&|$)/.test(c.query ?? ''))).toBe(true);
+        expect(state.calls.some((c) => /(^|&)q=x(&|$)/.test(c.query ?? ''))).toBe(false);
     });
 
     test('a member sees progress badges and can filter by their own progress', async ({ page }) => {
@@ -261,6 +263,25 @@ test.describe('Lab workspace', () => {
         await expect(page.getByLabel('Flag', { exact: true })).toBeDisabled();
     });
 
+    test('a lock counts its seconds from when the answer arrived, even when the API clock is 20 minutes ahead', async ({ page }) => {
+        const state = freshState({ lockSeconds: 600, clockSkewMs: 20 * 60_000 });
+        state.progress[SQL] = started({ lockedUntil: Date.now() + 600_000, attempts: 5 });
+        await open(page, MEMBER, `/labs/${SQL}`, state);
+        await expect(page.getByTestId('flag-form')).toHaveAttribute('data-phase', 'locked');
+        // The instant says 30 minutes, the seconds say 10: the seconds win
+        await expect(page.getByTestId('lock-clock')).toHaveText(/^(9:5\d|10:00)$/);
+    });
+
+    test('a lock still counts correctly when the API clock is 5 minutes behind, also after a reload', async ({ page }) => {
+        const state = freshState({ lockSeconds: 600, clockSkewMs: -5 * 60_000 });
+        state.progress[SQL] = started({ lockedUntil: Date.now() + 600_000, attempts: 5 });
+        await open(page, MEMBER, `/labs/${SQL}`, state);
+        await expect(page.getByTestId('lock-clock')).toHaveText(/^(9:5\d|10:00)$/);
+        await page.reload();
+        await expect(page.getByTestId('flag-form')).toHaveAttribute('data-phase', 'locked');
+        await expect(page.getByTestId('lock-clock')).toHaveText(/^(9:5\d|10:00)$/);
+    });
+
     test('a busy answer asks to try again, and the form stays usable', async ({ page }) => {
         const state = freshState();
         state.progress[SQL] = started();
@@ -332,7 +353,9 @@ test.describe('Lab workspace', () => {
         await open(page, MEMBER, `/labs/${PAYLOAD}`, state);
         await expect(page.getByRole('heading', { name: 'Payload Lab', level: 1 })).toBeVisible();
         await expect(page.getByTestId('lab-hint').first()).toHaveAttribute('data-opened', 'true');
-        await page.waitForTimeout(300);
+        // The page is hydrated and quiet: the member's own answer is in, so the browser-side pass has run too
+        await expect(page.getByTestId('flag-form')).toHaveAttribute('data-phase', 'idle');
+        await page.waitForLoadState('networkidle');
 
         expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined();
         expect(dialogs).toEqual([]);
