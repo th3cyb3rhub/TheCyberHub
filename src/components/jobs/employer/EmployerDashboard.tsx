@@ -90,7 +90,7 @@ function JobRow({ job, busy, onAction, onReopen, onDelete }: RowProps) {
     return (
         <li className={`${card} p-4 sm:p-5`} data-testid="employer-job" data-status={shown}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[min(100%,16rem)] flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                         <JobStatusChip status={shown} />
                         {left && <span className={`${chip} bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-gray-300`}>{left}</span>}

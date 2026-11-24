@@ -69,7 +69,7 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
                 )}
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-[min(100%,16rem)] flex-1">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
                                 <JobStatusChip status={status} audience="reviewer" />
                                 {job.heldForReports && <span className={`${chip} bg-red-100 text-red-950 dark:bg-red-500/15 dark:text-red-300`}><EyeOff className="h-3 w-3" aria-hidden="true" /> Held after reports</span>}
@@ -173,7 +173,7 @@ export function AdminCompanyRow({ company, busy, onApprove, onReject }: CompanyR
     return (
         <li className={`${card} p-4 sm:p-5`} data-testid="admin-company" data-status={company.status} data-id={company._id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[min(100%,16rem)] flex-1">
                     <div className="mb-1"><CompanyStatusChip status={company.status} /></div>
                     <h3 className="break-words text-base font-semibold text-gray-900 dark:text-white">{company.name}</h3>
                     <p className={`mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm ${muted}`}>
