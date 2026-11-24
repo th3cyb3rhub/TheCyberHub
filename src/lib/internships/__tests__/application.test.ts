@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    applicationSchema, buildAnswers, buildApplyPayload, cleanAnswer, emptyApplication, isHttpUrl, isPublicHttpUrl, validateAnswers, validateApplication,
+    applicationSchema, buildAnswers, buildApplyPayload, cleanAnswer, emptyApplication, isHttpUrl, isInternalHost, isPublicHttpUrl, parseHttpUrl, validateAnswers, validateApplication,
 } from '../application';
 import { questions, QUESTION_AREA, QUESTION_FILE, QUESTION_PICK, QUESTION_TEXT } from './fixtures';
 
@@ -16,17 +16,50 @@ describe('isHttpUrl', () => {
     });
 });
 
+describe('isInternalHost (mirrors the API)', () => {
+    it('spots the hosts the API test lists, and the ones it accepts', () => {
+        // the vectors of the API's own unit test
+        for (const host of ['localhost', '127.0.0.1', '10.0.0.5', '[::1]', '169.254.169.254', 'printer.local', 'intranet', '2130706433', '0x7f000001', 'a.localhost']) {
+            expect(isInternalHost(host), host).toBe(true);
+        }
+        for (const host of ['example.org', 'portswigger.net', 'sub.domain.co.uk']) expect(isInternalHost(host), host).toBe(false);
+    });
+
+    it('refuses every IP literal, public ones too, and the internal top-level names', () => {
+        for (const host of ['8.8.8.8', '172.32.0.1', '1.1.1.1', '[2001:db8::1]', '2001:db8::1', 'EXAMPLE.LOCAL.', '[::ffff:7f00:1]']) expect(isInternalHost(host), host).toBe(true);
+        for (const tld of ['local', 'internal', 'lan', 'home', 'corp', 'intranet', 'test', 'invalid', 'example']) expect(isInternalHost(`host.${tld}`), tld).toBe(true);
+        expect(isInternalHost('my.homepage.dev')).toBe(false);
+        expect(isInternalHost('corp.example.org')).toBe(false);
+        expect(isInternalHost('www.example.org.')).toBe(false);
+    });
+
+    it('treats a bare or odd number, a hex number and a one-label name as addresses', () => {
+        for (const host of ['2130706433', '0x7f000001', '1.2.3', '300.1.1.1', '999.999.999.999', 'nas', 'db-1']) expect(isInternalHost(host), host).toBe(true);
+    });
+});
+
+describe('parseHttpUrl', () => {
+    it('is the API\'s parse: trimmed, http(s), no credentials, a host', () => {
+        expect(parseHttpUrl('  https://example.org/a  ')?.hostname).toBe('example.org');
+        for (const bad of ['javascript:alert(1)', 'data:text/html,<b>x', 'ftp://example.org/x', 'file:///etc/passwd', 'https://user:pw@example.org/', '//example.org', 'not a url', '']) {
+            expect(parseHttpUrl(bad), bad).toBeNull();
+        }
+        expect(parseHttpUrl(42 as unknown as string)).toBeNull();
+    });
+});
+
 describe('isPublicHttpUrl', () => {
-    it('refuses localhost, private ranges, internal names and IPv6 literals, and accepts any real public host', () => {
-        for (const bad of ['http://localhost:3000/x', 'https://127.0.0.1/a', 'http://10.0.0.5/a', 'https://192.168.1.2/a', 'http://172.20.0.1', 'http://169.254.169.254/latest', 'https://printer.local/cv', 'https://svc.internal/x', 'http://[::1]/x', 'https://intranet/cv', 'https://u:p@example.org/a']) {
+    it('refuses localhost, any IP address, internal names and IPv6 literals, and accepts any real public host', () => {
+        for (const bad of ['http://localhost:3000/x', 'https://127.0.0.1/a', 'http://10.0.0.5/a', 'https://192.168.1.2/a', 'http://172.20.0.1', 'http://169.254.169.254/latest', 'https://printer.local/cv', 'https://svc.internal/x', 'http://[::1]/x', 'https://intranet/cv', 'https://u:p@example.org/a', 'https://8.8.8.8/cv', 'https://172.32.0.1/ok', 'http://2130706433/', 'http://0x7f000001/', 'https://nas.home/cv', 'https://wiki.corp/cv', 'https://hr.intranet/cv', 'https://x.test/cv', 'https://x.invalid/cv', 'https://x.example/cv', 'https://x.localhost/cv']) {
             expect(isPublicHttpUrl(bad), bad).toBe(false);
         }
-        for (const good of ['https://github.com/ada', 'https://drive.google.com/file/d/1/view', 'http://example.io/cv.pdf', 'https://my.portfolio.dev/', 'https://172.32.0.1/ok']) {
+        for (const good of ['https://github.com/ada', 'https://drive.google.com/file/d/1/view', 'http://example.io/cv.pdf', 'https://my.portfolio.dev/', 'https://example.org./cv', '  https://github.com/ada  ']) {
             expect(isPublicHttpUrl(good), good).toBe(true);
         }
     });
     it('caps the length at 2048 without guessing at top-level domains', () => {
         expect(isPublicHttpUrl(`https://example.org/${'a'.repeat(2040)}`)).toBe(false);
+        expect(isPublicHttpUrl(`https://example.org/${'a'.repeat(2000)}`)).toBe(true);
         expect(isPublicHttpUrl('https://example.technology/x')).toBe(true);
     });
 });

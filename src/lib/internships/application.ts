@@ -11,35 +11,50 @@ export const LIMITS = {
     withdrawReason: 500,
 } as const;
 
-/** http or https, no credentials: the same links the API accepts */
-export function isHttpUrl(value: string): boolean {
+/** A link as the API reads it: trimmed, http or https only, no credentials, a host */
+export function parseHttpUrl(value: string): URL | null {
+    if (typeof value !== 'string') return null;
+    let url: URL;
     try {
-        const url = new URL(value);
-        return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password && !!url.hostname;
+        url = new URL(value.trim());
     } catch {
-        return false;
+        return null;
     }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username || url.password) return null;
+    return url.hostname ? url : null;
 }
 
-/** An IPv4 address in a private, loopback, link-local or otherwise non-public range */
-function isPrivateIPv4(host: string): boolean {
-    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-    if (!m) return false;
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+/** http or https, no credentials: the same links the API accepts */
+export function isHttpUrl(value: string): boolean {
+    return parseHttpUrl(value) !== null;
 }
 
 /**
- * A link the API accepts: http(s), no credentials, a public-looking host (no localhost, private or
- * internal addresses) and at most 2048 characters. The API is the judge; this only saves a round trip.
+ * Hosts that never belong in a public link. This mirrors `isInternalHost` of the API
+ * (src/utils/urlNormalize.js), rule for rule: any IP address, `localhost`, the internal top-level
+ * names, a bare number or hex number, and a name without a dot.
+ */
+export function isInternalHost(hostname: string): boolean {
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    // An IPv6 literal: the API asks `net.isIP`, and only an address holds a colon
+    if (host.includes(':')) return true;
+    // An IPv4 literal in its plain dotted form (a bare or odd number is caught below)
+    if (/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(host)) return true;
+    if (host === 'localhost' || host.endsWith('.localhost')) return true;
+    if (/\.(local|internal|lan|home|corp|intranet|test|invalid|example)$/.test(host)) return true;
+    // A bare number (2130706433) or a dotted number that is not a plain IPv4 address is still an address
+    if (/^[0-9.]+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) return true;
+    return !host.includes('.');
+}
+
+/**
+ * A link the API accepts: http(s), no credentials, a public host (see `isInternalHost`) and at
+ * most 2048 characters once trimmed. The API is the judge; this only saves a round trip.
  */
 export function isPublicHttpUrl(value: string): boolean {
-    if (value.length > 2048 || !isHttpUrl(value)) return false;
-    const host = new URL(value).hostname.toLowerCase().replace(/\.$/, '');
-    if (host.startsWith('[') || host.includes(':')) return false; // IPv6 literals
-    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return false;
-    if (isPrivateIPv4(host)) return false;
-    return host.includes('.');
+    const url = typeof value === 'string' && value.trim().length <= LIMITS.url ? parseHttpUrl(value) : null;
+    return !!url && !isInternalHost(url.hostname);
 }
 
 const optionalLink = (label: string) => z.string().trim().max(LIMITS.url, `${label} is too long`)
