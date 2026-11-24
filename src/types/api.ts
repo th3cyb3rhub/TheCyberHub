@@ -55,7 +55,6 @@ export interface User {
     isPublic?: boolean;
     stats?: UserStats;
     bookmarks?: UserBookmarks;
-    progress?: UserProgress;
     contributionStats?: ContributionStats;
     createdAt?: string;
     updatedAt?: string;
@@ -71,16 +70,6 @@ export interface UserBookmarks {
     roadmaps: string[];
     cheatsheets: string[];
     tools: string[];
-}
-
-export interface UserProgress {
-    roadmaps: RoadmapProgress[];
-}
-
-export interface RoadmapProgress {
-    roadmapId: string;
-    completedSteps: string[];
-    percent: number;
 }
 
 export interface ContributionStats {

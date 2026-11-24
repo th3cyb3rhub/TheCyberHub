@@ -32,6 +32,7 @@ import {
     ChevronRight,
     Zap,
     FlaskConical,
+    Library,
 } from 'lucide-react';
 import { useNotificationSocket } from '@/context/NotificationProvider';
 import { NavDropdownItem } from '@/components/navbar/MobileMenu';
@@ -79,6 +80,7 @@ const Navbar = () => {
         { title: "Cheatsheets", href: "/cheatsheets", icon: <FileText className="w-4 h-4" />, description: "Linux, Nmap, XSS & more" },
         { title: "Code Review", href: "/code-review", icon: <Code2 className="w-4 h-4" />, description: "Find vulnerabilities in code" },
         { title: "Learning Paths", href: "/learning-paths", icon: <GraduationCap className="w-4 h-4" />, description: "Guided courses for every level" },
+        { title: "Resources", href: "/resources", icon: <Library className="w-4 h-4" />, description: "Community picked articles, videos and tools" },
     ];
 
     const communityLinks: NavDropdownItem[] = [

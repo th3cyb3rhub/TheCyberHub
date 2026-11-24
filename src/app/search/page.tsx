@@ -258,7 +258,7 @@ export default function SearchPage() {
             case 'discussion': return `/forums/${result._id}`;
             case 'event': return `/events/${result.slug || result._id}`;
             case 'challenge': return `/challenges/${result.slug || result._id}`;
-            case 'resource': return `/roadmaps`;
+            case 'resource': return result.slug ? `/resources/${result.slug}` : '/resources';
             case 'job': return `/jobs/${result.slug || result._id}`;
             case 'user': return `/user/${result.username}`;
             default: return '#';
