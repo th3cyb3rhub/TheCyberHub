@@ -20,6 +20,14 @@ export const eventKeys = {
     queue: (params: object) => ['events', 'queue', params] as const,
     feedback: (id: string) => ['events', 'feedback', id] as const,
     attendees: (id: string, params: object) => ['events', 'attendees', id, params] as const,
+    /** Public data, the same for everyone: no viewer in the key */
+    calendars: () => ['events', 'calendar'] as const,
+    calendar: (range: { from: string; to: string }, category: string) => ['events', 'calendar', range.from, range.to, category] as const,
+    archives: (filters: object) => ['events', 'archives', filters] as const,
+    /** The answer depends on who is asking, so the member is in the key */
+    calendarToken: (userId: string | null) => ['events', 'calendar-token', userId] as const,
+    series: (id: string, userId: string | null = null) => ['events', 'series', id, userId] as const,
+    seriesAll: () => ['events', 'series'] as const,
 };
 
 const PAGE_SIZE = 12;

@@ -30,6 +30,11 @@ const MESSAGES: Record<string, string> = {
     EVENT_FEEDBACK_EXISTS: 'You have already left feedback for this event.',
     EVENT_FEEDBACK_FORBIDDEN: 'Only people who registered can leave feedback.',
     AUTHZ_FORBIDDEN: 'You are not allowed to do that.',
+    SERIES_NOT_FOUND: 'This series could not be found. It may have been removed.',
+    SERIES_ENDED: 'This series has ended, so it cannot be changed.',
+    SERIES_LIMIT: 'You already have 20 running series. End one before you create another.',
+    SERIES_OCCURRENCE_EXISTS: 'Another occurrence of this series already starts at that time.',
+    EVENT_NOT_EDITABLE: 'That occurrence is over or cancelled, so it cannot be edited.',
 };
 
 const NOT_FOUND = 'This event could not be found. It may have been removed.';
@@ -65,4 +70,17 @@ export function fieldErrors(err: unknown): Record<string, string> {
 /** Whether the error means "sign in again" rather than "you may not" */
 export function isAuthError(err: unknown): boolean {
     return err instanceof ApiError && err.status === 401;
+}
+
+/** The attendee export: a 403 is about the organizer role, not about the member being signed out */
+export function exportErrorMessage(err: unknown): string {
+    if (err instanceof ApiError && err.status === 403) return 'Only the organizer of this event and administrators can export the attendee list.';
+    if (err instanceof ApiError && err.status === 401) return 'Sign in again to export the attendee list.';
+    return eventErrorMessage(err, 'Could not export the attendee list. Please try again.');
+}
+
+/** Calendar feed calls: the same words for any failure, without hints about the address */
+export function calendarFeedErrorMessage(err: unknown): string {
+    if (err instanceof ApiError && err.status === 401) return 'Sign in again to manage your calendar feed.';
+    return eventErrorMessage(err, 'Could not update your calendar feed. Please try again.');
 }
