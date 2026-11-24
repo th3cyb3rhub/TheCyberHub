@@ -140,12 +140,6 @@ const staticRoutes = [
         priority: 0.7,
     },
 
-    // Auth
-    {
-        url: '/auth',
-        changeFrequency: 'monthly' as const,
-        priority: 0.3,
-    },
     {
         url: '/forgot-password',
         changeFrequency: 'monthly' as const,
@@ -155,13 +149,6 @@ const staticRoutes = [
         url: '/reset-password',
         changeFrequency: 'monthly' as const,
         priority: 0.3,
-    },
-
-    // Blog
-    {
-        url: '/blog/write',
-        changeFrequency: 'monthly' as const,
-        priority: 0.8,
     },
 
     // CTF
@@ -197,42 +184,9 @@ const staticRoutes = [
         priority: 0.6,
     },
 
-    // Bookmarks
-    {
-        url: '/bookmarks',
-        changeFrequency: 'monthly' as const,
-        priority: 0.3,
-    },
-
-    // Dashboard
-    {
-        url: '/dashboard',
-        changeFrequency: 'monthly' as const,
-        priority: 0.4,
-    },
-
-    // Profile
-    {
-        url: '/profile',
-        changeFrequency: 'monthly' as const,
-        priority: 0.3,
-    },
-
     // Code Review
     {
         url: '/code-review',
-        changeFrequency: 'weekly' as const,
-        priority: 0.5,
-    },
-
-    // Employer
-    {
-        url: '/employer/dashboard',
-        changeFrequency: 'weekly' as const,
-        priority: 0.5,
-    },
-    {
-        url: '/employer/post-job',
         changeFrequency: 'weekly' as const,
         priority: 0.5,
     },

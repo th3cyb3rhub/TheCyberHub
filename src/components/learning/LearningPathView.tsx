@@ -265,6 +265,9 @@ export function LearningPathView({ slug, kind, initialPath }: { slug: string; ki
                         <p className={`text-sm ${muted}`}>Sign in to tick off steps and keep your progress on every device.</p>
                         <Link href={signInHref} className={btnPrimary}>Sign in to track progress</Link>
                     </div>
+                ) : !viewer && !query.isError ? (
+                    // Signed in, but the page still holds the public copy: the member's own state is on its way
+                    <div role="status" aria-label="Loading your progress" className="space-y-3"><Skeleton className="h-4 w-1/2" /><Skeleton className="h-9 w-48" /></div>
                 ) : !viewer?.enrolled ? (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <p className={`text-sm ${muted}`}>

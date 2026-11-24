@@ -69,6 +69,22 @@ describe('viewer driven controls', () => {
         expect(push).toHaveBeenCalledWith(expect.stringContaining('/auth'))
         expect(screen.queryByRole('button', { name: /bookmark/i })).toBeNull()
     })
+    it('does not offer "Start" while the member\'s own state is still loading', () => {
+        query.current = ok(makeDetail({ viewer: null }))
+        render(<LearningPathView slug="web-hacking" kind="roadmap" />)
+        expect(screen.getByRole('status', { name: 'Loading your progress' })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /Start this roadmap/ })).toBeNull()
+        expect(screen.queryByRole('link', { name: 'Sign in to track progress' })).toBeNull()
+    })
+    it('keeps one bookmark label and reports the state with aria-pressed', () => {
+        const { unmount } = render(<LearningPathView slug="web-hacking" kind="roadmap" />)
+        const off = screen.getByRole('button', { name: 'Bookmark Web hacking' })
+        expect(off).toHaveAttribute('aria-pressed', 'false')
+        unmount()
+        query.current = ok(makeDetail({ viewer: viewer({ bookmarked: true }) }))
+        render(<LearningPathView slug="web-hacking" kind="roadmap" />)
+        expect(screen.getByRole('button', { name: 'Bookmark Web hacking' })).toHaveAttribute('aria-pressed', 'true')
+    })
     it('offers to start when signed in but not enrolled', () => {
         query.current = ok(makeDetail({ viewer: viewer({ enrolled: false, progress: null, next: node({ id: 'a', title: 'HTTP basics' }) }) }))
         render(<LearningPathView slug="web-hacking" kind="roadmap" />)
