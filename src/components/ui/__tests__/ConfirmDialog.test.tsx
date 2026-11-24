@@ -73,6 +73,23 @@ describe('ConfirmDialog', () => {
         expect(onCancel).toHaveBeenCalledTimes(1)
     })
 
+    it('starts on the safe button and cancels with Escape', () => {
+        const onCancel = vi.fn()
+        render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />)
+        expect(screen.getByText('Cancel')).toHaveFocus()
+        fireEvent.keyDown(document, { key: 'Escape' })
+        expect(onCancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps Tab inside the dialog', () => {
+        render(<ConfirmDialog {...defaultProps} />)
+        screen.getByText('Confirm').focus()
+        fireEvent.keyDown(document, { key: 'Tab' })
+        expect(screen.getByText('Cancel')).toHaveFocus()
+        fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+        expect(screen.getByText('Confirm')).toHaveFocus()
+    })
+
     it('calls onCancel when backdrop is clicked', () => {
         const onCancel = vi.fn()
         render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />)
