@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    describeRecurrence, emptySeriesForm, formatDuration, isSeriesId, seriesToEditValues, startsOnBounds, toSeriesPatch, toSeriesPayload,
+    describeRecurrence, emptySeriesForm, formatDuration, isSeriesId, seriesToEditValues, startsOnBounds, toSeriesPatch, toSeriesPayload, touchesReviewFields,
     validateSeriesEdit, validateSeriesForm, type SeriesFormValues,
 } from '../series'
 import type { Series } from '@/types/event'
@@ -177,5 +177,16 @@ describe('ids', () => {
         expect(isSeriesId('64b000000000000000000009')).toBe(true)
         expect(isSeriesId('64b0000000000000000000')).toBe(false)
         expect(isSeriesId('../etc')).toBe(false)
+    })
+})
+
+describe('touchesReviewFields', () => {
+    it('is true for the fields a moderator cannot change on a public date, false otherwise', () => {
+        for (const key of ['title', 'category', 'organizer', 'description', 'eventLink', 'registrationLink', 'streamLink', 'image']) {
+            expect(touchesReviewFields({ scope: 'future', [key]: 'x' })).toBe(true)
+        }
+        for (const key of ['startTime', 'durationMinutes', 'maxParticipants', 'location', 'venue', 'waitlistEnabled']) {
+            expect(touchesReviewFields({ scope: 'future', [key]: 'x' })).toBe(false)
+        }
     })
 })

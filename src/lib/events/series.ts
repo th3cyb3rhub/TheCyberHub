@@ -422,6 +422,13 @@ export function toSeriesPatch(
     return scope === 'this' ? { scope, eventId, ...changes } : { scope, ...changes };
 }
 
+/** What a moderator cannot change on a public date without it going back to review */
+export const REVIEW_FIELDS = ['title', 'category', 'organizer', 'description', 'eventLink', 'registrationLink', 'streamLink', 'image'] as const;
+export const REVIEW_FIELD_WORDS = 'title, category, organizer, description, join link, registration link, stream link or image';
+
+/** Whether a change sends the dates it reaches back to review */
+export const touchesReviewFields = (payload: SeriesPayload) => REVIEW_FIELDS.some((key) => key in payload);
+
 /** A series id is a 24 character hex string; anything else cannot be a series, so no request is made */
 export const isSeriesId = (value: string) => /^[0-9a-fA-F]{24}$/.test(value);
 

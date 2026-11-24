@@ -9,7 +9,7 @@ import { eventErrorMessage, fieldErrors } from '@/lib/events/errors';
 import { EVENT_LIMITS, FORMAT_LABELS } from '@/lib/events/form';
 import { isAdminRole } from '@/lib/events/roles';
 import {
-    seriesFieldKey, seriesToEditValues, SERIES_LIMITS, toSeriesPatch, validateSeriesEdit, type SeriesEditValues, type SeriesFormErrors, type SeriesScope,
+    REVIEW_FIELD_WORDS, seriesFieldKey, seriesToEditValues, SERIES_LIMITS, toSeriesPatch, touchesReviewFields, validateSeriesEdit, type SeriesEditValues, type SeriesFormErrors, type SeriesScope,
 } from '@/lib/events/series';
 import { formatClock, formatDayYear } from '@/lib/events/time';
 import { EVENT_FORMATS, type Series } from '@/types/event';
@@ -69,11 +69,16 @@ function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; o
         }
         patch.mutate({ id: series.id, payload }, {
             onSuccess: (result) => {
-                const backToReview = result.scope === 'this' && result.changed.includes('status');
+                // The server says so for one date (`status` in `changed`); for the future dates it follows from the fields sent
+                const backToReview = !admin && (result.scope === 'this' ? result.changed.includes('status') : touchesReviewFields(payload));
                 onSaved((result.scope === 'future'
                     ? `Saved. ${result.updated} upcoming ${result.updated === 1 ? 'date was' : 'dates were'} updated${result.created ? `, ${result.created} new ${result.created === 1 ? 'date was' : 'dates were'} created` : ''}${result.cancelled ? `, ${result.cancelled} cancelled` : ''}.`
                     : 'Saved. This date was changed and later changes to the series leave it alone.')
-                    + (backToReview ? ' It went back to review, so it is hidden from the public until another reviewer approves it.' : ''));
+                    + (backToReview
+                        ? (result.scope === 'this'
+                            ? ' It went back to review, so it is hidden from the public until another reviewer approves it.'
+                            : ' Updated dates go back to review and stay hidden from the public until another reviewer approves them.')
+                        : ''));
                 onOpenChange(false);
             },
             onError: (err) => {
@@ -103,7 +108,7 @@ function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; o
                 <form onSubmit={submit} noValidate className="space-y-4">
                     {!admin && (
                         <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="edit-review-warning">
-                            Changing the title, the category or the organizer of a date that is already public sends that date back to review. It stays hidden until another reviewer approves it.
+                            Changing the {REVIEW_FIELD_WORDS} of a date that is already public sends that date back to review. It stays hidden until another reviewer approves it.
                         </p>
                     )}
                     <fieldset className="space-y-2">

@@ -183,7 +183,7 @@ describe('series management', () => {
         query.current = ok(manageable())
         const { unmount } = render(<SeriesView id="x" />)
         fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
-        expect(screen.getByTestId('edit-review-warning')).toHaveTextContent(/title, the category or the organizer.*back to review/)
+        expect(screen.getByTestId('edit-review-warning')).toHaveTextContent(/title, category, organizer, description, join link, registration link, stream link or image.*back to review/)
         expect(screen.getByTestId('review-note')).toHaveTextContent(/cannot approve your own/)
         unmount()
         auth.user = { id: 'a1', role: 'admin' }
@@ -203,6 +203,35 @@ describe('series management', () => {
         fireEvent.change(within(dialog).getByLabelText(/^Title/), { target: { value: 'A new title here' } })
         fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
         expect(screen.getByTestId('series-saved')).toHaveTextContent(/went back to review/)
+    })
+
+    it('says updated dates go back to review after a future save of a review field by a moderator, but not for an administrator', () => {
+        mut.patch.mutate.mockImplementation((_v, o) => o.onSuccess({ scope: 'future', updated: 3, created: 0, cancelled: 0, removed: 0, series: series() }))
+        auth.user = { id: 'm1', role: 'moderator' }
+        query.current = ok(manageable())
+        const { unmount } = render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'A new title here' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(screen.getByTestId('series-saved')).toHaveTextContent(/Updated dates go back to review/)
+        unmount()
+        auth.user = { id: 'a1', role: 'admin' }
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'A new title here' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(screen.getByTestId('series-saved')).not.toHaveTextContent(/review/)
+    })
+
+    it('does not mention review for a moderator who only changes the start time', () => {
+        mut.patch.mutate.mockImplementation((_v, o) => o.onSuccess({ scope: 'future', updated: 3, created: 0, cancelled: 0, removed: 0, series: series() }))
+        auth.user = { id: 'm1', role: 'moderator' }
+        query.current = ok(manageable())
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '20:00' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(screen.getByTestId('series-saved')).not.toHaveTextContent(/review/)
     })
 
     it('shows what the API says when a save fails', () => {
