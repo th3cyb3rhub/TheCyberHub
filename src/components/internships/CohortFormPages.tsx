@@ -25,7 +25,8 @@ function Editor({ id }: { id: string }) {
     return (
         <PageShell title={cohort ? `Edit ${cohort.title}` : 'Edit program'} subtitle="Change only what you need: the rest stays as it is." backHref="/admin/internships" backLabel="All programs" wide>
             {cohort ? (
-                // Remount when the cohort is reloaded after a save elsewhere, so the form starts from the truth
+                // The form takes a newer copy of the program by itself while nothing was typed, and
+                // keeps what was typed otherwise; the key only separates one program from another
                 <CohortForm key={cohort._id} cohort={cohort} />
             ) : query.isError ? (
                 <ErrorState

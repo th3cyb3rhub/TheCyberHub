@@ -31,7 +31,7 @@ export function Field({ id, label, required = false, hint, error, children, clas
             </label>
             {children({ id, 'aria-invalid': error ? true : undefined, 'aria-describedby': describedBy, 'aria-required': required || undefined })}
             {hint && <p id={hintId} className={`mt-1 text-xs ${muted}`}>{hint}</p>}
-            {error && <p id={errorId} className="mt-1 text-sm text-red-800 dark:text-red-300" role="alert">{error}</p>}
+            {error && <p id={errorId} className="mt-1 text-sm text-red-800 dark:text-red-300" aria-live="polite">{error}</p>}
         </div>
     );
 }

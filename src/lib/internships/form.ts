@@ -208,6 +208,9 @@ export function buildCreatePayload(v: CohortFormValues): CohortPayload {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The lists whose rows are edited one by one; an error on one is keyed by its position */
+export const LIST_FIELDS = ['syllabus', 'customFields', 'showcaseProjects'] as const;
+
 /**
  * What `PUT /:id` takes: only the fields that differ from the cohort as it was loaded, so an edit
  * never overwrites what somebody else changed in the meantime. Dates are compared as typed (the
@@ -303,9 +306,23 @@ export function validateCohort(values: CohortFormValues, options: ValidateOption
     const errors: Record<string, string> = {};
     const note = (key: string, message: string) => { if (!errors[key]) errors[key] = message; };
 
+    // Edit mode: what the person did not change is not theirs to fix (an older link that today's
+    // rules would refuse must not block saving an unrelated change), and the API only looks at what is sent
+    const before = options.initial ? buildPayload(options.initial) : null;
+    const changed = options.initial ? new Set<string>(Object.keys(buildUpdatePayload(options.initial, values))) : null;
+    const unchangedRow = (path: PropertyKey[]) => {
+        const [list, index] = path;
+        if (!before || typeof list !== 'string' || typeof index !== 'number' || !(LIST_FIELDS as readonly string[]).includes(list)) return false;
+        const rows = payload[list as typeof LIST_FIELDS[number]] as unknown[];
+        return (before[list as typeof LIST_FIELDS[number]] as unknown[]).some((row) => same(row, rows[index]));
+    };
+
     const parsed = cohortSchema.safeParse(payload);
     if (!parsed.success) {
-        for (const issue of parsed.error.issues) note(formFieldPath(issue.path.map(String).join('.')), issue.message);
+        for (const issue of parsed.error.issues) {
+            if (unchangedRow(issue.path)) continue;
+            note(formFieldPath(issue.path.map(String).join('.')), issue.message);
+        }
     }
 
     // Dates that are typed but not real
@@ -347,5 +364,82 @@ export function validateCohort(values: CohortFormValues, options: ValidateOption
             else if (new Set(opts).size !== opts.length) note(`customFields.${i}.options`, 'Options must be different from each other');
         }
     });
+
+    if (changed) {
+        const dates = ['applicationDeadline', 'startDate', 'endDate'];
+        for (const key of Object.keys(errors)) {
+            const top = key.split('.')[0];
+            // The dates are judged together, and the open rule follows the status
+            const keep = dates.includes(top) ? dates.some((d) => changed.has(d)) || changed.has('status') : changed.has(top);
+            if (!keep) delete errors[key];
+        }
+    }
     return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Where an error is shown
+// ---------------------------------------------------------------------------
+
+const SCALAR_FIELDS = new Set(['title', 'description', 'type', 'status', 'capacity', 'applicationDeadline', 'startDate', 'endDate', 'requirements', 'responsibilities', 'benefits', 'technologies']);
+const ROW_FIELDS: Record<(typeof LIST_FIELDS)[number], Set<string>> = {
+    syllabus: new Set(['week', 'title', 'description', 'topics', 'deliverables']),
+    customFields: new Set(['label', 'type', 'options']),
+    showcaseProjects: new Set(['title', 'description', 'teamMembers', 'demoLink', 'repoLink']),
+};
+
+/**
+ * Whether the form has a place to show an error key. `showcaseProjects.0.image` has no input,
+ * `isActive` has no message line and an object level error (`syllabus.2`, a bare detail without
+ * a field) has nowhere to sit: these go in the banner instead of "marked below".
+ */
+export function hasVisibleField(key: string, options: { showShowcase: boolean }): boolean {
+    const [top, row, field, ...rest] = key.split('.');
+    if (SCALAR_FIELDS.has(top)) return row === undefined;
+    if (!(LIST_FIELDS as readonly string[]).includes(top)) return false;
+    if (top === 'showcaseProjects' && !options.showShowcase) return false;
+    if (row === undefined) return true; // the message above the list
+    if (field === undefined) return top === 'customFields'; // a question as a whole shows on its label
+    return rest.length === 0 && ROW_FIELDS[top as (typeof LIST_FIELDS)[number]].has(field);
+}
+
+const ROW_NAMES: Record<(typeof LIST_FIELDS)[number], string> = { syllabus: 'Week', customFields: 'Question', showcaseProjects: 'Project' };
+const FIELD_NAMES: Record<string, string> = {
+    applicationDeadline: 'Application deadline', startDate: 'Start', endDate: 'End', isActive: 'Visibility', image: 'image', demoLink: 'demo link', repoLink: 'code link', teamMembers: 'team members',
+};
+
+/** A name for an error key a person can read: `showcaseProjects.2.image` is "Project 3, image" */
+export function describeErrorKey(key: string): string {
+    const [top, row, field] = key.split('.');
+    if ((LIST_FIELDS as readonly string[]).includes(top) && row !== undefined && /^\d+$/.test(row)) {
+        const name = `${ROW_NAMES[top as (typeof LIST_FIELDS)[number]]} ${Number(row) + 1}`;
+        return field ? `${name}, ${FIELD_NAMES[field] ?? field}` : name;
+    }
+    return FIELD_NAMES[top] ?? (top === 'form' || !top ? '' : top.charAt(0).toUpperCase() + top.slice(1));
+}
+
+/** The errors with no field to carry them, as readable lines for the banner */
+export function unattachedErrors(errors: Record<string, string>, options: { showShowcase: boolean }): string[] {
+    return Object.entries(errors)
+        .filter(([key, message]) => message && !hasVisibleField(key, options))
+        .map(([key, message]) => {
+            const name = describeErrorKey(key);
+            return name ? `${name}: ${message}` : message;
+        });
+}
+
+/**
+ * Forget the errors of an editable list after it changed. Typing in a row (`rows` are the indexes
+ * that changed) clears that row's errors; adding, removing or moving a row shifts every index
+ * (`null`), so all of the list's errors go: they would point at the wrong row.
+ */
+export function clearListErrors(errors: Record<string, string>, list: (typeof LIST_FIELDS)[number], rows: number[] | null): Record<string, string> {
+    let touched = false;
+    const next: Record<string, string> = {};
+    for (const [key, message] of Object.entries(errors)) {
+        const [top, row] = key.split('.');
+        const drop = top === list && (row === undefined || rows === null || rows.includes(Number(row)));
+        if (drop) touched = true; else next[key] = message;
+    }
+    return touched ? next : errors;
 }

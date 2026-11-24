@@ -345,6 +345,25 @@ test.describe('Staff: programs', () => {
         await expect(page.getByTestId('admin-cohort').filter({ hasText: 'Winter Internship' })).toBeVisible();
     });
 
+    test('asks before a form with typed changes is left, and not when it is clean', async ({ page }) => {
+        await open(page, MODERATOR, '/admin/internships/create');
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        await expect(page).toHaveURL(/\/admin\/internships$/);
+
+        await page.goto('/admin/internships/create');
+        await page.getByLabel(/^Title/).fill('Half written');
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Leave without saving?' });
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole('button', { name: 'Keep editing' }).click();
+        await expect(page).toHaveURL(/\/admin\/internships\/create$/);
+        await expect(page.getByLabel(/^Title/)).toHaveValue('Half written');
+
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        await dialog.getByRole('button', { name: 'Leave' }).click();
+        await expect(page).toHaveURL(/\/admin\/internships$/);
+    });
+
     test('edits a program and sends only what changed, with the id of each existing question', async ({ page }) => {
         const state = await open(page, MODERATOR, `/admin/internships/${OPEN_ID}/edit`);
         await expect(page.getByLabel(/^Title/).first()).toHaveValue('Summer Security Internship');

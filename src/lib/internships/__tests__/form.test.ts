@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    buildCreatePayload, buildUpdatePayload, emptyCohort, fromCohort, fromLocalInput, parseLines, rowKey, toLocalInput, validateCohort,
+    buildCreatePayload, buildUpdatePayload, clearListErrors, describeErrorKey, emptyCohort, fromCohort, fromLocalInput, hasVisibleField, parseLines, rowKey, toLocalInput,
+    unattachedErrors, validateCohort,
     type CohortFormValues,
 } from '../form';
 import { FIXED_NOW, makeCohort, QUESTION_PICK, QUESTION_TEXT } from './fixtures';
@@ -105,6 +106,63 @@ describe('validateCohort', () => {
         expect(validateCohort(valid({ showcaseProjects: [p({ demoLink: 'javascript:alert(1)' })] }), { now: NOW })['showcaseProjects.0.demoLink']).toBeDefined();
         expect(validateCohort(valid({ showcaseProjects: [p({ repoLink: 'http://localhost/x' })] }), { now: NOW })['showcaseProjects.0.repoLink']).toBeDefined();
         expect(validateCohort(valid({ showcaseProjects: [p({ demoLink: 'https://demo.example.org', repoLink: 'https://github.com/a/b' })] }), { now: NOW })).toEqual({});
+    });
+});
+
+describe('validateCohort on an edit', () => {
+    const proj = (over: object = {}) => ({ key: rowKey(), title: 'Scanner', description: '', teamMembers: '', demoLink: '', repoLink: '', image: '', ...over });
+
+    it('does not hold an unchanged stored link to today\'s rules, and still checks what was edited', () => {
+        const stale = proj({ image: 'https://8.8.8.8/shot.png' }) // an address: the API refuses it today
+        const initial = valid({ status: 'completed', showcaseProjects: [stale, proj({ title: 'Other', repoLink: 'https://github.com/a/b' })] });
+        // an unrelated change: nothing to fix
+        expect(validateCohort({ ...initial, title: 'Renamed program' }, { now: NOW, initial })).toEqual({});
+        // the other project is edited: the untouched one with the stale image is still left alone
+        const edited = { ...initial, showcaseProjects: [initial.showcaseProjects[0], { ...initial.showcaseProjects[1], title: 'Edited' }] };
+        expect(validateCohort(edited, { now: NOW, initial })).toEqual({});
+        // the same stale row on a create is checked
+        expect(validateCohort(initial, { now: NOW })['showcaseProjects.0.image']).toBeDefined();
+        // an edited row is checked
+        const worse = { ...initial, showcaseProjects: [initial.showcaseProjects[0], { ...initial.showcaseProjects[1], repoLink: 'http://localhost/x' }] };
+        expect(validateCohort(worse, { now: NOW, initial })['showcaseProjects.1.repoLink']).toBeDefined();
+    });
+
+    it('does not judge the dates or the capacity when they were not touched', () => {
+        const initial = valid({ applicationDeadline: '2026-12-29T10:00', startDate: '2026-12-28T09:00', capacity: '1' });
+        expect(validateCohort({ ...initial, title: 'Renamed program' }, { now: NOW, initial, acceptedCount: 3 })).toEqual({});
+        expect(validateCohort({ ...initial, capacity: '2' }, { now: NOW, initial, acceptedCount: 3 }).capacity).toMatch(/already accepted/);
+        expect(validateCohort({ ...initial, endDate: '2026-12-27T09:00' }, { now: NOW, initial }).endDate).toMatch(/after the start/);
+    });
+});
+
+describe('where an error is shown', () => {
+    const on = { showShowcase: true };
+    it('knows which keys have an input and which do not', () => {
+        for (const key of ['title', 'capacity', 'applicationDeadline', 'requirements', 'syllabus', 'syllabus.0.week', 'customFields.1.options', 'customFields.1', 'showcaseProjects.0.demoLink']) {
+            expect(hasVisibleField(key, on), key).toBe(true);
+        }
+        for (const key of ['showcaseProjects.0.image', 'syllabus.2', 'isActive', 'mentors', 'form', 'customFields.0.required', 'title.x']) {
+            expect(hasVisibleField(key, on), key).toBe(false);
+        }
+        expect(hasVisibleField('showcaseProjects.0.title', { showShowcase: false })).toBe(false);
+    });
+
+    it('lists the unattached ones in words for the banner', () => {
+        const lines = unattachedErrors({
+            title: 'Title is too short', 'showcaseProjects.2.image': 'Use a public link', isActive: 'Not allowed', form: 'Something odd', 'syllabus.1': 'Bad row', applicationDeadline: '',
+        }, on);
+        expect(lines).toEqual(['Project 3, image: Use a public link', 'Visibility: Not allowed', 'Something odd', 'Week 2: Bad row']);
+        expect(describeErrorKey('customFields.0.label')).toBe('Question 1, label');
+    });
+
+    it('clears a typed row\'s errors only, and every error of the list when the rows move', () => {
+        const errors = { 'customFields.0.label': 'a', 'customFields.2.label': 'b', customFields: 'c', title: 'keep', 'syllabus.0.title': 'keep too' };
+        // typing in row 2
+        expect(clearListErrors(errors, 'customFields', [2])).toEqual({ 'customFields.0.label': 'a', title: 'keep', 'syllabus.0.title': 'keep too' });
+        // add, remove or move
+        expect(clearListErrors(errors, 'customFields', null)).toEqual({ title: 'keep', 'syllabus.0.title': 'keep too' });
+        // nothing of that list: the same object
+        expect(clearListErrors(errors, 'showcaseProjects', null)).toBe(errors);
     });
 });
 

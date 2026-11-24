@@ -50,7 +50,7 @@ export function CustomFieldsEditor({ rows, onChange, errors }: { rows: CustomFie
     const update = (i: number, patch: Partial<CustomFieldRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
     return (
         <div>
-            {errors.customFields && <p className="mb-3 text-sm text-red-800 dark:text-red-300" role="alert">{errors.customFields}</p>}
+            {errors.customFields && <p className="mb-3 text-sm text-red-800 dark:text-red-300" aria-live="polite">{errors.customFields}</p>}
             {rows.length === 0 && <p className={`mb-4 text-sm ${muted}`}>No extra questions. Applicants only send a cover letter and links.</p>}
             <ol className="space-y-4">
                 {rows.map((row, i) => {
@@ -90,7 +90,7 @@ export function CustomFieldsEditor({ rows, onChange, errors }: { rows: CustomFie
                                             </li>
                                         ))}
                                     </ul>
-                                    {errors[`${base}.options`] && <p id={`${row.key}-options-error`} className="mt-1 text-sm text-red-800 dark:text-red-300" role="alert">{errors[`${base}.options`]}</p>}
+                                    {errors[`${base}.options`] && <p id={`${row.key}-options-error`} className="mt-1 text-sm text-red-800 dark:text-red-300" aria-live="polite">{errors[`${base}.options`]}</p>}
                                     <button type="button" className={`${btnSecondary} mt-2 !px-3 !py-1.5`} disabled={row.options.length >= FORM_LIMITS.customFieldOptions} onClick={() => update(i, { options: [...row.options, ''] })}>
                                         <Plus className="h-4 w-4" aria-hidden="true" /> Add option
                                     </button>
@@ -117,7 +117,7 @@ export function SyllabusEditor({ rows, onChange, errors }: { rows: SyllabusRow[]
     const nextWeek = Math.min(FORM_LIMITS.syllabusWeeks, rows.reduce((max, r) => Math.max(max, Number(r.week) || 0), 0) + 1);
     return (
         <div>
-            {errors.syllabus && <p className="mb-3 text-sm text-red-800 dark:text-red-300" role="alert">{errors.syllabus}</p>}
+            {errors.syllabus && <p className="mb-3 text-sm text-red-800 dark:text-red-300" aria-live="polite">{errors.syllabus}</p>}
             {rows.length === 0 && <p className={`mb-4 text-sm ${muted}`}>No curriculum yet. Add one row per week.</p>}
             <ol className="space-y-4">
                 {rows.map((row, i) => {
@@ -167,7 +167,7 @@ export function ShowcaseEditor({ rows, onChange, errors }: { rows: ShowcaseRow[]
     const update = (i: number, patch: Partial<ShowcaseRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
     return (
         <div>
-            {errors.showcaseProjects && <p className="mb-3 text-sm text-red-800 dark:text-red-300" role="alert">{errors.showcaseProjects}</p>}
+            {errors.showcaseProjects && <p className="mb-3 text-sm text-red-800 dark:text-red-300" aria-live="polite">{errors.showcaseProjects}</p>}
             {rows.length === 0 && <p className={`mb-4 text-sm ${muted}`}>No projects yet. Add what this cohort built.</p>}
             <ol className="space-y-4">
                 {rows.map((row, i) => {

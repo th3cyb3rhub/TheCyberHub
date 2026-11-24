@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { makeCohort } from '@/lib/internships/__tests__/fixtures'
@@ -24,7 +24,7 @@ function fillRequired() {
     fill(/^End/, '2099-03-10T10:00')
 }
 
-beforeEach(() => { vi.clearAllMocks(); create.isPending = false; update.isPending = false })
+beforeEach(() => { vi.clearAllMocks(); create.mutate.mockReset(); update.mutate.mockReset(); create.isPending = false; update.isPending = false })
 
 describe('CohortForm (new program)', () => {
     it('shows every problem at once and sends nothing', () => {
@@ -199,5 +199,147 @@ describe('CohortForm (edit)', () => {
         render(<CohortForm cohort={makeCohort({ storedStatus: 'completed', status: 'completed', showcaseProjects: [{ title: 'Scanner', description: '', teamMembers: [], repoLink: 'https://github.com/a/b' }] })} />)
         expect(screen.getByRole('heading', { name: 'Showcase' })).toBeInTheDocument()
         expect(screen.getAllByTestId('showcase-row')).toHaveLength(1)
+    })
+})
+
+describe('CohortForm (errors and where they show)', () => {
+    const q = () => screen.getAllByTestId('custom-field-row')
+
+    it('lists the errors that have no field in the banner, instead of "marked below"', async () => {
+        create.mutate.mockImplementation((_p, opts) => opts.onError(new ApiError('Validation failed', 400, 'VALIDATION_ERROR', [
+            { field: 'showcaseProjects.0.image', message: 'Image must point to a public website' },
+            { field: '', message: 'Something about the whole program' },
+        ])))
+        render(<CohortForm />)
+        fillRequired()
+        save('Save draft')
+        const lines = screen.getByTestId('form-error-lines')
+        expect(lines).toHaveTextContent('Project 1, image: Image must point to a public website')
+        expect(lines).toHaveTextContent('Something about the whole program')
+        expect(screen.getByTestId('form-error')).not.toHaveTextContent(/marked below/)
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('form-error')))
+    })
+
+    it('says "marked below" only when a field carries an error, and still lists the others', () => {
+        create.mutate.mockImplementation((_p, opts) => opts.onError(new ApiError('Validation failed', 400, 'VALIDATION_ERROR', [
+            { field: 'title', message: 'Title is not allowed' },
+            { field: 'showcaseProjects.0.image', message: 'Bad image' },
+        ])))
+        render(<CohortForm />)
+        fillRequired()
+        save('Save draft')
+        expect(screen.getByTestId('form-error')).toHaveTextContent(/marked below/)
+        expect(screen.getByTestId('form-error-lines')).toHaveTextContent('Project 1, image: Bad image')
+        expect(screen.getByTestId('form-error-lines')).not.toHaveTextContent('Title is not allowed')
+    })
+
+    it('does not leave a question\'s error on the next one when a question is removed or moved', () => {
+        render(<CohortForm />)
+        fillRequired()
+        fireEvent.click(screen.getByRole('button', { name: 'Add a question' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Add a question' }))
+        save('Save draft')
+        expect(screen.getAllByText('Write the question')).toHaveLength(2)
+        fireEvent.click(screen.getByRole('button', { name: 'Move question 1 down' }))
+        expect(screen.queryAllByText('Write the question')).toHaveLength(0)
+        save('Save draft')
+        expect(screen.getAllByText('Write the question')).toHaveLength(2)
+        fireEvent.click(screen.getByRole('button', { name: 'Remove question 1' }))
+        expect(q()).toHaveLength(1)
+        expect(screen.queryAllByText('Write the question')).toHaveLength(0)
+        expect(within(q()[0]).getByLabelText(/^Question/)).not.toHaveAttribute('aria-invalid')
+    })
+
+    it('clears only the row that is typed in', () => {
+        render(<CohortForm />)
+        fillRequired()
+        fireEvent.click(screen.getByRole('button', { name: 'Add a question' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Add a question' }))
+        save('Save draft')
+        fireEvent.change(within(q()[1]).getByLabelText(/^Question/), { target: { value: 'Why us?' } })
+        expect(within(q()[1]).queryByText('Write the question')).toBeNull()
+        expect(within(q()[0]).getByText('Write the question')).toBeInTheDocument()
+        expect(within(q()[0]).getByLabelText(/^Question/)).toHaveAttribute('aria-invalid', 'true')
+    })
+
+    it('uses a polite live region for a field error and keeps role="alert" for the banner only', () => {
+        render(<CohortForm />)
+        save('Save draft')
+        expect(screen.getAllByRole('alert')).toHaveLength(1)
+        expect(screen.getByRole('alert')).toBe(screen.getByTestId('form-error'))
+        const message = screen.getByText(/Title must be at least 3/)
+        expect(message).toHaveAttribute('aria-live', 'polite')
+        expect(screen.getByLabelText(/^Title/).getAttribute('aria-describedby')).toContain(message.id)
+    })
+})
+
+describe('CohortForm (edit: stale data)', () => {
+    const stale = () => makeCohort({
+        storedStatus: 'completed', status: 'completed', isActive: true, acceptedCount: 0,
+        applicationDeadline: '2026-01-05T10:00:00.000Z', startDate: '2026-01-10T10:00:00.000Z', endDate: '2026-03-10T10:00:00.000Z',
+        showcaseProjects: [{ title: 'Scanner', description: '', teamMembers: [], image: 'https://8.8.8.8/shot.png' }],
+    })
+
+    it('saves an unrelated change although an old image link would not pass today\'s rules', () => {
+        render(<CohortForm cohort={stale()} />)
+        fireEvent.change(screen.getAllByLabelText(/^Title/)[0], { target: { value: 'Summer Security Internship 2' } })
+        save('Save changes')
+        expect(screen.queryByTestId('form-error')).toBeNull()
+        expect(update.mutate).toHaveBeenCalledTimes(1)
+        expect(Object.keys(update.mutate.mock.calls[0][0].payload)).toEqual(['title'])
+    })
+
+    it('takes a newer copy of the program while nothing was typed, and keeps the typing otherwise', () => {
+        const { rerender } = render(<CohortForm cohort={makeCohort({ title: 'First title' })} />)
+        expect(screen.getAllByLabelText(/^Title/)[0]).toHaveValue('First title')
+        rerender(<CohortForm cohort={makeCohort({ title: 'Second title' })} />)
+        expect(screen.getAllByLabelText(/^Title/)[0]).toHaveValue('Second title')
+
+        fireEvent.change(screen.getAllByLabelText(/^Title/)[0], { target: { value: 'My own title' } })
+        rerender(<CohortForm cohort={makeCohort({ title: 'Third title' })} />)
+        expect(screen.getAllByLabelText(/^Title/)[0]).toHaveValue('My own title')
+    })
+})
+
+describe('CohortForm (leaving and saving)', () => {
+    const beforeUnload = () => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented }
+
+    it('asks before the page is left or a link is followed once something was typed', () => {
+        render(<CohortForm />)
+        expect(beforeUnload()).toBe(false)
+        fireEvent.click(screen.getByRole('link', { name: 'Cancel' }))
+        expect(screen.queryByRole('dialog')).toBeNull() // clean: no question (jsdom does not navigate)
+
+        fill(/^Title/, 'Winter Internship')
+        expect(beforeUnload()).toBe(true)
+        fireEvent.click(screen.getByRole('link', { name: 'Cancel' }))
+        const dialog = screen.getByRole('dialog', { name: 'Leave without saving?' })
+        expect(push).not.toHaveBeenCalled()
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
+        expect(screen.queryByRole('dialog')).toBeNull()
+        expect(screen.getByLabelText(/^Title/)).toHaveValue('Winter Internship')
+
+        fireEvent.click(screen.getByRole('link', { name: 'Cancel' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Leave' }))
+        expect(push).toHaveBeenCalledWith('/admin/internships')
+    })
+
+    it('treats an edit as changed only when it differs from the loaded program', () => {
+        render(<CohortForm cohort={makeCohort()} />)
+        expect(beforeUnload()).toBe(false)
+        fireEvent.change(screen.getAllByLabelText(/^Title/)[0], { target: { value: 'Another title' } })
+        expect(beforeUnload()).toBe(true)
+        fireEvent.change(screen.getAllByLabelText(/^Title/)[0], { target: { value: 'Summer Security Internship' } })
+        expect(beforeUnload()).toBe(false)
+    })
+
+    it('keeps the button off after a successful save, and no longer asks before leaving', () => {
+        create.mutate.mockImplementation((_p, opts) => opts.onSuccess())
+        render(<CohortForm />)
+        fillRequired()
+        save('Save draft')
+        expect(push).toHaveBeenCalledWith('/admin/internships')
+        expect(screen.getByRole('button', { name: /Save draft/ })).toBeDisabled()
+        expect(beforeUnload()).toBe(false)
     })
 })
