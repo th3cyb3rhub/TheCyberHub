@@ -56,6 +56,8 @@ export const ctfCardSchema = z.object({
 });
 
 export const ctfDetailSchema = ctfCardSchema.extend({
+    /** False for a link only competition. Older API builds do not send it. */
+    isPublic: z.boolean().optional(),
     rules: z.string().default(''),
     challenges: z.array(z.string()).default([]),
 });
@@ -80,6 +82,7 @@ export const ctfResultsSchema = z.object({
         scoringMode: z.enum(CTF_SCORING_MODES).default('static'),
         prizes: z.array(prizeSchema).default([]),
         status: z.enum(CTF_STATUSES),
+        isPublic: z.boolean().optional(),
     }),
     mode: z.enum(['solo', 'team']),
     /** The standings are the ones of the freeze, not the final ones */

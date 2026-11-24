@@ -82,8 +82,9 @@ export interface CtfCompetition extends CtfCompetitionCard {
     rules: string;
     /** Challenge ids; empty before the start for everybody but staff */
     challenges: string[];
-    // Staff only
+    /** False for a link only competition; sent on the public detail by newer API builds, and always to staff */
     isPublic?: boolean;
+    // Staff only
     createdBy?: string | { _id: string; username?: string } | null;
     storedStatus?: CtfStatus;
     backfillDone?: boolean;
@@ -223,6 +224,7 @@ export interface CtfResults {
         scoringMode: CtfScoringMode;
         prizes: CtfPrize[];
         status: CtfStatus;
+        isPublic?: boolean;
     };
     mode: 'solo' | 'team';
     /** The standings are the public, frozen ones */

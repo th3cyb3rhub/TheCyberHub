@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CompetitionView } from '@/components/ctf/CompetitionView';
-import { excerpt } from '@/lib/labs/display';
-import { fetchPublicCompetition, SITE_URL } from '@/lib/ctf/server';
+import { competitionMetadata } from '@/lib/ctf/metadata';
+import { fetchPublicCompetition } from '@/lib/ctf/server';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
@@ -11,32 +11,10 @@ interface PageProps {
 
 export async function generateMetadata({ params }: Pick<PageProps, 'params'>): Promise<Metadata> {
     const { slug } = await params;
-    // The same request as the page below: `fetchPublicCompetition` is cached per render
+    // The same request as the page below: `fetchPublicCompetition` is cached per render.
+    // A draft, an unknown slug or a failing API stays out of search results; so does a link only competition.
     const result = await fetchPublicCompetition(slug);
-
-    if (result.state !== 'ok') {
-        // A draft, an unknown slug or a failing API stays out of search results
-        return { title: 'Competition', robots: { index: false, follow: false } };
-    }
-
-    const { competition } = result;
-    const description = excerpt(competition.shortDescription || competition.description, 160) || `${competition.title}: a capture the flag competition on TheCyberHub.`;
-    const url = `${SITE_URL}/ctf/competitions/${competition.slug}`;
-
-    return {
-        title: competition.title,
-        description,
-        alternates: { canonical: url },
-        openGraph: {
-            title: `${competition.title} | TheCyberHub CTF`,
-            description,
-            url,
-            type: 'website',
-            siteName: 'TheCyberHub',
-            images: [{ url: '/img.png', width: 1200, height: 630, alt: 'TheCyberHub' }],
-        },
-        twitter: { card: 'summary_large_image', title: competition.title, description, images: ['/twitter-image.png'] },
-    };
+    return competitionMetadata(result.state === 'ok' ? result.competition : null);
 }
 
 export default async function CompetitionPage({ params, searchParams }: PageProps) {
