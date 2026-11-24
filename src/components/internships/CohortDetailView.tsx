@@ -7,6 +7,7 @@ import {
     Undo2, Users,
 } from 'lucide-react';
 import { btnPrimary, btnSecondary, card, cardPad, chip, focusRing, muted, pageBg } from '@/components/events/styles';
+import { useAuth } from '@/context/AuthContext';
 import { useInternship } from '@/hooks/queries/useInternships';
 import { useNow } from '@/lib/events/clock';
 import { applyView, spotsInfo, TYPE_LABELS } from '@/lib/internships/display';
@@ -18,7 +19,7 @@ import { ErrorState } from './ListStates';
 import { ShowcaseList } from './PastCohorts';
 import { ApplicationStatusBadge, CohortStatusBadge } from './StatusBadges';
 import { ViewerTime } from './ViewerTime';
-import { WithdrawDialog } from './WithdrawDialog';
+import { focusAfterRender, WithdrawDialog } from './WithdrawDialog';
 
 const DAY = 86_400_000;
 
@@ -60,7 +61,7 @@ function ApplyPanel({ cohort, onWithdraw }: { cohort: CohortDetail; onWithdraw: 
             <section aria-labelledby="your-application" className="rounded-2xl border border-orange-300 bg-orange-50 p-5 dark:border-orange-500/30 dark:bg-orange-500/5" data-testid="your-application" data-state="applied">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 id="your-application" className="text-lg font-semibold text-gray-900 dark:text-white">Your application</h2>
+                        <h2 id="your-application" tabIndex={-1} className="rounded text-lg font-semibold text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-white">Your application</h2>
                         <p className={`text-sm ${muted}`}>Sent <ViewerTime iso={mine.appliedAt} kind="stamp" /></p>
                     </div>
                     <ApplicationStatusBadge status={mine.status} />
@@ -94,6 +95,30 @@ function ApplyPanel({ cohort, onWithdraw }: { cohort: CohortDetail; onWithdraw: 
     );
 }
 
+/** The viewer's own answer is on its way: a neutral panel, so nobody sees a state that is not theirs */
+function ApplyPending() {
+    return (
+        <section aria-label="Apply" aria-busy="true" role="status" className="rounded-2xl border border-gray-200 p-5 dark:border-neutral-800" data-testid="apply-pending">
+            <span className="sr-only">Checking your application status</span>
+            <div className="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-neutral-800" aria-hidden="true" />
+            <div className="mt-3 h-4 w-64 max-w-full animate-pulse rounded bg-gray-200 dark:bg-neutral-800" aria-hidden="true" />
+        </section>
+    );
+}
+
+/** The signed-in answer did not come: say so and offer to ask again, instead of a panel that may be wrong */
+function ApplyRetry({ onRetry }: { onRetry: () => void }) {
+    return (
+        <section aria-label="Apply" className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-500/10 sm:flex-row sm:items-center" data-testid="apply-retry">
+            <div>
+                <h2 className="mb-1 text-lg font-semibold text-gray-900 dark:text-white">We could not check your application</h2>
+                <p className={`text-sm ${muted}`}>Try again to see whether you can apply.</p>
+            </div>
+            <button type="button" className={btnSecondary} onClick={onRetry}>Try again</button>
+        </section>
+    );
+}
+
 function Deadline({ cohort }: { cohort: CohortDetail }) {
     const now = useNow(60_000);
     if (!cohort.applicationsOpen || !now) return null;
@@ -110,12 +135,16 @@ function Deadline({ cohort }: { cohort: CohortDetail }) {
 }
 
 export function CohortDetailView({ id, initialCohort = null }: { id: string; initialCohort?: CohortDetail | null }) {
+    const { user } = useAuth();
     const query = useInternship(id, initialCohort);
     const [withdrawing, setWithdrawing] = useState<ViewerApplication | null>(null);
-    const cohort = query.data;
+
+    // A 404 from the API beats anything cached: the program was hidden after the page was cached
+    const missing = query.error instanceof ApiError && query.error.status === 404;
+    const cohort = missing ? null : (query.data ?? initialCohort);
 
     if (!cohort) {
-        if (query.isLoading || query.isPending) {
+        if (!missing && (query.isLoading || query.isPending)) {
             return (
                 <div className={pageBg}>
                     <div className="mx-auto max-w-4xl space-y-4 px-4 pb-16 pt-24 sm:px-6" role="status" aria-label="Loading program">
@@ -125,7 +154,6 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
                 </div>
             );
         }
-        const missing = query.error instanceof ApiError && query.error.status === 404;
         return (
             <div className={pageBg}>
                 <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6">
@@ -143,6 +171,10 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
             </div>
         );
     }
+
+    // What the server rendered has no viewer. A signed-in member waits for their own answer: until
+    // then (or when it failed) the apply panel is neutral, never the visitor's.
+    const viewerKnown = !user || (!!query.data && !query.isPlaceholderData && query.data.viewer !== null);
 
     const spots = spotsInfo(cohort);
     const syllabus = [...cohort.syllabus].sort((a, b) => a.week - b.week);
@@ -181,7 +213,11 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
 
                 <div className="space-y-6">
                     <Deadline cohort={cohort} />
-                    {cohort.status !== 'completed' && cohort.status !== 'draft' && <ApplyPanel cohort={cohort} onWithdraw={setWithdrawing} />}
+                    {cohort.status !== 'completed' && cohort.status !== 'draft' && (
+                        viewerKnown
+                            ? <ApplyPanel cohort={cohort} onWithdraw={setWithdrawing} />
+                            : query.isFetching ? <ApplyPending /> : <ApplyRetry onRetry={() => void query.refetch()} />
+                    )}
                     {cohort.status === 'draft' && <p role="status" className={`${cardPad} text-sm ${muted}`}>This program is a draft. Only staff can see it.</p>}
 
                     <BulletSection id="requirements" title="Requirements" items={cohort.requirements} icon={CheckCircle2} />
@@ -243,6 +279,7 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
                 <WithdrawDialog
                     open
                     onClose={() => setWithdrawing(null)}
+                    onWithdrawn={() => focusAfterRender('your-application')}
                     applicationId={withdrawing._id}
                     cohortId={cohort._id}
                     cohortTitle={cohort.title}

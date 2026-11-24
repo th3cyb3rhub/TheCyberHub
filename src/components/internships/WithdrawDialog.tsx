@@ -7,10 +7,21 @@ import { btnDanger, btnSecondary, input, label as labelClass, muted } from '@/co
 import { useWithdrawApplication } from '@/hooks/queries/useInternships';
 import { LIMITS } from '@/lib/internships/application';
 
+/**
+ * Move focus to an element once the screen has settled. After a withdrawal the button that opened
+ * the dialog is gone, so focus would fall back to the page; the status heading is where the news is.
+ */
+export function focusAfterRender(elementId: string) {
+    if (typeof window === 'undefined') return;
+    window.requestAnimationFrame(() => document.getElementById(elementId)?.focus());
+}
+
 /** Confirm a withdrawal, with an optional reason that stays in the timeline */
-export function WithdrawDialog({ open, onClose, applicationId, cohortId, cohortTitle, accepted = false }: {
+export function WithdrawDialog({ open, onClose, onWithdrawn, applicationId, cohortId, cohortTitle, accepted = false }: {
     open: boolean;
     onClose: () => void;
+    /** Called after the API accepted the withdrawal and the dialog closed */
+    onWithdrawn?: () => void;
     applicationId: string;
     cohortId?: string;
     cohortTitle?: string;
@@ -23,7 +34,7 @@ export function WithdrawDialog({ open, onClose, applicationId, cohortId, cohortT
 
     useEffect(() => { if (open) setReason(''); }, [open]);
 
-    const submit = () => withdraw.mutate({ id: applicationId, cohortId, reason }, { onSuccess: onClose });
+    const submit = () => withdraw.mutate({ id: applicationId, cohortId, reason }, { onSuccess: () => { onClose(); onWithdrawn?.(); } });
 
     return (
         <DialogShell

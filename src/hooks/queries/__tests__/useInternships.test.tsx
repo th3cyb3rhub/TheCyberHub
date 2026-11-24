@@ -76,13 +76,41 @@ describe('reads', () => {
         expect(result.current.fetchStatus).toBe('idle')
     })
 
-    it('reads the cohort of the current user and treats server data as stale', async () => {
+    it('shows the server copy to a signed-in member only as a placeholder, until their own answer arrives', async () => {
         api.getCohort.mockResolvedValue(makeCohort({ viewer: viewer({ canApply: false }) }))
         const { result } = renderHook(() => useInternship(COHORT_ID, makeCohort({ viewer: null })), { wrapper })
-        expect(result.current.data?.viewer).toBeNull() // the server copy is shown at once
-        await waitFor(() => expect(result.current.data?.viewer?.canApply).toBe(false)) // then replaced by the signed-in answer
+        expect(result.current.data?.viewer).toBeNull() // the server copy is shown at once...
+        expect(result.current.isPlaceholderData).toBe(true) // ...as a placeholder, never as the answer
+        await waitFor(() => expect(result.current.data?.viewer?.canApply).toBe(false))
+        expect(result.current.isPlaceholderData).toBe(false)
+        expect(api.getCohort).toHaveBeenCalledTimes(1)
         expect(qc.getQueryData(internshipKeys.detail(COHORT_ID, 'u1'))).toBeDefined()
         expect(qc.getQueryData(internshipKeys.detail(COHORT_ID, null))).toBeUndefined()
+    })
+
+    it('keeps no cached answer when a signed-in member\'s own request fails, so the placeholder is not mistaken for it', async () => {
+        api.getCohort.mockRejectedValue(new ApiError('down', 500, 'INTERNAL_ERROR'))
+        const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
+        const w = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        const { result } = renderHook(() => useInternship(COHORT_ID, makeCohort({ viewer: null })), { wrapper: w })
+        await waitFor(() => expect(result.current.isError).toBe(true))
+        expect(result.current.data).toBeUndefined()
+    })
+
+    it('does not refetch for an anonymous visitor right after the page rendered', async () => {
+        auth.current = { user: null, loading: false }
+        const { result } = renderHook(() => useInternship(COHORT_ID, makeCohort({ viewer: null })), { wrapper })
+        expect(result.current.data?.title).toBe('Summer Security Internship')
+        expect(result.current.isPlaceholderData).toBe(false)
+        await new Promise((r) => setTimeout(r, 20))
+        expect(api.getCohort).not.toHaveBeenCalled()
+        expect(qc.getQueryData(internshipKeys.detail(COHORT_ID, null))).toBeDefined()
+    })
+
+    it('waits for the session before asking', () => {
+        auth.current = { user: null, loading: true }
+        renderHook(() => useInternship(COHORT_ID), { wrapper })
+        expect(api.getCohort).not.toHaveBeenCalled()
     })
 
     it('does not retry a 404', async () => {

@@ -114,6 +114,8 @@ test.describe('Internship detail', () => {
         await dialog.getByRole('button', { name: 'Withdraw', exact: true }).click();
         await expect(page.getByTestId('your-application')).toContainText('Withdrawn');
         await expect(page.getByTestId('your-application').getByRole('button', { name: 'Withdraw' })).toHaveCount(0);
+        // the button that opened the dialog is gone: focus moves to the status heading
+        await expect(page.getByRole('heading', { name: 'Your application' })).toBeFocused();
         expect(state.calls.find((c) => c.path.endsWith('/withdraw'))?.body).toEqual({ reason: 'Found another offer' });
     });
 
@@ -260,6 +262,7 @@ test.describe('My applications', () => {
         await expect(card.getByTestId('status-timeline').getByRole('listitem')).toHaveCount(3);
         await expect(card.getByTestId('timeline-note').filter({ hasText: 'Your reason' })).toHaveCount(1);
         await expect(card.getByRole('button', { name: 'Withdraw', exact: true })).toHaveCount(0);
+        await expect(card.getByRole('heading', { level: 2 })).toBeFocused();
     });
 
     test('explains a withdraw that the API refuses, and shows the empty state', async ({ page }) => {

@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const withdraw = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useInternships', () => ({ useWithdrawApplication: () => withdraw }))
 
-import { WithdrawDialog } from '../WithdrawDialog'
+import { focusAfterRender, WithdrawDialog } from '../WithdrawDialog'
 
 beforeEach(() => { vi.clearAllMocks(); withdraw.isPending = false })
 
@@ -32,5 +32,30 @@ describe('WithdrawDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Keep my application' }))
         expect(withdraw.mutate).not.toHaveBeenCalled()
         expect(onClose).toHaveBeenCalled()
+    })
+
+    it('tells the screen after a successful withdrawal, and not after a refusal', () => {
+        const onWithdrawn = vi.fn()
+        withdraw.mutate.mockImplementationOnce(() => undefined) // the API refused: no onSuccess
+        render(<WithdrawDialog open onClose={vi.fn()} onWithdrawn={onWithdrawn} applicationId="app1" />)
+        fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
+        expect(onWithdrawn).not.toHaveBeenCalled()
+        withdraw.mutate.mockImplementationOnce((_v, opts) => opts?.onSuccess?.())
+        fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
+        expect(onWithdrawn).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('focusAfterRender', () => {
+    it('moves focus to the heading once the screen has settled', async () => {
+        render(<h2 id="your-application" tabIndex={-1}>Your application</h2>)
+        focusAfterRender('your-application')
+        await new Promise((r) => requestAnimationFrame(() => r(null)))
+        await new Promise((r) => requestAnimationFrame(() => r(null)))
+        expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Your application' }))
+    })
+
+    it('does nothing for an element that is not there', () => {
+        expect(() => focusAfterRender('nope')).not.toThrow()
     })
 })

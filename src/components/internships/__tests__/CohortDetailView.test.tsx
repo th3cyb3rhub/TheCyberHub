@@ -1,10 +1,12 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { makeCohort, viewer } from '@/lib/internships/__tests__/fixtures'
 
 const q = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 vi.mock('@/hooks/queries/useInternships', () => ({ useInternship: () => q.current }))
+const auth = vi.hoisted(() => ({ user: null as { id: string } | null }))
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: auth.user, loading: false }) }))
 const withdraw = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('../WithdrawDialog', () => ({
     WithdrawDialog: (p: { applicationId: string; cohortId?: string; accepted?: boolean; onClose: () => void }) => (
@@ -17,10 +19,10 @@ vi.mock('../WithdrawDialog', () => ({
 
 import { CohortDetailView } from '../CohortDetailView'
 
-const ok = (cohort: unknown) => ({ data: cohort, isError: false, isLoading: false, isPending: false, refetch: vi.fn() })
+const ok = (cohort: unknown) => ({ data: cohort, isError: false, isLoading: false, isPending: false, isPlaceholderData: false, isFetching: false, refetch: vi.fn() })
 const applied = (status: 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn') => viewer({ canApply: false, userApplication: { _id: 'app1', status, appliedAt: '2026-12-01T10:00:00.000Z', updatedAt: '2026-12-02T10:00:00.000Z' } })
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); auth.user = null })
 
 describe('CohortDetailView states', () => {
     it('asks an anonymous visitor to sign in, and comes back to the apply page', () => {
@@ -100,6 +102,54 @@ describe('CohortDetailView states', () => {
         render(<CohortDetailView id="c1" />)
         fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
         expect(refetch).toHaveBeenCalled()
+    })
+})
+
+describe('a signed-in member and the server copy', () => {
+    const serverCopy = () => makeCohort({ viewer: null })
+
+    it('shows a neutral panel, not "Sign in to apply", while their own answer is on its way', () => {
+        auth.user = { id: 'u1' }
+        q.current = { ...ok(serverCopy()), isPlaceholderData: true, isFetching: true }
+        render(<CohortDetailView id="c1" initialCohort={serverCopy()} />)
+        expect(screen.getByRole('heading', { level: 1, name: 'Summer Security Internship' })).toBeInTheDocument()
+        expect(screen.getByTestId('apply-pending')).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: /Sign in to apply|Apply now/ })).toBeNull()
+        expect(screen.queryByTestId('apply-panel')).toBeNull()
+    })
+
+    it('does not take a viewer-less answer for theirs even when it is no placeholder', () => {
+        auth.user = { id: 'u1' }
+        q.current = ok(serverCopy())
+        render(<CohortDetailView id="c1" />)
+        expect(screen.getByTestId('apply-retry')).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: 'Sign in to apply' })).toBeNull()
+    })
+
+    it('offers a retry, with the program still shown, when their own request failed', () => {
+        auth.user = { id: 'u1' }
+        const refetch = vi.fn()
+        q.current = { data: undefined, isError: true, isLoading: false, isPending: false, isPlaceholderData: false, isFetching: false, error: new ApiError('down', 500), refetch }
+        render(<CohortDetailView id="c1" initialCohort={serverCopy()} />)
+        expect(screen.getByRole('heading', { level: 1, name: 'Summer Security Internship' })).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: 'Sign in to apply' })).toBeNull()
+        fireEvent.click(within(screen.getByTestId('apply-retry')).getByRole('button', { name: 'Try again' }))
+        expect(refetch).toHaveBeenCalled()
+    })
+
+    it('shows the real panel once their answer is in', () => {
+        auth.user = { id: 'u1' }
+        q.current = ok(makeCohort())
+        render(<CohortDetailView id="c1" initialCohort={serverCopy()} />)
+        expect(screen.getByRole('link', { name: 'Apply now' })).toBeInTheDocument()
+        expect(screen.queryByTestId('apply-pending')).toBeNull()
+    })
+
+    it('shows "not available" when the API now says 404, whatever was cached', () => {
+        q.current = { ...ok(makeCohort()), isError: true, error: new ApiError('gone', 404, 'INTERNSHIP_NOT_FOUND') }
+        render(<CohortDetailView id="c1" initialCohort={makeCohort()} />)
+        expect(screen.getByRole('heading', { name: 'This program is not available' })).toBeInTheDocument()
+        expect(screen.queryByRole('heading', { level: 1, name: 'Summer Security Internship' })).toBeNull()
     })
 })
 

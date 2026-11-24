@@ -16,7 +16,7 @@ import { SubmittedDetails } from './SubmittedDetails';
 import { ErrorState, ListSkeleton } from './ListStates';
 import { ApplicationStatusBadge, CohortStatusBadge } from './StatusBadges';
 import { ViewerTime } from './ViewerTime';
-import { WithdrawDialog } from './WithdrawDialog';
+import { focusAfterRender, WithdrawDialog } from './WithdrawDialog';
 
 const cohortOf = (a: MyApplication): ApplicationCohort | null => (a.cohort && typeof a.cohort === 'object' ? a.cohort : null);
 
@@ -32,7 +32,7 @@ function ApplicationCard({ application, onWithdraw }: { application: MyApplicati
                         {cohort && <CohortStatusBadge status={cohort.status} />}
                         {cohort && <span className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-300`}>{TYPE_LABELS[cohort.type] ?? cohort.type}</span>}
                     </div>
-                    <h2 className="break-words text-lg font-semibold text-gray-900 dark:text-white">
+                    <h2 id={`application-${application._id}`} tabIndex={-1} className="break-words rounded text-lg font-semibold text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-white">
                         {cohortId && cohort ? <Link href={`/internships/${cohortId}`} className={`rounded hover:underline ${focusRing}`}>{cohort.title}</Link> : 'This program was removed'}
                     </h2>
                     <p className={`text-sm ${muted}`}>Applied <ViewerTime iso={application.appliedAt} kind="stamp" /></p>
@@ -127,6 +127,7 @@ export function MyApplicationsView() {
                 <WithdrawDialog
                     open
                     onClose={() => setWithdrawing(null)}
+                    onWithdrawn={() => focusAfterRender(`application-${withdrawing._id}`)}
                     applicationId={withdrawing._id}
                     cohortId={withdrawingCohort?._id}
                     cohortTitle={withdrawingCohort?.title}

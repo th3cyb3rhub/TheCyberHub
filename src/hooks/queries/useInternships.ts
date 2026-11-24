@@ -70,17 +70,22 @@ export function usePastInternships(limit = 6) {
 }
 
 /**
- * One cohort with the viewer block. `initialData` (rendered on the server without a login) is
- * treated as already stale, so a signed-in visitor always refetches with their token.
+ * One cohort with the viewer block. The copy rendered on the server has no viewer, so it differs
+ * by who is looking:
+ * - A visitor who is not signed in has the same answer, so it counts as fresh from the moment the
+ *   page rendered, and nothing is fetched right after hydration.
+ * - A signed-in member only gets it as `placeholderData`: shown while the answer with their own
+ *   token is on its way, and never taken for the answer itself (`isPlaceholderData` tells them apart).
  */
-export function useInternship(id: string, initialData?: CohortDetail | null) {
+export function useInternship(id: string, serverCohort?: CohortDetail | null) {
     const { user, loading } = useAuth();
+    const signedIn = !!user;
     return useQuery({
         queryKey: internshipKeys.detail(id, user?.id ?? null),
         queryFn: () => api.getCohort(id),
         enabled: !!id && !loading,
-        initialData: initialData ?? undefined,
-        initialDataUpdatedAt: 0,
+        initialData: !signedIn ? (serverCohort ?? undefined) : undefined,
+        placeholderData: signedIn ? (serverCohort ?? undefined) : undefined,
         staleTime: 30_000,
         retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 2,
     });
