@@ -182,7 +182,8 @@ export interface CalendarItem {
     /** IANA zone of the organizer */
     timezone: string;
     format: EventFormat;
-    status: 'upcoming' | 'live' | 'ended' | 'cancelled';
+    /** `pending` appears for the people who may manage a series: an occurrence waiting for review */
+    status: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'pending';
     isAllDay: boolean;
     seriesId?: string;
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Ban, ClipboardList, Loader2, Pause, Pencil, Play } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useEndSeries, usePatchSeries, usePauseSeries, useResumeSeries } from '@/hooks/queries/useEventSeries';
+import { useEndSeries, useEventSeries, usePatchSeries, usePauseSeries, useResumeSeries } from '@/hooks/queries/useEventSeries';
 import { eventErrorMessage, fieldErrors } from '@/lib/events/errors';
 import { EVENT_LIMITS, FORMAT_LABELS } from '@/lib/events/form';
 import { isAdminRole } from '@/lib/events/roles';
@@ -30,6 +30,10 @@ function Field({ id, label, error, hint, children }: { id: string; label: string
     );
 }
 
+/** Dates the edit picker lists at first, and the most the API returns */
+const DATES_DEFAULT = 10;
+const DATES_MAX = 20;
+
 /** Change one occurrence or this and every later one. Only what changed is sent. */
 function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; open: boolean; onOpenChange: (o: boolean) => void; onSaved: (message: string) => void }) {
     const { user } = useAuth();
@@ -38,10 +42,18 @@ function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; o
     const initial = useMemo(() => seriesToEditValues(series), [series]);
     const [values, setValues] = useState<SeriesEditValues>(initial);
     const [scope, setScope] = useState<SeriesScope>('future');
-    const [eventId, setEventId] = useState<string>(series.nextOccurrences[0]?.id ?? '');
+    const [eventId, setEventId] = useState<string>('');
+    // The page loads the next 10 dates; "show more" asks for the most the server gives (20)
+    const [wanted, setWanted] = useState<number>(DATES_DEFAULT);
+    const more = useEventSeries(series.id, null, { limit: DATES_MAX, enabled: wanted === DATES_MAX });
+    const listed = wanted === DATES_MAX && more.data ? more.data.nextOccurrences : series.nextOccurrences;
+    // A cancelled or finished date cannot be edited, so it is not offered; one waiting for review is, and says so
+    const dates = useMemo(() => listed.filter((o) => o.status !== 'cancelled' && o.status !== 'ended'), [listed]);
+    const mayHaveMore = wanted < DATES_MAX && series.nextOccurrences.length >= DATES_DEFAULT;
+    const selectedId = dates.some((o) => o.id === eventId) ? eventId : (dates[0]?.id ?? '');
     const [errors, setErrors] = useState<SeriesFormErrors>({});
     const [formError, setFormError] = useState<string | null>(null);
-    const occurrence = series.nextOccurrences.find((o) => o.id === eventId) ?? null;
+    const occurrence = dates.find((o) => o.id === selectedId) ?? null;
 
     const set = <K extends keyof SeriesEditValues>(key: K, value: SeriesEditValues[K]) => {
         setValues((v) => ({ ...v, [key]: value }));
@@ -118,21 +130,34 @@ function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; o
                             <span><span className="font-medium text-gray-900 dark:text-white">This and all future dates</span>
                                 <span className={`block text-xs ${muted}`}>Changes the template and the upcoming dates that were not edited by hand. Dates that already started stay as they are.</span></span>
                         </label>
-                        <label className={`flex items-start gap-2.5 rounded-xl border border-gray-200 p-3 text-sm dark:border-neutral-800 ${series.nextOccurrences.length === 0 ? 'opacity-60' : ''}`}>
-                            <input type="radio" name="scope" checked={scope === 'this'} disabled={series.nextOccurrences.length === 0} onChange={() => setScope('this')} className="mt-0.5 accent-orange-600" />
+                        <label className={`flex items-start gap-2.5 rounded-xl border border-gray-200 p-3 text-sm dark:border-neutral-800 ${dates.length === 0 ? 'opacity-60' : ''}`}>
+                            <input type="radio" name="scope" checked={scope === 'this'} disabled={dates.length === 0} onChange={() => setScope('this')} className="mt-0.5 accent-orange-600" />
                             <span><span className="font-medium text-gray-900 dark:text-white">Only one date</span>
                                 <span className={`block text-xs ${muted}`}>Changes a single date, or moves it to another time. Later changes to the series leave that date alone.</span></span>
                         </label>
                     </fieldset>
 
                     {scope === 'this' && (
-                        <Field id="se-occurrence" label="Which date">
-                            {({ id }) => (
-                                <select id={id} value={eventId} onChange={(e) => setEventId(e.target.value)} className={input}>
-                                    {series.nextOccurrences.map((o) => <option key={o.id} value={o.id}>{formatDayYear(o.startDate, o.timezone)} at {formatClock(o.startDate, o.timezone)}</option>)}
-                                </select>
+                        <div>
+                            <Field id="se-occurrence" label="Which date">
+                                {({ id }) => (
+                                    <select id={id} value={selectedId} onChange={(e) => setEventId(e.target.value)} className={input}>
+                                        {dates.map((o) => (
+                                            <option key={o.id} value={o.id}>
+                                                {formatDayYear(o.startDate, o.timezone)} at {formatClock(o.startDate, o.timezone)}{o.status === 'pending' ? ' (waiting for review)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </Field>
+                            {mayHaveMore && (
+                                <button type="button" className="mt-1 rounded text-xs font-medium text-orange-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-orange-300" onClick={() => setWanted(DATES_MAX)}>
+                                    Show more dates
+                                </button>
                             )}
-                        </Field>
+                            {wanted === DATES_MAX && more.isFetching && !more.data && <p className={`mt-1 text-xs ${muted}`} role="status">Loading more dates</p>}
+                            {wanted === DATES_MAX && more.isError && <p className="mt-1 text-xs font-medium text-red-700 dark:text-red-400" role="alert">Could not load more dates.</p>}
+                        </div>
                     )}
 
                     {text('title', 'Title', { maxLength: EVENT_LIMITS.title.max })}

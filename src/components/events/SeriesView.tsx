@@ -59,7 +59,7 @@ function Occurrences({ series }: { series: Series }) {
                                 <Link href={`/events/${item.slug}`} className="min-w-0 rounded text-sm font-semibold text-gray-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-white">
                                     {item.title}
                                 </Link>
-                                {(item.status === 'live' || item.status === 'cancelled') && <StatusBadge status={item.status} />}
+                                {(item.status === 'live' || item.status === 'cancelled' || item.status === 'pending') && <StatusBadge status={item.status} />}
                             </div>
                             <div className="mt-1"><EventTimes event={item} compact /></div>
                         </li>

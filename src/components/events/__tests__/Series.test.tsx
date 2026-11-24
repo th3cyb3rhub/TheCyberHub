@@ -6,13 +6,13 @@ import type { Series } from '@/types/event'
 const auth = vi.hoisted(() => ({ user: null as { id: string; role: string } | null }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: auth.user, loading: false }) }))
 vi.mock('@/lib/events/clock', () => ({ useViewerZone: () => 'Asia/Kolkata', useNow: () => null }))
-const query = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
+const query = vi.hoisted(() => ({ current: {} as Record<string, unknown>, more: {} as Record<string, unknown>, limits: [] as unknown[] }))
 const mut = vi.hoisted(() => ({
     pause: { mutate: vi.fn(), isPending: false }, resume: { mutate: vi.fn(), isPending: false }, end: { mutate: vi.fn(), isPending: false },
     patch: { mutate: vi.fn(), isPending: false }, create: { mutate: vi.fn(), isPending: false },
 }))
 vi.mock('@/hooks/queries/useEventSeries', () => ({
-    useEventSeries: () => query.current,
+    useEventSeries: (_id: string, _initial: unknown, options?: { limit?: number }) => { if (options?.limit) { query.limits.push(options.limit); return query.more } return query.current },
     usePauseSeries: () => mut.pause, useResumeSeries: () => mut.resume, useEndSeries: () => mut.end, usePatchSeries: () => mut.patch, useCreateSeries: () => mut.create,
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), usePathname: () => '/', useSearchParams: () => new URLSearchParams() }))
@@ -28,6 +28,7 @@ const series = (over: Partial<Series> = {}): Series => ({
     nextOccurrences: [
         { id: 'o1', slug: 'weekly-ctf-night-2026-12-03', title: 'Weekly CTF Night', category: 'ctf', startDate: '2026-12-03T19:00:00.000Z', endDate: '2026-12-03T21:00:00.000Z', timezone: 'Europe/London', format: 'online', status: 'upcoming', isAllDay: false, seriesId: '64b000000000000000000009' },
         { id: 'o2', slug: 'weekly-ctf-night-2026-12-10', title: 'Weekly CTF Night', category: 'ctf', startDate: '2026-12-10T19:00:00.000Z', endDate: '2026-12-10T21:00:00.000Z', timezone: 'Europe/London', format: 'online', status: 'cancelled', isAllDay: false, seriesId: '64b000000000000000000009' },
+        { id: 'o3', slug: 'weekly-ctf-night-2026-12-17', title: 'Weekly CTF Night', category: 'ctf', startDate: '2026-12-17T19:00:00.000Z', endDate: '2026-12-17T21:00:00.000Z', timezone: 'Europe/London', format: 'online', status: 'pending', isAllDay: false, seriesId: '64b000000000000000000009' },
     ],
     ...over,
 })
@@ -47,12 +48,13 @@ describe('SeriesView (public)', () => {
         expect(screen.getByTestId('series-rule')).toHaveTextContent('Every Thursday at 19:00 Europe/London')
         expect(screen.getByText('Running')).toBeInTheDocument()
         const dates = within(screen.getByTestId('occurrences')).getAllByRole('listitem')
-        expect(dates).toHaveLength(2)
+        expect(dates).toHaveLength(3)
         expect(within(dates[0]).getByRole('link', { name: 'Weekly CTF Night' })).toHaveAttribute('href', '/events/weekly-ctf-night-2026-12-03')
         // Event time first, then the viewer's zone (Kolkata)
         expect(dates[0]).toHaveTextContent('7:00 PM GMT')
         expect(dates[0]).toHaveTextContent('Your time: Fri, Dec 4 · 12:30 AM GMT+5:30')
         expect(within(dates[1]).getByText('Cancelled')).toBeInTheDocument()
+        expect(within(dates[2]).getByText('Waiting for review')).toBeInTheDocument()
     })
 
     it('has no management for the public or for a signed in member', () => {
@@ -171,11 +173,11 @@ describe('series management', () => {
         fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
         const dialog = screen.getByRole('dialog', { name: 'Edit the series' })
         fireEvent.click(within(dialog).getByRole('radio', { name: /Only one date/ }))
-        fireEvent.change(within(dialog).getByLabelText('Which date'), { target: { value: 'o2' } })
+        fireEvent.change(within(dialog).getByLabelText('Which date'), { target: { value: 'o3' } })
         fireEvent.change(within(dialog).getByLabelText('Move to date'), { target: { value: '2026-12-11' } })
         fireEvent.change(within(dialog).getByLabelText('Move to time'), { target: { value: '18:00' } })
         fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
-        expect(mut.patch.mutate).toHaveBeenCalledWith({ id: series().id, payload: { scope: 'this', eventId: 'o2', startDate: '2026-12-11T18:00:00.000Z' } }, expect.any(Object))
+        expect(mut.patch.mutate).toHaveBeenCalledWith({ id: series().id, payload: { scope: 'this', eventId: 'o3', startDate: '2026-12-11T18:00:00.000Z' } }, expect.any(Object))
     })
 
     it('warns a moderator that a public date goes back to review, and an administrator sees no warning', () => {
@@ -232,6 +234,41 @@ describe('series management', () => {
         fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '20:00' } })
         fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
         expect(screen.getByTestId('series-saved')).not.toHaveTextContent(/review/)
+    })
+
+    it('offers only dates that can still change, and says which one waits for review', () => {
+        auth.user = { id: 'a1', role: 'admin' }
+        query.current = ok(manageable())
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        const dialog = screen.getByRole('dialog', { name: 'Edit the series' })
+        fireEvent.click(within(dialog).getByRole('radio', { name: /Only one date/ }))
+        const options = within(within(dialog).getByLabelText('Which date')).getAllByRole('option').map((o) => o.textContent)
+        expect(options).toHaveLength(2)
+        expect(options[0]).not.toMatch(/waiting/)
+        expect(options[1]).toMatch(/waiting for review/)
+        expect(within(dialog).queryByRole('button', { name: 'Show more dates' })).not.toBeInTheDocument()
+    })
+
+    it('shows more dates, up to 20, when the first page was full', () => {
+        auth.user = { id: 'a1', role: 'admin' }
+        const dated = (n: number) => Array.from({ length: n }, (_, i) => ({
+            id: `d${i}`, slug: `d${i}`, title: 'Weekly CTF Night', category: 'ctf' as const,
+            startDate: new Date(Date.UTC(2026, 11, 3 + i * 7, 19)).toISOString(), endDate: new Date(Date.UTC(2026, 11, 3 + i * 7, 21)).toISOString(),
+            timezone: 'Europe/London', format: 'online' as const, status: 'upcoming' as const, isAllDay: false, seriesId: '64b000000000000000000009',
+        }))
+        query.current = ok({ ...manageable(), nextOccurrences: dated(10) })
+        query.more = ok({ ...manageable(), nextOccurrences: dated(20) })
+        query.limits = []
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        const dialog = screen.getByRole('dialog', { name: 'Edit the series' })
+        fireEvent.click(within(dialog).getByRole('radio', { name: /Only one date/ }))
+        expect(within(within(dialog).getByLabelText('Which date')).getAllByRole('option')).toHaveLength(10)
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Show more dates' }))
+        expect(within(within(dialog).getByLabelText('Which date')).getAllByRole('option')).toHaveLength(20)
+        expect(query.limits).toContain(20)
+        expect(within(dialog).queryByRole('button', { name: 'Show more dates' })).not.toBeInTheDocument()
     })
 
     it('shows what the API says when a save fails', () => {

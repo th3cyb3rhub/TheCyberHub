@@ -11,12 +11,13 @@ import { eventKeys } from './useEvents';
  * answer depends on the viewer and the key has the member in it. Data rendered on the server (without
  * a login) is treated as stale, so a signed-in visitor always asks again.
  */
-export function useEventSeries(id: string, initialData?: Series | null) {
+export function useEventSeries(id: string, initialData?: Series | null, { limit, enabled = true }: { limit?: number; enabled?: boolean } = {}) {
     const { user, loading } = useAuth();
     return useQuery({
-        queryKey: eventKeys.series(id, user?.id ?? null),
-        queryFn: () => api.getSeries(id),
-        enabled: !!id && !loading,
+        // A longer list of dates is its own entry, so the page's own copy is never replaced by it
+        queryKey: limit ? [...eventKeys.series(id, user?.id ?? null), limit] as const : eventKeys.series(id, user?.id ?? null),
+        queryFn: () => api.getSeries(id, limit),
+        enabled: !!id && !loading && enabled,
         initialData: initialData ?? undefined,
         initialDataUpdatedAt: 0,
         staleTime: 30_000,
