@@ -11,7 +11,7 @@ import { useToast } from '@/context/ToastContext';
 import { useCreateCtfTeam, useCtfMe, useCtfTeam, useJoinCtfTeam, useKickCtfMember, useLeaveCtfTeam } from '@/hooks/queries/useCtf';
 import { CAPTAIN_LEAVE_MESSAGE, ctfErrorMessage } from '@/lib/ctf/errors';
 import { inviteCodeSchema, teamNameSchema } from '@/lib/ctf/schemas';
-import { JOIN_BLOCK_TEXT, joinBlock, normaliseInvite, seatsLeft, teamPermissions, teamTooSmall } from '@/lib/ctf/team';
+import { JOIN_BLOCK_TEXT, joinBlock, normaliseInvite, ROSTER_LOCKED_TEXT, seatsLeft, teamPermissions, teamTooSmall } from '@/lib/ctf/team';
 import { scoreText } from '@/lib/ctf/display';
 import type { CtfCompetition, CtfStatus, CtfTeam, CtfTeamMember } from '@/types/ctf';
 import { Avatar } from './Person';
@@ -178,7 +178,14 @@ function TeamCard({ competition, status, team }: { competition: CtfCompetition; 
 
             {perms.rosterOpen ? (
                 <div className="mt-5 border-t border-gray-100 pt-4 dark:border-neutral-800">
-                    {perms.leaveBlocked ? (
+                    {perms.rosterLocked ? (
+                        <div data-testid="roster-locked">
+                            <button type="button" className={`${btnSecondary} cursor-not-allowed opacity-60`} aria-disabled="true" aria-describedby="roster-locked-note" onClick={(e) => e.preventDefault()}>
+                                <LogOut className="h-4 w-4" aria-hidden="true" /> Leave team
+                            </button>
+                            <p id="roster-locked-note" className={`mt-2 text-xs ${muted}`}>{ROSTER_LOCKED_TEXT}</p>
+                        </div>
+                    ) : perms.leaveBlocked ? (
                         <div data-testid="leave-blocked">
                             <button type="button" className={`${btnSecondary} cursor-not-allowed opacity-60`} aria-disabled="true" aria-describedby="leave-blocked-note" onClick={(e) => e.preventDefault()}>
                                 <LogOut className="h-4 w-4" aria-hidden="true" /> Leave team
@@ -201,8 +208,8 @@ function TeamCard({ competition, status, team }: { competition: CtfCompetition; 
                 variant="danger"
                 title={perms.leaveDisbands ? 'Leave and disband this team?' : 'Leave this team?'}
                 description={perms.leaveDisbands
-                    ? 'You are the only member, so the team ends with you. A player who has solved a challenge cannot leave while the competition runs.'
-                    : 'You can join another team afterwards, unless you have solved a challenge: those points belong to the team while the competition runs.'}
+                    ? 'You are the only member, so the team ends with you. You can create or join another team afterwards.'
+                    : 'You can join another team afterwards. Once your team solves a challenge its roster is fixed until the competition ends.'}
                 confirmText={perms.leaveDisbands ? 'Leave and disband' : 'Leave team'}
                 onCancel={() => setConfirmLeave(false)}
                 onConfirm={doLeave}
@@ -211,7 +218,7 @@ function TeamCard({ competition, status, team }: { competition: CtfCompetition; 
                 open={!!kicking}
                 variant="danger"
                 title={kicking ? `Remove ${kicking.username}?` : 'Remove this player?'}
-                description="They lose their seat and the invite code can bring them back. A player who has solved a challenge cannot be removed while the competition runs."
+                description="They lose their seat and the invite code can bring them back. Once your team solves a challenge its roster is fixed until the competition ends."
                 confirmText="Remove player"
                 onCancel={() => setKicking(null)}
                 onConfirm={doKick}

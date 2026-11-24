@@ -8,6 +8,12 @@ export interface TeamPermissions {
     /** The roster can still change: the competition has not ended or been cancelled */
     rosterOpen: boolean;
     canKick: (memberId: string) => boolean;
+    /**
+     * The team has scored: its roster is fixed until the competition ends, so nobody leaves or is
+     * removed (the API answers CTF_TEAM_HAS_SOLVES). Otherwise a member could score the same
+     * challenge again with another team.
+     */
+    rosterLocked: boolean;
     /** The captain cannot leave while others remain: the API refuses it */
     leaveBlocked: boolean;
     /** The captain is alone: leaving ends the team */
@@ -21,14 +27,16 @@ export function teamPermissions(team: CtfTeam | null, userId: string | null | un
     const isCaptain = !!team && !!userId && team.captain._id === userId;
     const rosterOpen = isOpenForRoster(status);
     const others = team ? team.members.filter((m) => m._id !== team.captain._id).length : 0;
+    const rosterLocked = !!team && rosterOpen && team.solveCount > 0;
     return {
         isMember,
         isCaptain,
         rosterOpen,
-        canKick: (memberId) => isCaptain && rosterOpen && memberId !== userId,
+        rosterLocked,
+        canKick: (memberId) => isCaptain && rosterOpen && !rosterLocked && memberId !== userId,
         leaveBlocked: isCaptain && others > 0,
         leaveDisbands: isCaptain && others === 0,
-        canLeave: isMember && rosterOpen && !(isCaptain && others > 0),
+        canLeave: isMember && rosterOpen && !rosterLocked && !(isCaptain && others > 0),
     };
 }
 
@@ -58,3 +66,5 @@ export const teamTooSmall = (team: Pick<CtfTeam, 'members'> | null, minTeamSize:
 
 /** An invite code as people type it: no spaces, upper case (codes are upper-case hex) */
 export const normaliseInvite = (raw: string) => raw.replace(/\s+/g, '').toUpperCase();
+
+export const ROSTER_LOCKED_TEXT = 'Your team has solved a challenge, so the roster is fixed until the competition ends: nobody can leave or be removed.';

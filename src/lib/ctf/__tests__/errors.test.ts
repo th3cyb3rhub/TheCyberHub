@@ -19,6 +19,7 @@ describe('ctfErrorMessage', () => {
         ['CTF_TEAM_NAME_TAKEN', 'name'],
         ['CTF_TEAM_FULL', 'full'],
         ['CTF_MEMBER_HAS_SOLVES', 'solved'],
+        ['CTF_TEAM_HAS_SOLVES', 'roster is fixed'],
         ['CTF_SLUG_TAKEN', 'slug'],
         ['CTF_CHALLENGE_HAS_SOLVES', 'solves'],
     ])('maps %s to words a person can read', (code, part) => {

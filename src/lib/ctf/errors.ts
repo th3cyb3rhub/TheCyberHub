@@ -28,7 +28,8 @@ const MESSAGES: Record<string, string> = {
     CTF_ALREADY_IN_TEAM: 'You are already in a team in this competition.',
     CTF_TEAM_NAME_TAKEN: 'Another team already uses that name. Choose a different one.',
     CTF_TEAM_FULL: 'This team is full.',
-    CTF_MEMBER_HAS_SOLVES: 'A player who has solved a challenge cannot leave or be removed while the competition runs: their points belong to the team.',
+    CTF_MEMBER_HAS_SOLVES: 'A player who has solved a challenge cannot withdraw while the competition runs.',
+    CTF_TEAM_HAS_SOLVES: 'Your team has solved a challenge, so its roster is fixed until the competition ends: nobody can leave or be removed.',
     CTF_RESULTS_NOT_AVAILABLE: 'The results are published when the competition ends.',
     CTF_SLUG_TAKEN: 'Another competition already uses this slug. Choose a different one.',
     CTF_CHALLENGE_INVALID: 'Some challenges cannot be used in a competition. A challenge must exist and be active.',
@@ -101,7 +102,7 @@ export function ctfErrorMessage(err: unknown, fallback = 'Something went wrong. 
 /** Whether the error means "the page shows an old state": the screen should show the truth again */
 const STALE_CODES = new Set([
     'CTF_NOT_FOUND', 'CTF_CHALLENGE_NOT_FOUND', 'CTF_NOT_STARTED', 'CTF_ENDED', 'CTF_CANCELLED', 'CTF_ALREADY_SOLVED',
-    'CTF_TEAM_REQUIRED', 'CTF_TEAM_TOO_SMALL', 'CTF_NOT_IN_TEAM', 'CTF_ALREADY_IN_TEAM', 'CTF_NOT_CAPTAIN', 'CTF_MEMBER_NOT_FOUND', 'CTF_TEAM_FULL',
+    'CTF_TEAM_REQUIRED', 'CTF_TEAM_TOO_SMALL', 'CTF_TEAM_HAS_SOLVES', 'CTF_NOT_IN_TEAM', 'CTF_ALREADY_IN_TEAM', 'CTF_NOT_CAPTAIN', 'CTF_MEMBER_NOT_FOUND', 'CTF_TEAM_FULL',
 ]);
 export const isStaleState = (err: unknown): boolean => err instanceof ApiError && !!err.code && STALE_CODES.has(err.code);
 
