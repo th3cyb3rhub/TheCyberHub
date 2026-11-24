@@ -50,7 +50,7 @@ export function CohortCard({ cohort }: { cohort: Cohort }) {
                     <dt className="sr-only">Seats</dt>
                     <Users className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
                     <dd className={spots.full ? 'font-medium text-red-800 dark:text-red-300' : 'text-gray-800 dark:text-gray-200'}>
-                        {spots.unlimited ? 'Open seats' : spots.label}
+                        {spots.unlimited ? (cohort.status === 'open' ? 'Open seats' : 'No seat limit') : spots.label}
                     </dd>
                 </div>
             </dl>

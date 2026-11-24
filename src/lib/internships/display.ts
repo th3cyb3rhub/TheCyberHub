@@ -29,6 +29,16 @@ export const APPLICATION_STATUS_HINTS: Record<ApplicationStatus, string> = {
     withdrawn: 'You withdrew this application.',
 };
 
+/**
+ * The status to show for a cohort that came with its stored status (my applications carry the
+ * stored one): an open cohort whose deadline passed reads Closed, as everywhere else.
+ */
+export function effectiveCohortStatus(cohort: { status: CohortStatus; applicationDeadline?: string | null }, now: number = Date.now()): CohortStatus {
+    if (cohort.status !== 'open' || !cohort.applicationDeadline) return cohort.status;
+    const deadline = new Date(cohort.applicationDeadline).getTime();
+    return !Number.isNaN(deadline) && deadline <= now ? 'closed' : 'open';
+}
+
 export const isCohortStatus = (v: string | null | undefined): v is CohortStatus =>
     v === 'draft' || v === 'open' || v === 'closed' || v === 'in-progress' || v === 'completed';
 

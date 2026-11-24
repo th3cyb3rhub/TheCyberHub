@@ -69,6 +69,9 @@ export function InternshipsExplorer() {
         if (status && cohorts.length === 0 && hasNextPage && !isFetchingNextPage) void fetchNextPage();
     }, [status, cohorts.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+    // The API counts what it filtered. A visitor's status filter is applied here, so its count is the cards found
+    const lastPage = query.data?.pages[query.data.pages.length - 1];
+    const total = status && !staff ? null : lastPage?.pagination.total ?? null;
     const hasFilters = !!(type || status);
     const clear = () => update({ type: null, status: null });
     const searching = !!status && cohorts.length === 0 && !!hasNextPage;
@@ -135,7 +138,7 @@ export function InternshipsExplorer() {
                     />
                 ) : (
                     <>
-                        <p className={`mb-4 text-sm ${muted}`} aria-live="polite">{cohorts.length} {cohorts.length === 1 ? 'program' : 'programs'}</p>
+                        <p className={`mb-4 text-sm ${muted}`} aria-live="polite">{total !== null && total > cohorts.length ? `Showing ${cohorts.length} of ${total} programs` : `${cohorts.length} ${cohorts.length === 1 ? 'program' : 'programs'}`}</p>
                         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-testid="cohort-grid">
                             {cohorts.map((c) => <CohortCard key={c._id} cohort={c} />)}
                         </div>

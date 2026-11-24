@@ -116,7 +116,21 @@ const paged = (items: unknown[], page: number, limit: number) => {
     return { success: true, count: slice.length, data: slice, pagination: { page, limit, total: items.length, totalPages: Math.max(1, Math.ceil(items.length / limit)), hasMore: start + slice.length < items.length } };
 };
 
-const isLink = (v: string) => { try { const u = new URL(v); return (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && u.hostname.includes('.'); } catch { return false; } };
+/** The API's rule for a link (parseHttpUrl and isInternalHost): http(s), no credentials, and a public host: no IP address, no internal name */
+const isInternalHost = (hostname: string) => {
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (host.includes(':') || /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(host)) return true;
+    if (host === 'localhost' || host.endsWith('.localhost')) return true;
+    if (/\.(local|internal|lan|home|corp|intranet|test|invalid|example)$/.test(host)) return true;
+    if (/^[0-9.]+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) return true;
+    return !host.includes('.');
+};
+const isLink = (v: string) => {
+    try {
+        const u = new URL(v.trim());
+        return v.trim().length <= 2048 && (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password && !!u.hostname && !isInternalHost(u.hostname);
+    } catch { return false; }
+};
 
 export async function mockInternshipsApi(page: Page, who: Role, state: MockState = freshState()): Promise<MockState> {
     const staff = who.role === 'moderator' || who.role === 'admin' || who.role === 'owner';
@@ -146,7 +160,7 @@ export async function mockInternshipsApi(page: Page, who: Role, state: MockState
         const c = state.cohorts.find((x) => x._id === a.cohort);
         const last = [...a.statusHistory].reverse().find((h) => h.actor === 'staff' && h.note);
         return {
-            _id: a._id, cohort: c ? { _id: c._id, title: c.title, status: card(c).status, type: c.type, startDate: c.startDate, endDate: c.endDate, applicationDeadline: c.applicationDeadline } : null,
+            _id: a._id, cohort: c ? { _id: c._id, title: c.title, status: c.status, type: c.type, startDate: c.startDate, endDate: c.endDate, applicationDeadline: c.applicationDeadline } : null,
             status: a.status, coverLetter: a.coverLetter, githubUrl: a.githubUrl ?? null, linkedinUrl: null, portfolioUrl: null, resumeUrl: a.resumeUrl, answers: a.answers,
             appliedAt: a.appliedAt, updatedAt: a.updatedAt, statusHistory: a.statusHistory.map(({ status, at, note }) => ({ status, at, ...(note ? { note } : {}) })), reviewNote: last?.note ?? null,
         };
@@ -188,11 +202,18 @@ export async function mockInternshipsApi(page: Page, who: Role, state: MockState
 
         // ---- lists
         if (method === 'GET' && (path === '/api/internships' || path === '/api/internships/')) {
+            // Like the API: `all` (staff) is everything; otherwise only active cohorts, and for the public only the listed statuses.
+            // A staff `status` is a filter on its own (stored status, with the deadline deciding open and closed).
             const all = staff && q.get('all') === 'true';
             const limit = Math.min(Number(q.get('limit') || 20), state.pageCap);
-            let items = state.cohorts.filter((c) => (all ? true : c.isActive && ['open', 'closed', 'in-progress'].includes(c.status)));
+            const wanted = staff ? q.get('status') : null;
+            const now = Date.now();
+            const byStatus = (c: Cohort, status: string) => (status === 'open' ? c.status === 'open' && new Date(c.applicationDeadline).getTime() > now
+                : status === 'closed' ? c.status === 'closed' || (c.status === 'open' && new Date(c.applicationDeadline).getTime() <= now)
+                    : c.status === status);
+            let items = state.cohorts.filter((c) => (all ? true : c.isActive && (wanted ? true : ['open', 'closed', 'in-progress'].includes(c.status))));
+            if (wanted) items = items.filter((c) => byStatus(c, wanted));
             if (q.get('type')) items = items.filter((c) => c.type === q.get('type'));
-            if (staff && q.get('status')) items = items.filter((c) => card(c).status === q.get('status'));
             return send(route, 200, paged(items.map(card), Number(q.get('page') || 1), limit));
         }
         if (method === 'GET' && path === '/api/internships/past') {

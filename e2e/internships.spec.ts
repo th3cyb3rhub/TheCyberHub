@@ -280,6 +280,14 @@ test.describe('My applications', () => {
         await expect(card.getByRole('heading', { level: 2 })).toBeFocused();
     });
 
+    test('reads a program past its deadline as Closed, although the API sends it as open', async ({ page }) => {
+        const state = freshState();
+        state.cohorts.find((c) => c._id === OPEN_ID)!.applicationDeadline = iso(-1); // stored status stays open
+        state.applications.push(myApplication());
+        await open(page, MEMBER, '/internships/applications', state);
+        await expect(page.getByTestId('my-application')).toContainText('Closed');
+    });
+
     test('explains a withdraw that the API refuses, and shows the empty state', async ({ page }) => {
         const state = freshState();
         state.applications.push(myApplication({ status: 'pending' }));

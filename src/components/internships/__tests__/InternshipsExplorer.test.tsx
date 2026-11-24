@@ -16,7 +16,7 @@ vi.mock('@/hooks/queries/useInternships', () => ({
 
 import { filtersFromParams, InternshipsExplorer } from '../InternshipsExplorer'
 
-const result = (cards: unknown[], extra = {}) => ({ data: { pages: [{ data: cards }] }, isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(), ...extra })
+const result = (cards: unknown[], extra = {}, total = cards.length) => ({ data: { pages: [{ data: cards, pagination: { page: 1, limit: 50, total, totalPages: 1, hasMore: false } }] }, isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(), ...extra })
 const cards = () => [
     makeCard({ _id: '1'.repeat(24), title: 'Open one', status: 'open' }),
     makeCard({ _id: '2'.repeat(24), title: 'Closed one', status: 'closed', applicationsOpen: false }),
@@ -40,6 +40,34 @@ describe('filtersFromParams', () => {
     })
 })
 
+describe('InternshipsExplorer count', () => {
+    it('says how many of the programs are shown when there are more', () => {
+        list.current = result(cards(), {}, 7)
+        render(<InternshipsExplorer />)
+        expect(screen.getByText('Showing 3 of 7 programs')).toBeInTheDocument()
+    })
+
+    it('says only the number when everything is shown', () => {
+        render(<InternshipsExplorer />)
+        expect(screen.getByText('3 programs')).toBeInTheDocument()
+    })
+
+    it('does not trust the API total behind a visitor\'s status filter, which is applied here', () => {
+        search.current = 'status=closed'
+        list.current = result(cards(), {}, 7)
+        render(<InternshipsExplorer />)
+        expect(screen.getByText('1 program')).toBeInTheDocument()
+    })
+
+    it('uses the API total for staff, whose filter is applied by the API', () => {
+        auth.current = { user: { role: 'moderator' } }
+        search.current = 'status=closed'
+        list.current = result([cards()[1]], {}, 4)
+        render(<InternshipsExplorer />)
+        expect(screen.getByText('Showing 1 of 4 programs')).toBeInTheDocument()
+    })
+})
+
 describe('InternshipsExplorer', () => {
     it('shows each program with its seats and the deadline of an open one', () => {
         render(<InternshipsExplorer />)
@@ -48,7 +76,8 @@ describe('InternshipsExplorer', () => {
         expect(cardEls[0]).toHaveTextContent('4 of 10 spots left')
         expect(cardEls[0]).toHaveTextContent('Apply by')
         expect(cardEls[1]).not.toHaveTextContent('Apply by')
-        expect(cardEls[2]).toHaveTextContent('Open seats')
+        expect(cardEls[2]).toHaveTextContent('No seat limit') // in progress: not "open" seats
+        expect(cardEls[2]).not.toHaveTextContent('Open seats')
     })
 
     it('has a Closed chip, writes the filter in the address and links to my applications when signed in', () => {

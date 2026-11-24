@@ -10,7 +10,7 @@ import { useMyApplications } from '@/hooks/queries/useInternships';
 import { TYPE_LABELS } from '@/lib/internships/display';
 import { canWithdraw } from '@/lib/internships/review';
 import { APPLICATION_STATUSES, type ApplicationStatus, type ApplicationCohort, type MyApplication } from '@/types/internship';
-import { APPLICATION_STATUS_LABELS } from '@/lib/internships/display';
+import { APPLICATION_STATUS_LABELS, effectiveCohortStatus } from '@/lib/internships/display';
 import { ApplicationProgress, ApplicationTimeline } from './ApplicationTimeline';
 import { SubmittedDetails } from './SubmittedDetails';
 import { ErrorState, ListSkeleton } from './ListStates';
@@ -29,7 +29,7 @@ function ApplicationCard({ application, onWithdraw }: { application: MyApplicati
                 <div className="min-w-0">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                         <ApplicationStatusBadge status={application.status} />
-                        {cohort && <CohortStatusBadge status={cohort.status} />}
+                        {cohort && <CohortStatusBadge status={effectiveCohortStatus(cohort)} />}
                         {cohort && <span className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-300`}>{TYPE_LABELS[cohort.type] ?? cohort.type}</span>}
                     </div>
                     <h2 id={`application-${application._id}`} tabIndex={-1} className="break-words rounded text-lg font-semibold text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:text-white">

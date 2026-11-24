@@ -27,6 +27,19 @@ describe('MyApplicationsView', () => {
         expect(within(card).getByTestId('status-timeline')).toHaveTextContent('Pending')
     })
 
+    it('reads a program past its deadline as closed, although the API sends it as open', () => {
+        const stored = { _id: 'a'.repeat(24), title: 'Late Program', status: 'open' as const, type: 'internship' as const, startDate: '2027-01-01T00:00:00.000Z', endDate: '2027-03-01T00:00:00.000Z' }
+        q.current = pages(
+            makeMine({ _id: '1'.repeat(24), cohort: { ...stored, applicationDeadline: '2020-01-01T00:00:00.000Z' } }),
+            makeMine({ _id: '2'.repeat(24), cohort: { ...stored, title: 'Fresh Program', applicationDeadline: '2099-01-01T00:00:00.000Z' } }),
+        )
+        render(<MyApplicationsView />)
+        const [late, fresh] = screen.getAllByTestId('my-application')
+        expect(late).toHaveTextContent('Closed')
+        expect(fresh).not.toHaveTextContent('Closed')
+        expect(fresh).toHaveTextContent('Open')
+    })
+
     it('hides what was sent until it is opened, and shows answers as text', () => {
         q.current = pages(makeMine({ answers: [{ field: 'x', label: 'Favourite tool', value: '<b>Burp</b>' }], githubUrl: 'javascript:alert(1)' }))
         const { container } = render(<MyApplicationsView />)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyView, excerpt, formatMoment, hostOf, safeHref, spotsInfo } from '../display';
+import { applyView, effectiveCohortStatus, excerpt, formatMoment, hostOf, safeHref, spotsInfo } from '../display';
 import { makeCohort, viewer } from './fixtures';
 
 describe('apply panel state', () => {
@@ -32,6 +32,22 @@ describe('apply panel state', () => {
 
     it('is closed for a member whom the API says cannot apply', () => {
         expect(applyView(makeCohort({ viewer: viewer({ canApply: false }) })).state).toBe('closed');
+    });
+});
+
+describe('effectiveCohortStatus', () => {
+    const NOW = Date.parse('2026-12-01T12:00:00.000Z');
+    it('reads an open cohort past its deadline as closed, as the rest of the site does', () => {
+        expect(effectiveCohortStatus({ status: 'open', applicationDeadline: '2026-11-30T12:00:00.000Z' }, NOW)).toBe('closed');
+        expect(effectiveCohortStatus({ status: 'open', applicationDeadline: '2026-12-01T12:00:00.000Z' }, NOW)).toBe('closed');
+        expect(effectiveCohortStatus({ status: 'open', applicationDeadline: '2026-12-02T12:00:00.000Z' }, NOW)).toBe('open');
+    });
+    it('leaves every other status, and a missing or odd deadline, alone', () => {
+        for (const status of ['draft', 'closed', 'in-progress', 'completed'] as const) {
+            expect(effectiveCohortStatus({ status, applicationDeadline: '2020-01-01T00:00:00.000Z' }, NOW)).toBe(status);
+        }
+        expect(effectiveCohortStatus({ status: 'open' }, NOW)).toBe('open');
+        expect(effectiveCohortStatus({ status: 'open', applicationDeadline: 'nonsense' }, NOW)).toBe('open');
     });
 });
 
