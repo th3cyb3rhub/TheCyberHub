@@ -1,10 +1,11 @@
-import type { Metadata } from 'next'
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Apply for Internship | TheCyberHub',
-    description: 'Submit your application for this cybersecurity internship on TheCyberHub.',
-}
+    title: 'Apply for an internship',
+    description: 'Send your application for this program on TheCyberHub.',
+    robots: { index: false, follow: false },
+};
 
 export default function InternshipApplyLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>
+    return <>{children}</>;
 }

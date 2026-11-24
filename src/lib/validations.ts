@@ -244,17 +244,6 @@ export const jobSchema = z.object({
 });
 
 // ============================================
-// Internship Application Schemas
-// ============================================
-
-export const internshipApplicationSchema = z.object({
-    coverLetter: z.string().min(100, 'Cover letter must be at least 100 characters').max(5000, 'Cover letter cannot exceed 5000 characters'),
-    resume: z.string({ error: 'Please upload your resume' }).url('Please upload your resume'),
-    portfolio: urlSchema,
-    expectedStartDate: z.string().optional(),
-});
-
-// ============================================
 // Feed Post Schemas
 // ============================================
 
@@ -361,8 +350,6 @@ export type DiscussionInput = DiscussionFormData;
 export type ReplyFormData = z.infer<typeof replySchema>;
 export type JobFormData = z.infer<typeof jobSchema>;
 export type JobInput = JobFormData;
-export type InternshipApplicationFormData = z.infer<typeof internshipApplicationSchema>;
-export type InternshipApplicationInput = InternshipApplicationFormData;
 export type CommentFormData = z.infer<typeof commentSchema>;
 export type BookmarkCollectionFormData = z.infer<typeof bookmarkCollectionSchema>;
 export type AddBookmarkFormData = z.infer<typeof addBookmarkSchema>;

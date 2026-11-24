@@ -9,6 +9,7 @@ import {
     LayoutDashboard,
     Shield,
     Ticket,
+    GraduationCap,
     Building2,
 } from 'lucide-react';
 
@@ -58,6 +59,9 @@ export const UserDropdown = ({
                         )}
                         <Link href="/my-events" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all">
                             <Ticket className="w-4 h-4" /> My Events
+                        </Link>
+                        <Link href="/internships/applications" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+                            <GraduationCap className="w-4 h-4" /> My Applications
                         </Link>
                         {(user.role === 'employer' || user.role === 'admin' || user.role === 'owner') && (
                             <>
