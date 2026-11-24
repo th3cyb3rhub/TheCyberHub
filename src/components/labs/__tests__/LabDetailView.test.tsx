@@ -111,6 +111,15 @@ describe('LabDetailView for a member', () => {
         expect(screen.getByTestId('progress-pending')).toBeInTheDocument()
         expect(screen.queryByTestId('signin-prompt')).not.toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Start lab' })).not.toBeInTheDocument()
+        // Normal loading: no recovery button and no "start the lab" in the hints
+        expect(screen.queryByRole('button', { name: 'Reload my progress' })).not.toBeInTheDocument()
+        expect(screen.queryByText(/Start the lab to open hints/)).not.toBeInTheDocument()
+    })
+
+    it('offers to reload only when the member answer came back without their progress', () => {
+        q.lab = result(makeLab({ viewer: null }))
+        render(<LabDetailView slug="sql-injection-basics" initialLab={null} />)
+        expect(screen.getByRole('button', { name: 'Reload my progress' })).toBeInTheDocument()
     })
 
     it('tells staff what they are looking at and links to the editor', () => {

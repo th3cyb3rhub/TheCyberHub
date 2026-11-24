@@ -13,7 +13,7 @@ import { canStop } from '@/lib/labs/display';
 import type { LabDetail } from '@/types/lab';
 
 /** Start, progress and reset. Everything a visitor or a member does about the lab as a whole. */
-export function LabActionPanel({ lab, signedIn, viewerKnown, onRetry }: { lab: LabDetail; signedIn: boolean; viewerKnown: boolean; onRetry: () => void }) {
+export function LabActionPanel({ lab, signedIn, viewerKnown, viewerLoading = false, onRetry }: { lab: LabDetail; signedIn: boolean; viewerKnown: boolean; viewerLoading?: boolean; onRetry: () => void }) {
     const start = useStartLab();
     const stop = useStopLab();
     const { addToast } = useToast();
@@ -42,7 +42,7 @@ export function LabActionPanel({ lab, signedIn, viewerKnown, onRetry }: { lab: L
                     <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-neutral-800" />
                     <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-neutral-800" />
                 </div>
-                {!viewer && (
+                {!viewer && !viewerLoading && (
                     <button type="button" onClick={onRetry} className={`${btnSecondary} mt-4`}>Reload my progress</button>
                 )}
             </section>

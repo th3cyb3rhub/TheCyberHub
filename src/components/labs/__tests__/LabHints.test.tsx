@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { makeLab, makeViewer } from '@/lib/labs/__tests__/fixtures'
 
-type Callbacks = { onError?: (e: unknown) => void; onSettled?: () => void }
+type Callbacks = { onSuccess?: () => void; onError?: (e: unknown) => void; onSettled?: () => void }
 const unlock = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useLabs', () => ({ useUnlockHint: () => unlock }))
 
@@ -57,6 +57,44 @@ describe('LabHints', () => {
         render(<LabHints lab={started({ viewer: makeViewer({ myStatus: 'in-progress', pointsAvailable: 0 }) })} signedIn />)
         fireEvent.click(screen.getByRole('button', { name: 'Open hint 1' }))
         expect(screen.getByRole('dialog')).toHaveTextContent('costs nothing')
+    })
+
+    it('says a hint with no cost is free, whatever points are left', () => {
+        render(<LabHints lab={started({ hints: [{ index: 0, penalty: 0, unlocked: false }] })} signedIn />)
+        expect(screen.getByTestId('lab-hint')).toHaveTextContent('Free')
+        fireEvent.click(screen.getByRole('button', { name: 'Open hint 1' }))
+        expect(screen.getByRole('dialog')).toHaveTextContent('This hint is free')
+        expect(screen.getByRole('dialog')).not.toHaveTextContent('no points left')
+        expect(screen.getByRole('button', { name: 'Open hint' })).toBeInTheDocument()
+    })
+
+    it('moves focus to the text of the hint that was just opened and announces it politely', () => {
+        const closed = started({ hints: [{ index: 0, penalty: 10, unlocked: false }, { index: 1, penalty: 20, unlocked: false }] })
+        const { rerender } = render(<LabHints lab={closed} signedIn />)
+        fireEvent.click(screen.getByRole('button', { name: 'Open hint 2' }))
+        fireEvent.click(screen.getByRole('button', { name: /Open for/ }))
+        const cb = unlock.mutate.mock.calls[0][1] as Callbacks
+        act(() => { cb.onSuccess?.(); cb.onSettled?.() })
+        // The answer patches the cache: the hint now has its text
+        rerender(<LabHints lab={started({ hints: [{ index: 0, penalty: 10, unlocked: false }, { index: 1, penalty: 20, unlocked: true, text: 'Try a quote.' }] })} signedIn />)
+        const text = screen.getByRole('group', { name: 'Hint 2 text' })
+        expect(text).toHaveTextContent('Try a quote.')
+        expect(text).toHaveFocus()
+        const live = screen.getByTestId('hint-announcement')
+        expect(live).toHaveAttribute('aria-live', 'polite')
+        expect(live).toHaveTextContent('Hint 2 opened. It took 20 points off this lab.')
+    })
+
+    it('does not grab focus for a hint that was already open', () => {
+        render(<LabHints lab={started({ hints: [{ index: 0, penalty: 10, unlocked: true, text: 'Open already' }] })} signedIn />)
+        expect(screen.getByRole('group', { name: 'Hint 1 text' })).not.toHaveFocus()
+    })
+
+    it('says nothing about starting while the member own progress is still loading', () => {
+        render(<LabHints lab={makeLab({ viewer: null })} signedIn loading />)
+        expect(screen.getByTestId('hints-locked-note')).toHaveTextContent('Checking your progress')
+        expect(screen.queryByText(/Start the lab/)).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Open hint 1' })).toBeDisabled()
     })
 
     it('shows the server error under the hint', () => {

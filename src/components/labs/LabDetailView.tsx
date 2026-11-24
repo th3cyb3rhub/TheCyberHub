@@ -64,6 +64,8 @@ export function LabDetailView({ slug, initialLab, initialUpdatedAt }: { slug: st
     // What the server rendered has no viewer. A signed-in member waits for their own answer: until
     // then the panel is neutral, never the visitor's.
     const viewerKnown = !user || (!query.isPlaceholderData && lab.viewer !== null);
+    // Their answer is still loading (not failed, not empty): panels stay neutral and offer no recovery yet
+    const viewerLoading = !!user && query.isPlaceholderData;
     const viewer = viewerKnown ? lab.viewer : null;
     const canSubmit = signedIn && viewer?.myStatus !== 'not-started' && viewer !== null;
 
@@ -73,7 +75,7 @@ export function LabDetailView({ slug, initialLab, initialUpdatedAt }: { slug: st
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_auto_1fr] lg:items-start">
                 <div className="lg:col-start-2 lg:row-start-1">
-                    <LabActionPanel lab={lab} signedIn={signedIn} viewerKnown={viewerKnown} onRetry={() => void query.refetch()} />
+                    <LabActionPanel lab={lab} signedIn={signedIn} viewerKnown={viewerKnown} viewerLoading={viewerLoading} onRetry={() => void query.refetch()} />
                 </div>
 
                 <div className="min-w-0 space-y-6 lg:col-start-1 lg:row-span-3 lg:row-start-1">
@@ -85,7 +87,7 @@ export function LabDetailView({ slug, initialLab, initialUpdatedAt }: { slug: st
                     </section>
                     <LabTarget url={lab.labUrl} />
                     <LabFiles files={lab.files} />
-                    <LabHints lab={viewerKnown ? lab : { ...lab, viewer: null }} signedIn={signedIn} />
+                    <LabHints lab={viewerKnown ? lab : { ...lab, viewer: null }} signedIn={signedIn} loading={viewerLoading} />
                 </div>
 
                 {canSubmit && viewer && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Eye, Lightbulb, Lock } from 'lucide-react';
 import { btnSecondary, cardPad, chip, muted } from '@/components/events/styles';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -10,11 +10,13 @@ import { labErrorMessage } from '@/lib/labs/errors';
 import type { LabDetail, LabHint } from '@/types/lab';
 import { LabMarkdown } from './LabMarkdown';
 
-type Reason = 'signed-out' | 'not-started' | 'completed' | null;
+type Reason = 'signed-out' | 'loading' | 'not-started' | 'completed' | null;
 
 /** Why hints cannot be opened right now, or null when they can */
-function lockedReason(lab: LabDetail, signedIn: boolean): Reason {
+function lockedReason(lab: LabDetail, signedIn: boolean, loading: boolean): Reason {
     if (!signedIn) return 'signed-out';
+    // Their own progress is still on its way: say nothing about the state yet
+    if (loading) return 'loading';
     const status = lab.viewer?.myStatus;
     if (status === 'completed') return 'completed';
     if (status !== 'in-progress') return 'not-started';
@@ -23,6 +25,7 @@ function lockedReason(lab: LabDetail, signedIn: boolean): Reason {
 
 const REASON_TEXT: Record<Exclude<Reason, null>, string> = {
     'signed-out': 'Sign in and start the lab to open hints.',
+    loading: 'Checking your progress.',
     'not-started': 'Start the lab to open hints.',
     completed: 'This lab is completed, so hints that were not opened stay closed.',
 };
@@ -33,13 +36,25 @@ export function hintPrice(available: number, penalty: number) {
     return { cost, after: pointsAfterHint(available, penalty) };
 }
 
-export function LabHints({ lab, signedIn }: { lab: LabDetail; signedIn: boolean }) {
+export function LabHints({ lab, signedIn, loading = false }: { lab: LabDetail; signedIn: boolean; loading?: boolean }) {
     const unlock = useUnlockHint();
     const [confirming, setConfirming] = useState<LabHint | null>(null);
     const [error, setError] = useState<{ index: number; message: string } | null>(null);
     const [openingIndex, setOpeningIndex] = useState<number | null>(null);
-    const reason = lockedReason(lab, signedIn);
+    // The hint that was just opened: its text takes the focus (the button that had it is gone) and is announced
+    const [focusIndex, setFocusIndex] = useState<number | null>(null);
+    const [announcement, setAnnouncement] = useState('');
+    const textRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const reason = lockedReason(lab, signedIn, loading);
     const available = lab.viewer?.pointsAvailable ?? lab.points;
+
+    const focused = focusIndex !== null ? lab.hints.find((h) => h.index === focusIndex) : undefined;
+    const focusedReady = !!focused?.unlocked && typeof focused.text === 'string';
+    useEffect(() => {
+        if (focusIndex === null || !focusedReady) return;
+        textRefs.current[focusIndex]?.focus();
+        setFocusIndex(null);
+    }, [focusIndex, focusedReady]);
 
     if (lab.hints.length === 0) return null;
 
@@ -48,6 +63,10 @@ export function LabHints({ lab, signedIn }: { lab: LabDetail; signedIn: boolean 
         setError(null);
         setOpeningIndex(hint.index);
         unlock.mutate({ slug: lab.slug, hintIndex: hint.index }, {
+            onSuccess: () => {
+                setFocusIndex(hint.index);
+                setAnnouncement(`Hint ${hint.index + 1} opened.${hint.penalty === 0 ? '' : ` It took ${pointsText(hintCost(available, hint.penalty))} off this lab.`}`);
+            },
             onError: (err) => setError({ index: hint.index, message: labErrorMessage(err) }),
             onSettled: () => setOpeningIndex(null),
         });
@@ -64,6 +83,7 @@ export function LabHints({ lab, signedIn }: { lab: LabDetail; signedIn: boolean 
                 Stuck? A hint takes its cost off the points this lab pays. You pay for each hint once, and can read an opened hint again for free.
                 {reason && <> <span data-testid="hints-locked-note">{REASON_TEXT[reason]}</span></>}
             </p>
+            <p role="status" aria-live="polite" className="sr-only" data-testid="hint-announcement">{announcement}</p>
             <ol className="space-y-3">
                 {lab.hints.map((hint) => {
                     const opened = hint.unlocked;
@@ -94,7 +114,18 @@ export function LabHints({ lab, signedIn }: { lab: LabDetail; signedIn: boolean 
                                     </button>
                                 )}
                             </div>
-                            {showText && <div className="mt-3 border-t border-gray-100 pt-3 dark:border-neutral-800"><LabMarkdown content={hint.text as string} /></div>}
+                            {showText && (
+                                <div
+                                    ref={(el) => { textRefs.current[hint.index] = el; }}
+                                    tabIndex={-1}
+                                    role="group"
+                                    aria-label={`Hint ${hint.index + 1} text`}
+                                    className="mt-3 border-t border-gray-100 pt-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 dark:border-neutral-800"
+                                    data-testid="hint-text"
+                                >
+                                    <LabMarkdown content={hint.text as string} />
+                                </div>
+                            )}
                             {rowError && <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-300">{rowError}</p>}
                         </li>
                     );
@@ -106,7 +137,9 @@ export function LabHints({ lab, signedIn }: { lab: LabDetail; signedIn: boolean 
                 variant="warning"
                 title={confirming ? `Open hint ${confirming.index + 1}?` : 'Open this hint?'}
                 description={price && confirming
-                    ? (price.cost === 0
+                    ? (confirming?.penalty === 0
+                        ? 'This hint is free: it does not take any points off. You can read it again at any time.'
+                        : price.cost === 0
                         ? 'There are no points left to take off, so this hint costs nothing. You can read it again at any time.'
                         : `This takes ${pointsText(price.cost)} off this lab: you would earn ${price.after} instead of ${available}. You pay once, and can read the hint again for free.`)
                     : ''}
