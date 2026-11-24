@@ -70,6 +70,14 @@ const adminSections = [
         minRole: 'admin' as MinRole,
     },
     {
+        title: 'Mentorship',
+        description: 'Review mentor applications, oversee mentorships, open reports',
+        icon: Users,
+        href: '/admin/mentorship',
+        color: 'from-green-500 to-emerald-500',
+        minRole: 'moderator' as MinRole,
+    },
+    {
         title: 'CTF Challenges',
         description: 'Manage CTF challenges, flags, and scoring',
         icon: Flag,

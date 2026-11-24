@@ -1,4 +1,4 @@
-export type ModerationContentType = 'blog' | 'discussion' | 'feedPost' | 'reply' | 'comment';
+export type ModerationContentType = 'blog' | 'discussion' | 'feedPost' | 'reply' | 'comment' | 'mentorMessage' | 'mentorProfile' | 'mentorship';
 export type ModerationAction = 'dismiss' | 'hide' | 'remove' | 'restore';
 export type FlagStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
 
@@ -56,6 +56,9 @@ export const CONTENT_TYPE_LABELS: Record<ModerationContentType, string> = {
     feedPost: 'Feed post',
     reply: 'Forum reply',
     comment: 'Blog comment',
+    mentorMessage: 'Mentorship message',
+    mentorProfile: 'Mentor profile',
+    mentorship: 'Mentorship',
 };
 
 export const ACTION_COPY: Record<ModerationAction, { label: string; title: string; effect: string }> = {
