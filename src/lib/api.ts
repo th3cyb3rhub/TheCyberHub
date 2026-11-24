@@ -97,7 +97,14 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
             const data = await response.json();
             errorMessage = data.message || data.error?.message || errorMessage;
             if (typeof data.error?.code === 'string') errorCode = data.error.code;
-            if (data.error?.meta && typeof data.error.meta === 'object' && !Array.isArray(data.error.meta)) {
+            // Rate limiters answer with the wait at `error.retryAfter` (seconds); a lock puts it in `meta`.
+            // Either way callers read `meta.retryAfter`.
+            const waited = Number(data.error?.retryAfter);
+            if (Number.isFinite(waited) && waited > 0 && !(typeof data.error?.meta?.retryAfter === 'number')) {
+                const own = data.error?.meta;
+                errorMeta = { ...(own && typeof own === 'object' && !Array.isArray(own) ? own : {}), retryAfter: waited };
+            }
+            if (!errorMeta && data.error?.meta && typeof data.error.meta === 'object' && !Array.isArray(data.error.meta)) {
                 errorMeta = data.error.meta;
             }
             if (Array.isArray(data.error?.details)) {

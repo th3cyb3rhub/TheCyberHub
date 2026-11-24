@@ -29,7 +29,11 @@ export function waitText(seconds: number): string {
     return `${m} ${m === 1 ? 'minute' : 'minutes'}`;
 }
 
-/** Seconds to wait from a 429: the API's `meta.retryAfter`, or the time left to `meta.lockedUntil` */
+/**
+ * Seconds to wait from a 429: the API's `meta.retryAfter` (a number of seconds, also what the rate
+ * limiters send at `error.retryAfter`). `meta.lockedUntil` is a server instant and is read against
+ * the browser clock only when there is nothing else.
+ */
 export function retryAfterSeconds(err: unknown, now: number = Date.now()): number | null {
     if (!(err instanceof ApiError)) return null;
     const retry = err.meta?.retryAfter;
@@ -43,9 +47,9 @@ export function retryAfterSeconds(err: unknown, now: number = Date.now()): numbe
 }
 
 /**
- * When a lab is locked until, as a client clock instant. The wait is taken relative to the moment
- * the error arrived (the API's `retryAfter`), so a browser clock that is off does not shorten or
- * stretch the lock; the absolute `lockedUntil` is the fallback.
+ * When a lab is locked until, as a browser clock instant. `now` is the moment the error arrived: the
+ * wait (`retryAfter`) is counted from it, so a browser clock that is off does not shorten or stretch
+ * the lock. The absolute `lockedUntil` is only the last resort.
  */
 export function lockedUntilFromError(err: unknown, now: number = Date.now()): number | null {
     if (!(err instanceof ApiError) || err.code !== 'LAB_LOCKED') return null;

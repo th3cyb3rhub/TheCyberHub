@@ -5,17 +5,12 @@ import { Flag, Loader2, Lock, Send } from 'lucide-react';
 import { btnPrimary, cardPad, input, inputError, muted } from '@/components/events/styles';
 import { useSubmitFlag } from '@/hooks/queries/useLabs';
 import { formatClock, useCountdown } from '@/lib/labs/countdown';
+import { lockEndsAt } from '@/lib/labs/lock';
 import { checkFlag, flagReducer, initialFlagState } from '@/lib/labs/flagForm';
 import { FLAG_MAX } from '@/lib/labs/schemas';
 import { waitText } from '@/lib/labs/errors';
 import type { LabDetail } from '@/types/lab';
 import { CompletedPanel } from './CompletedPanel';
-
-const parseTime = (iso: string | null | undefined) => {
-    if (!iso) return null;
-    const t = new Date(iso).getTime();
-    return Number.isFinite(t) ? t : null;
-};
 
 /**
  * Where a member sends a flag. The text lives in one input and is cleared the moment it is sent:
@@ -24,7 +19,8 @@ const parseTime = (iso: string | null | undefined) => {
 export function FlagForm({ lab, onUnlocked }: { lab: LabDetail; onUnlocked?: () => void }) {
     const submit = useSubmitFlag();
     const viewer = lab.viewer;
-    const serverLock = parseTime(viewer?.lockedUntil);
+    // The lock as the answer stamped it (a wait counted from when it arrived), on the browser clock
+    const serverLock = viewer ? lockEndsAt(viewer, Date.now()) : null;
     const [state, dispatch] = useReducer(flagReducer, serverLock, (lock) => initialFlagState(lock));
     const [flag, setFlag] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);

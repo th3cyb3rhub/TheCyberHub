@@ -1,5 +1,6 @@
 import { ApiError } from '@/lib/api';
 import { labErrorMessage, lockedUntilFromError } from './errors';
+import { lockEndsAt } from './lock';
 import { flagSchema } from './schemas';
 import type { LabBadge, SubmitResult } from '@/types/lab';
 
@@ -10,7 +11,8 @@ import type { LabBadge, SubmitResult } from '@/types/lab';
  *
  * - idle:        the box is open; `notice` says what the last send came to (wrong, busy, error)
  * - submitting:  one request is in flight; a second send is ignored
- * - locked:      the lab is locked until `until` (client clock); the box is off
+ * - locked:      the lab is locked until `until` (an instant on the browser clock, worked out from a
+ *                number of seconds counted from when the answer arrived); the box is off
  * - success:     the flag was right
  * - completed:   the lab was already completed (409): nothing more to send
  */
@@ -49,9 +51,10 @@ export function flagReducer(state: FlagState, action: FlagAction): FlagState {
             if (state.phase !== 'submitting') return state;
             const r = action.result;
             if (r.correct) return { phase: 'success', pointsEarned: r.pointsEarned, badges: r.newBadges ?? [], attempts: r.attempts };
+            // `now` is when the answer arrived. The lock is a wait counted from it, never a server instant.
             const now = action.now ?? Date.now();
-            const until = r.lockedUntil ? new Date(r.lockedUntil).getTime() : NaN;
-            if (Number.isFinite(until) && until > now) return { phase: 'locked', until, attempts: r.attempts };
+            const until = lockEndsAt(r, now);
+            if (until !== null && until > now) return { phase: 'locked', until, attempts: r.attempts };
             return { phase: 'idle', notice: { kind: 'wrong', attempts: r.attempts, attemptsLeft: r.attemptsLeft } };
         }
         case 'failed': {
@@ -70,7 +73,8 @@ export function flagReducer(state: FlagState, action: FlagAction): FlagState {
         case 'unlocked':
             return state.phase === 'locked' ? { phase: 'idle', notice: null } : state;
         case 'lock':
-            return state.phase === 'idle' || state.phase === 'locked' ? { phase: 'locked', until: action.until } : state;
+            // A lock already counting down is kept: a later copy of the same fact must not move it
+            return state.phase === 'idle' ? { phase: 'locked', until: action.until } : state;
         default:
             return state;
     }

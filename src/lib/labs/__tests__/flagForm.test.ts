@@ -34,6 +34,16 @@ describe('flag form state machine', () => {
         expect(next).toEqual({ phase: 'locked', until: NOW + 900_000, attempts: 5 })
     })
 
+    it.each([20 * 60_000, -5 * 60_000])('locks by lockedForSeconds whatever the server instant says (skew %i ms)', (skew) => {
+        const result = wrong({ attempts: 5, attemptsLeft: 0, lockedForSeconds: 900, lockedUntil: new Date(NOW + skew + 900_000).toISOString() })
+        expect(flagReducer(submitting, { type: 'result', result, now: NOW })).toEqual({ phase: 'locked', until: NOW + 900_000, attempts: 5 })
+    })
+
+    it('stays open when the API says not locked, even with a lockedUntil still ahead', () => {
+        const result = wrong({ lockedForSeconds: null, lockedUntil: new Date(NOW + 900_000).toISOString() })
+        expect(flagReducer(submitting, { type: 'result', result, now: NOW }).phase).toBe('idle')
+    })
+
     it('ignores a lock time that has already passed', () => {
         const next = flagReducer(submitting, { type: 'result', result: wrong({ lockedUntil: new Date(NOW - 5000).toISOString() }), now: NOW })
         expect(next.phase).toBe('idle')
@@ -74,9 +84,11 @@ describe('flag form state machine', () => {
         expect(flagReducer(idle, { type: 'failed', error: new Error('x') })).toBe(idle)
     })
 
-    it('takes a lock from the lab while open or locked, but never over a sending flag', () => {
+    it('takes a lock from the lab while open, but never over a sending flag, and never moves one that is counting down', () => {
         expect(flagReducer(idle, { type: 'lock', until: NOW })).toEqual({ phase: 'locked', until: NOW })
         expect(flagReducer(submitting, { type: 'lock', until: NOW })).toBe(submitting)
+        const counting: FlagState = { phase: 'locked', until: NOW + 60_000 }
+        expect(flagReducer(counting, { type: 'lock', until: NOW + 3_600_000 })).toBe(counting)
     })
 })
 

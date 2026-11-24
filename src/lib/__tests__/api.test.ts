@@ -216,4 +216,19 @@ describe('fetchApi', () => {
         )
         expect(refreshCall?.[1]).toMatchObject({ method: 'POST', credentials: 'include', body: '{}' })
     })
+
+    it('reads the wait of a rate limiter (error.retryAfter) into meta.retryAfter, and keeps a lock\'s own meta', async () => {
+        const fail = (error: Record<string, unknown>) => {
+            global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 429, json: () => Promise.resolve({ success: false, error }) })
+            return fetchApi('/api/x', { requireAuth: false }).catch((e) => e)
+        }
+        const limited = await fail({ code: 'RATE_LIMIT_EXCEEDED', message: 'slow down', retryAfter: 42 })
+        expect(limited.meta).toEqual({ retryAfter: 42 })
+        const locked = await fail({ code: 'LAB_LOCKED', message: 'locked', meta: { retryAfter: 600, lockedUntil: '2026-01-01T00:00:00.000Z' } })
+        expect(locked.meta).toEqual({ retryAfter: 600, lockedUntil: '2026-01-01T00:00:00.000Z' })
+        const both = await fail({ code: 'X', message: 'm', retryAfter: 5, meta: { reason: 'r' } })
+        expect(both.meta).toEqual({ reason: 'r', retryAfter: 5 })
+        const none = await fail({ code: 'X', message: 'm' })
+        expect(none.meta).toBeUndefined()
+    })
 })

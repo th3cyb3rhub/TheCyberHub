@@ -1,5 +1,6 @@
 import { ApiError, fetchApi } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
+import { serverClock, withLock } from '@/lib/labs/lock';
 import type {
     GlobalLeaderRow, HintResult, LabAdminView, LabCategory, LabDetail, LabFacets, LabFilters, LabLeaderRow, LabManageRow,
     LabPayload, LabProgressRow, LabCard, LabStats, LabStatus, Page, StopResult, SubmitResult,
@@ -24,6 +25,22 @@ const ref = (slug: string) => encodeURIComponent(slug);
 const send = (path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown) =>
     fetchApi(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
+/**
+ * A call whose answer carries a lock. It reads the moment the answer arrived (browser clock) and the
+ * server's own clock from the `Date` header, so the countdown can be a number of seconds from that
+ * moment and never a comparison of a server instant with the browser clock.
+ */
+async function sendTimed(path: string, method: 'GET' | 'POST', body?: unknown): Promise<{ body: { data?: unknown }; receivedAt: number; serverNow: number | null }> {
+    const res: Response = await fetchApi(path, { method, raw: true, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const receivedAt = Date.now();
+    const serverNow = serverClock(res.headers?.get?.('date'));
+    let parsed: { data?: unknown } = {};
+    try { parsed = (await res.json()) ?? {}; } catch { parsed = {}; }
+    return { body: parsed, receivedAt, serverNow };
+}
+
+const stampRow = <T extends LabProgressRow>(row: T, receivedAt: number, serverNow: number | null): T => withLock(row, receivedAt, serverNow);
+
 // ---- Public reads (the token is sent when there is one: it adds `myStatus` and `viewer`) ----
 
 export function listLabs(filters: LabFilters = {}): Promise<Page<LabCard>> {
@@ -38,7 +55,9 @@ export async function getFacets(): Promise<LabFacets> {
 }
 
 export async function getLab(slug: string): Promise<LabDetail> {
-    return (await fetchApi(E.BY_REF(ref(slug)))).data;
+    const { body, receivedAt, serverNow } = await sendTimed(E.BY_REF(ref(slug)), 'GET');
+    const lab = body.data as LabDetail;
+    return lab?.viewer ? { ...lab, viewer: withLock(lab.viewer, receivedAt, serverNow) } : lab;
 }
 
 export async function globalLeaderboard(params: { limit?: number; category?: LabCategory | '' } = {}): Promise<GlobalLeaderRow[]> {
@@ -54,15 +73,20 @@ export async function labLeaderboard(slug: string, limit?: number): Promise<LabL
 /** My progress on one lab, or null when I have not started it */
 export async function getLabProgress(slug: string): Promise<LabProgressRow | null> {
     try {
-        return (await fetchApi(E.LAB_PROGRESS(ref(slug)))).data;
+        const { body, receivedAt, serverNow } = await sendTimed(E.LAB_PROGRESS(ref(slug)), 'GET');
+        return body.data ? stampRow(body.data as LabProgressRow, receivedAt, serverNow) : null;
     } catch (err) {
         if (err instanceof ApiError && err.code === 'LAB_NOT_STARTED') return null;
         throw err;
     }
 }
 
-export function listMyProgress(params: { page?: number; limit?: number } = {}): Promise<Page<LabProgressRow>> {
-    return fetchApi(`${E.PROGRESS}${query(params)}`);
+export async function listMyProgress(params: { page?: number; limit?: number } = {}): Promise<Page<LabProgressRow>> {
+    const res: Response = await fetchApi(`${E.PROGRESS}${query(params)}`, { raw: true });
+    const receivedAt = Date.now();
+    const serverNow = serverClock(res.headers?.get?.('date'));
+    const page = (await res.json()) as Page<LabProgressRow>;
+    return { ...page, data: (page.data ?? []).map((row) => stampRow(row, receivedAt, serverNow)) };
 }
 
 export async function getStats(): Promise<LabStats> {
@@ -75,7 +99,9 @@ export async function startLab(slug: string): Promise<LabProgressRow> {
 
 /** The flag goes to the server and nowhere else: it is not logged, cached or kept */
 export async function submitFlag(slug: string, flag: string): Promise<SubmitResult> {
-    return (await send(E.SUBMIT(ref(slug)), 'POST', { flag })).data;
+    const { body, receivedAt, serverNow } = await sendTimed(E.SUBMIT(ref(slug)), 'POST', { flag });
+    const result = body.data as SubmitResult;
+    return result && result.correct === false ? withLock(result, receivedAt, serverNow) : result;
 }
 
 export async function unlockHint(slug: string, hintIndex: number): Promise<HintResult> {

@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api/labs';
 import { ApiError } from '@/lib/api';
 import { lockedUntilFromError } from '@/lib/labs/errors';
+import { lockEndsAt } from '@/lib/labs/lock';
 import type {
     GlobalLeaderRow, HintResult, LabAdminView, LabCard, LabCategory, LabDetail, LabFacets, LabFilters, LabLeaderRow,
     LabPayload, LabProgressRow, LabStats, LabStatus, LabViewer, Page, StopResult, SubmitResult,
@@ -235,7 +236,7 @@ export function useStartLab() {
         mutationFn: (v: { slug: string }) => api.startLab(v.slug),
         retry: 0,
         onSuccess: (row: LabProgressRow, v) => {
-            patchViewer(qc, v.slug, user?.id ?? null, (viewer) => ({ ...viewer, myStatus: 'in-progress', startedAt: row.startedAt, attempts: 0, lockedUntil: null }));
+            patchViewer(qc, v.slug, user?.id ?? null, (viewer) => ({ ...viewer, myStatus: 'in-progress', startedAt: row.startedAt, attempts: 0, lockedUntil: null, lockedForSeconds: null, lockEndsAt: null }));
             patchCards(qc, v.slug, 'in-progress');
             refreshLab(qc, v.slug);
         },
@@ -261,13 +262,15 @@ export function useSubmitFlag() {
             if (result.correct) {
                 patchViewer(qc, v.slug, userId, (viewer) => ({
                     ...viewer, myStatus: 'completed', attempts: result.attempts, completedAt: result.completedAt,
-                    pointsAwarded: result.pointsEarned, pointsAvailable: result.pointsEarned, lockedUntil: null,
+                    pointsAwarded: result.pointsEarned, pointsAvailable: result.pointsEarned, lockedUntil: null, lockedForSeconds: null, lockEndsAt: null,
                 }));
                 patchCards(qc, v.slug, 'completed');
                 refreshAfterCompletion(qc, v.slug);
                 void refreshUser?.();
             } else {
-                patchViewer(qc, v.slug, userId, (viewer) => ({ ...viewer, attempts: result.attempts, lockedUntil: result.lockedUntil }));
+                patchViewer(qc, v.slug, userId, (viewer) => ({
+                    ...viewer, attempts: result.attempts, lockedUntil: result.lockedUntil, lockedForSeconds: result.lockedForSeconds, lockEndsAt: lockEndsAt(result, Date.now()),
+                }));
                 void qc.invalidateQueries({ queryKey: [...labKeys.details(), v.slug] });
                 void qc.invalidateQueries({ queryKey: labKeys.progress() });
             }
@@ -275,7 +278,7 @@ export function useSubmitFlag() {
         onError: (err, v) => {
             // Locked: remember it on the cached lab, so leaving and coming back still shows the wait
             const until = lockedUntilFromError(err);
-            if (until) patchViewer(qc, v.slug, userId, (viewer) => ({ ...viewer, lockedUntil: new Date(until).toISOString() }));
+            if (until) patchViewer(qc, v.slug, userId, (viewer) => ({ ...viewer, lockEndsAt: until }));
             else if (isStaleState(err)) refreshLab(qc, v.slug);
         },
     });
@@ -310,7 +313,7 @@ export function useStopLab() {
         retry: 0,
         onSuccess: (result, v) => {
             if (result.reset) {
-                patchViewer(qc, v.slug, user?.id ?? null, (viewer) => ({ ...viewer, myStatus: 'not-started', startedAt: null, attempts: 0, lockedUntil: null }));
+                patchViewer(qc, v.slug, user?.id ?? null, (viewer) => ({ ...viewer, myStatus: 'not-started', startedAt: null, attempts: 0, lockedUntil: null, lockedForSeconds: null, lockEndsAt: null }));
                 patchCards(qc, v.slug, 'not-started');
             }
             refreshLab(qc, v.slug);

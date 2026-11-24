@@ -181,7 +181,7 @@ describe('submit', () => {
         const before = Date.now()
         const { result } = renderHook(() => useSubmitFlag(), { wrapper })
         await act(async () => { await result.current.mutateAsync({ slug: SLUG, flag: 'x' }).catch(() => undefined) })
-        const until = new Date(qc.getQueryData<LabDetail>(labKeys.detail(SLUG, 'u1'))?.viewer?.lockedUntil ?? '').getTime()
+        const until = qc.getQueryData<LabDetail>(labKeys.detail(SLUG, 'u1'))?.viewer?.lockEndsAt ?? NaN
         expect(until).toBeGreaterThanOrEqual(before + 599_000)
         expect(until).toBeLessThanOrEqual(Date.now() + 601_000)
     })

@@ -47,6 +47,7 @@ export const labViewerSchema = z.object({
     pointsAwarded: z.number().default(0),
     pointsAvailable: z.number().default(0),
     lockedUntil: isoOrNull.default(null),
+    lockedForSeconds: z.number().nullable().optional(),
 });
 
 export const labDetailSchema = labCardSchema.extend({

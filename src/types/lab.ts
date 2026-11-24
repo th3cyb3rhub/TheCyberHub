@@ -87,7 +87,12 @@ export interface LabViewer {
     pointsAwarded: number;
     /** What completing now would pay; after completion it equals `pointsAwarded` */
     pointsAvailable: number;
+    /** A server instant: for display only. The countdown never compares it with the browser clock. */
     lockedUntil: string | null;
+    /** Seconds the lab stays locked, counted from when the answer was sent; null when not locked. Absent on an older API. */
+    lockedForSeconds?: number | null;
+    /** Added in the browser when the answer is read: when the lock ends, on the browser clock (null: not locked) */
+    lockEndsAt?: number | null;
 }
 
 export interface LabAdminBlock {
@@ -152,6 +157,8 @@ export interface LabProgressRow {
     completedAt: string | null;
     timeSpent: number;
     lockedUntil: string | null;
+    lockedForSeconds?: number | null;
+    lockEndsAt?: number | null;
 }
 
 export interface LabStats {
@@ -163,10 +170,10 @@ export interface LabStats {
     byDifficulty: Partial<Record<LabDifficulty, { started: number; completed: number; points: number }>>;
 }
 
-export interface LabBadge { code: string; name: string; icon: string; rarity: string }
+export interface LabBadge { code: string; name: string; icon: string | null; rarity: string | null }
 
 export type SubmitResult =
-    | { correct: false; attempts: number; status: 'started'; pointsEarned: 0; attemptsLeft: number; lockedUntil: string | null }
+    | { correct: false; attempts: number; status: 'started'; pointsEarned: 0; attemptsLeft: number; lockedUntil: string | null; lockedForSeconds?: number | null; lockEndsAt?: number | null }
     | { correct: true; attempts: number; status: 'completed'; pointsEarned: number; completedAt: string; newBadges: LabBadge[] };
 
 export interface HintResult {

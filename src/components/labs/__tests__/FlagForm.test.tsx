@@ -104,6 +104,32 @@ describe('FlagForm', () => {
         expect(screen.getByLabelText('Flag')).toBeDisabled()
     })
 
+    it('reload while locked: disabled, with the wait counted from when the lab was read, whatever the server instant says', () => {
+        // lockedUntil is 20 minutes in the browser's future (a server clock that runs ahead); the wait is 10 minutes
+        const lockedUntil = new Date(Date.now() + 20 * 60_000).toISOString()
+        const lockEndsAt = Date.now() + 600_000
+        render(<FlagForm lab={lab({ viewer: makeViewer({ myStatus: 'in-progress', lockedUntil, lockedForSeconds: 600, lockEndsAt }) })} />)
+        expect(screen.getByTestId('lock-notice')).toBeInTheDocument()
+        expect(screen.getByLabelText('Flag')).toBeDisabled()
+        expect(screen.getByTestId('lock-clock')).toHaveTextContent('10:00')
+    })
+
+    it('is open when the API says not locked, even if an old lockedUntil is still in the future', () => {
+        const lockedUntil = new Date(Date.now() + 20 * 60_000).toISOString()
+        render(<FlagForm lab={lab({ viewer: makeViewer({ myStatus: 'in-progress', lockedUntil, lockedForSeconds: null, lockEndsAt: null }) })} />)
+        expect(screen.queryByTestId('lock-notice')).not.toBeInTheDocument()
+        expect(screen.getByLabelText('Flag')).toBeEnabled()
+    })
+
+    it('locks from a wrong flag answer by its lockedForSeconds, not its lockedUntil', async () => {
+        render(<FlagForm lab={lab()} />)
+        type('x')
+        send()
+        const skewed = new Date(Date.now() - 5 * 60_000).toISOString() // server clock 5 minutes behind: the instant is already past here
+        await act(async () => { lastCall()[1].onSuccess?.({ correct: false, attempts: 5, status: 'started', pointsEarned: 0, attemptsLeft: 0, lockedUntil: skewed, lockedForSeconds: 900 }) })
+        expect(screen.getByTestId('lock-clock')).toHaveTextContent('15:00')
+    })
+
     it('locks from a 429 using the wait the API names', async () => {
         render(<FlagForm lab={lab()} />)
         type('x')
