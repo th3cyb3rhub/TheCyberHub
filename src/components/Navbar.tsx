@@ -93,7 +93,7 @@ const Navbar = () => {
         { title: "Security Tools", href: "/tools", icon: <Wrench className="w-4 h-4" />, description: `${FALLBACK_TOOLS.length} security tools and lookups` },
         { title: "Jobs", href: "/jobs", icon: <Briefcase className="w-4 h-4" />, description: "Cybersecurity careers" },
         { title: "Blog", href: "/blog", icon: <BookOpen className="w-4 h-4" />, description: "Tutorials & writeups" },
-        { title: "Labs", href: "/labs", icon: <FlaskConical className="w-4 h-4" />, description: "Hands-on practice environments" },
+        { title: "Labs", href: "/labs", icon: <FlaskConical className="w-4 h-4" />, description: "Guided flag exercises with hints and points" },
         { title: "Resource Library", href: "/resources", icon: <Library className="w-4 h-4" />, description: "Community picked articles, videos and tools" },
     ];
 

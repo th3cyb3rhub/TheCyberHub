@@ -28,7 +28,7 @@ interface SearchItem {
     title: string;
     description: string;
     href: string;
-    category: 'tool' | 'resource' | 'page' | 'blog' | 'event' | 'forum';
+    category: 'tool' | 'resource' | 'page' | 'blog' | 'event' | 'forum' | 'lab';
     icon: React.ReactNode;
     keywords?: string[];
     dynamic?: boolean; // Flag for dynamically loaded content
@@ -62,7 +62,7 @@ const searchItems: SearchItem[] = [
     // Pages
     { id: 'tools', title: 'All Tools', description: 'Browse all security tools', href: '/tools', category: 'page', icon: <Wrench className="w-4 h-4" />, keywords: ['tools', 'security'] },
     { id: 'challenges', title: 'CTF Challenges', description: 'Capture the flag challenges', href: '/challenges', category: 'page', icon: <Flag className="w-4 h-4" />, keywords: ['ctf', 'challenge', 'flag', 'capture'] },
-    { id: 'labs', title: 'Labs', description: 'Hands-on practice labs (coming soon)', href: '/labs', category: 'page', icon: <Shield className="w-4 h-4" />, keywords: ['labs', 'practice', 'hands-on'] },
+    { id: 'labs', title: 'Labs', description: 'Guided flag exercises with hints and points', href: '/labs', category: 'page', icon: <Shield className="w-4 h-4" />, keywords: ['labs', 'practice', 'hands-on', 'flag', 'exercise'] },
     { id: 'events', title: 'Events', description: 'CTFs and workshops', href: '/events', category: 'page', icon: <Calendar className="w-4 h-4" />, keywords: ['ctf', 'workshop', 'event'] },
     { id: 'code-review', title: 'Code Review', description: 'Security code exercises', href: '/code-review', category: 'page', icon: <Code2 className="w-4 h-4" />, keywords: ['code', 'review', 'exercise'] },
     { id: 'dashboard', title: 'Dashboard', description: 'Your workspace', href: '/dashboard', category: 'page', icon: <Wrench className="w-4 h-4" />, keywords: ['dashboard', 'home'] },
@@ -75,7 +75,8 @@ const categoryLabels = {
     page: 'Pages',
     blog: 'Blogs',
     event: 'Events',
-    forum: 'Forums'
+    forum: 'Forums',
+    lab: 'Labs'
 };
 
 const categoryColors = {
@@ -84,7 +85,8 @@ const categoryColors = {
     page: 'text-green-400',
     blog: 'text-purple-400',
     event: 'text-pink-400',
-    forum: 'text-cyan-400'
+    forum: 'text-cyan-400',
+    lab: 'text-yellow-400'
 };
 
 const highlightText = (text: string, query: string) => {
@@ -122,10 +124,11 @@ export const GlobalSearch = () => {
         const fetchDynamicContent = async () => {
             setLoadingDynamic(true);
             try {
-                const [blogsData, eventsData, forumsData] = await Promise.all([
+                const [blogsData, eventsData, forumsData, labsData] = await Promise.all([
                     fetchApi('/api/blogs?limit=3&sort=-createdAt', { requireAuth: false }).catch(() => null),
                     fetchApi('/api/events?limit=3&sort=-createdAt', { requireAuth: false }).catch(() => null),
                     fetchApi('/api/forum/discussions?limit=3&sortBy=new', { requireAuth: false }).catch(() => null),
+                    fetchApi('/api/labs?limit=3&sort=newest', { requireAuth: false }).catch(() => null),
                 ]);
 
                 const items: SearchItem[] = [];
@@ -176,6 +179,24 @@ export const GlobalSearch = () => {
                             category: 'forum',
                             icon: <FileText className="w-4 h-4" />,
                             keywords: [forum.title, forum.category, 'forum', 'discussion'].filter((k): k is string => !!k),
+                            dynamic: true,
+                        });
+                    });
+                }
+
+                // Add the newest labs: they open on their own page, addressed by slug
+                if (labsData) {
+                    const labs = Array.isArray(labsData.data) ? labsData.data : [];
+                    labs.forEach((lab: { _id: string; slug?: string; title?: string; summary?: string; category?: string; difficulty?: string; tags?: string[] }) => {
+                        if (!lab.slug || !lab.title) return;
+                        items.push({
+                            id: `lab-${lab._id}`,
+                            title: lab.title,
+                            description: lab.summary?.substring(0, 100) || 'Guided flag exercise',
+                            href: `/labs/${encodeURIComponent(lab.slug)}`,
+                            category: 'lab',
+                            icon: <Shield className="w-4 h-4" />,
+                            keywords: [lab.title, lab.category, lab.difficulty, 'lab', 'flag', ...(lab.tags ?? [])].filter((k): k is string => !!k),
                             dynamic: true,
                         });
                     });
