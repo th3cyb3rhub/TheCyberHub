@@ -144,7 +144,16 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
         if (who.role) view.myStatus = myStatus(state.progress[l.slug]);
         return view;
     };
+    // The whole row the API sends for a member's progress on one lab
+    const progressRow = (l: LabRec, p: ProgressRec) => ({
+        _id: 'p', lab: l._id, labSlug: l.slug, difficulty: l.difficulty, status: p.status, hintsUsed: p.hintsUsed, attempts: p.attempts,
+        pointsEarned: p.status === 'completed' ? p.pointsEarned : 0, startedAt: p.startedAt, completedAt: p.completedAt,
+        timeSpent: Math.max(0, Math.round(((p.completedAt ? Date.parse(p.completedAt) : Date.now()) - Date.parse(p.startedAt)) / 1000)),
+        lockedUntil: lockedUntil(p), lockedForSeconds: lockedForSeconds(p),
+    });
     const lockedUntil = (p?: ProgressRec) => (p?.lockedUntil && p.lockedUntil > Date.now() ? new Date(p.lockedUntil).toISOString() : null);
+    // The API counts the wait in whole seconds, rounded up, next to the instant
+    const lockedForSeconds = (p?: ProgressRec) => (p?.lockedUntil && p.lockedUntil > Date.now() ? Math.ceil((p.lockedUntil - Date.now()) / 1000) : null);
     const detail = (l: LabRec) => {
         const p = state.progress[l.slug];
         const view: Record<string, unknown> = {
@@ -155,7 +164,7 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
             }),
             viewer: who.role ? {
                 myStatus: myStatus(p), hintsUsed: p?.hintsUsed.length ?? 0, attempts: p?.attempts ?? 0, startedAt: p?.startedAt ?? null, completedAt: p?.completedAt ?? null,
-                pointsAwarded: p?.status === 'completed' ? p.pointsEarned : 0, pointsAvailable: available(l, p), lockedUntil: lockedUntil(p),
+                pointsAwarded: p?.status === 'completed' ? p.pointsEarned : 0, pointsAvailable: available(l, p), lockedUntil: lockedUntil(p), lockedForSeconds: lockedForSeconds(p),
             } : null,
         };
         if (staff) view.admin = { status: l.status, flagCount: l.flags.length, pointsOverride: l.points, startCount: l.startCount };
@@ -296,6 +305,13 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
             const nextStatus = (body.status as LabRec['status'] | undefined) ?? l.status;
             const nextFlags = flags ? flags.map((f) => ({ value: f.value, caseSensitive: !!f.caseSensitive })) : l.flags;
             if (nextStatus === 'published' && nextFlags.length === 0) return fail(route, 409, 'LAB_NOT_READY', 'A lab needs at least one flag before it is published', { details: [{ field: 'flags', message: 'Add at least one flag' }] });
+            // Once members have opened hints they stay: no fewer hints, and an opened hint keeps its text and cost
+            const hints = body.hints as { text: string; penalty?: number }[] | undefined;
+            if (hints) {
+                const opened = Array.from(new Set(Object.values(state.progress).flatMap((x) => x.hintsUsed)));
+                const changed = opened.some((i) => !hints[i] || hints[i].text !== l.hints[i]?.text || hints[i].penalty !== l.hints[i]?.penalty);
+                if ((opened.length > 0 && hints.length < l.hints.length) || changed) return fail(route, 409, 'LAB_HINTS_LOCKED', 'Members have opened hints on this lab', { details: { hints: opened } });
+            }
             const { flags: _ignored, ...rest } = body;
             void _ignored;
             Object.assign(l, rest, { flags: nextFlags, updatedAt: new Date().toISOString() });
@@ -316,13 +332,13 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
         const p = state.progress[lab.slug];
 
         if (method === 'GET' && action === 'progress') {
-            return p ? send(route, 200, { success: true, data: { _id: 'p', lab: lab._id, labSlug: lab.slug, status: p.status, hintsUsed: p.hintsUsed, attempts: p.attempts } }) : fail(route, 404, 'LAB_NOT_STARTED', 'Start the lab first');
+            return p ? send(route, 200, { success: true, data: progressRow(lab, p) }) : fail(route, 404, 'LAB_NOT_STARTED', 'Start the lab first');
         }
         if (method === 'POST' && action === 'start') {
             if (p) return fail(route, 409, 'LAB_ALREADY_STARTED', 'Lab already started');
             state.progress[lab.slug] = started({ startedAt: new Date().toISOString() });
             lab.startCount += 1;
-            return send(route, 201, { success: true, data: { _id: 'p', lab: lab._id, labSlug: lab.slug, status: 'started', hintsUsed: [], attempts: 0, startedAt: state.progress[lab.slug].startedAt, completedAt: null, lockedUntil: null } });
+            return send(route, 201, { success: true, data: progressRow(lab, state.progress[lab.slug]) });
         }
         if (!p) return fail(route, 404, 'LAB_NOT_STARTED', 'Start the lab first');
 
@@ -336,7 +352,7 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
         if (method === 'POST' && action === 'hint') {
             const index = Number(body.hintIndex);
             if (!Number.isInteger(index) || !lab.hints[index]) return fail(route, 404, 'LAB_HINT_NOT_FOUND', 'Hint not found');
-            if (p.status === 'completed') return fail(route, 409, 'LAB_ALREADY_COMPLETED', 'Already completed');
+            if (p.status === 'completed') return fail(route, 409, 'LAB_ALREADY_COMPLETED', 'Already completed', { meta: { status: 'completed', pointsEarned: p.pointsEarned } });
             const already = p.hintsUsed.includes(index);
             if (!already) p.hintsUsed.push(index);
             return send(route, 200, { success: true, data: {
@@ -345,8 +361,9 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
             } });
         }
         if (method === 'POST' && action === 'submit') {
-            if (p.status === 'completed') return fail(route, 409, 'LAB_ALREADY_COMPLETED', 'Already completed', { meta: { status: 'completed', pointsEarned: p.pointsEarned } });
+            // Like the API: a lab without a flag is refused before the progress is looked at
             if (lab.flags.length === 0) return fail(route, 409, 'LAB_NO_FLAGS', 'This lab has no flag yet');
+            if (p.status === 'completed') return fail(route, 409, 'LAB_ALREADY_COMPLETED', 'Already completed', { meta: { status: 'completed', pointsEarned: p.pointsEarned } });
             if (p.lockedUntil && p.lockedUntil > Date.now()) {
                 const retryAfter = Math.max(1, Math.ceil((p.lockedUntil - Date.now()) / 1000));
                 return fail(route, 429, 'LAB_LOCKED', 'Too many wrong flags for this lab.', { meta: { retryAfter, lockedUntil: new Date(p.lockedUntil).toISOString() } }, { 'Retry-After': String(retryAfter) });
@@ -370,7 +387,7 @@ export async function mockLabsApi(page: Page, who: Role, state: MockState = fres
             p.wrong = [...p.wrong.filter((t) => t > Date.now() - 600_000), Date.now()];
             if (p.wrong.length >= 5) { p.lockedUntil = Date.now() + state.lockSeconds * 1000; p.wrong = []; }
             return send(route, 200, { success: true, correct: false, data: {
-                correct: false, attempts: p.attempts, status: 'started', pointsEarned: 0, attemptsLeft: p.lockedUntil && p.lockedUntil > Date.now() ? 0 : 5 - p.wrong.length, lockedUntil: lockedUntil(p),
+                correct: false, attempts: p.attempts, status: 'started', pointsEarned: 0, attemptsLeft: p.lockedUntil && p.lockedUntil > Date.now() ? 0 : 5 - p.wrong.length, lockedUntil: lockedUntil(p), lockedForSeconds: lockedForSeconds(p),
             } });
         }
         return fail(route, 404, 'NOT_FOUND', 'Not found');

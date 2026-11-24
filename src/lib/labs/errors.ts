@@ -14,6 +14,7 @@ const MESSAGES: Record<string, string> = {
     LAB_HINT_NOT_FOUND: 'This hint does not exist any more. Reload the page to see the current hints.',
     LAB_SLUG_TAKEN: 'Another lab already uses this slug. Choose a different one.',
     LAB_NOT_READY: 'Add at least one flag before you publish this lab.',
+    LAB_HINTS_LOCKED: 'Members have already opened hints on this lab. You can add hints and edit the ones nobody opened, but you cannot remove hints or change the text, cost or position of an opened one.',
     LAB_HAS_COMPLETIONS: 'Members have completed this lab, so it cannot be deleted. Archive it instead.',
 };
 

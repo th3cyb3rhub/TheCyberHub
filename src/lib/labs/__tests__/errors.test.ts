@@ -19,6 +19,9 @@ describe('lab error messages', () => {
     it('maps the authoring codes and falls back to the server message', () => {
         expect(labErrorMessage(new ApiError('x', 409, 'LAB_NOT_READY'))).toMatch(/flag before you publish/)
         expect(labErrorMessage(new ApiError('x', 409, 'LAB_HAS_COMPLETIONS'))).toMatch(/Archive/)
+        expect(labErrorMessage(new ApiError('x', 409, 'LAB_HINTS_LOCKED'))).toMatch(/opened hints.*cannot remove hints/)
+        // The limiters answer 429 with their own code and the wait at error.retryAfter
+        expect(labErrorMessage(new ApiError('x', 429, 'RATE_LIMIT_EXCEEDED', undefined, { retryAfter: 90 }))).toBe('Too many requests. Try again in about 2 minutes.')
         expect(labErrorMessage(new ApiError('x', 409, 'LAB_SLUG_TAKEN'))).toMatch(/slug/)
         expect(labErrorMessage(new ApiError('Odd thing', 500, 'LAB_NEW'))).toBe('Odd thing')
         expect(labErrorMessage(new Error('offline'))).toBe('offline')
