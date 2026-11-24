@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useLiveMentorship, useMentorshipSummary } from '@/hooks/queries/useMentorship';
+import { useMentorshipSummary } from '@/hooks/queries/useMentorship';
 import { CountBadge } from './shared';
 import { focusRing } from './styles';
 
@@ -12,7 +12,6 @@ export function MentorshipNav() {
     const { user } = useAuth();
     const pathname = usePathname();
     const summary = useMentorshipSummary();
-    useLiveMentorship();
     const data = summary.data;
 
     const items = [

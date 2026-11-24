@@ -9,6 +9,7 @@ const send = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const sendFile = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, isError: false }))
 const report = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, error: null }))
 const discard = vi.hoisted(() => vi.fn())
+const outbox = vi.hoisted(() => ({ current: [] as unknown[] }))
 vi.mock('@/hooks/queries/useMentorship', async () => {
     const actual = await vi.importActual<typeof import('@/hooks/queries/useMentorship')>('@/hooks/queries/useMentorship')
     return {
@@ -17,6 +18,7 @@ vi.mock('@/hooks/queries/useMentorship', async () => {
         useSendMessage: () => send,
         useSendFile: () => sendFile,
         useDiscardMessage: () => discard,
+        useOutbox: () => outbox.current,
         useMarkRead: vi.fn(),
         useReport: () => report,
     }
@@ -32,6 +34,7 @@ const page = (data: unknown[], over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     vi.clearAllMocks()
     messages.current = page([makeMessage()])
+    outbox.current = []
 })
 
 describe('MessageBubble', () => {
@@ -60,6 +63,12 @@ describe('MessageBubble', () => {
         const link = screen.getByRole('link', { name: /notes\.pdf/ })
         expect(link).toHaveAttribute('target', '_blank')
         expect(link.getAttribute('rel')).toContain('noopener')
+    })
+
+    it('does not link an attachment that is not https', () => {
+        const { container } = render(<ul><MessageBubble message={makeMessage({ contentType: 'file', content: 'x.txt', attachment: { filename: 'x.txt', url: 'javascript:alert(1)', size: 10, mimeType: 'text/plain' } })} mine={false} zone="UTC" /></ul>)
+        expect(container.querySelector('a')).toBeNull()
+        expect(screen.getByTestId('attachment-unavailable')).toHaveTextContent('x.txt')
     })
 
     it('offers retry and remove on a failed message', () => {
@@ -131,6 +140,40 @@ describe('ChatPanel', () => {
         expect(send.mutate).not.toHaveBeenCalled()
         fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true })
         expect(send.mutate).toHaveBeenCalledWith({ content: 'print(1)', contentType: 'code', codeLanguage: 'python' })
+    })
+
+    it('refuses code that contains three backticks, and says why', () => {
+        render(<ChatPanel mentorship={makeMentorship()} active />)
+        fireEvent.click(screen.getByLabelText('Code'))
+        const box = screen.getByLabelText('Write a message')
+        fireEvent.change(box, { target: { value: 'echo "```"' } })
+        expect(screen.getByRole('alert')).toHaveTextContent(/three backticks/)
+        fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true })
+        fireEvent.click(screen.getByLabelText('Send message'))
+        expect(send.mutate).not.toHaveBeenCalled()
+        // The text stays in the box
+        expect(box).toHaveValue('echo "```"')
+        // Plain text may contain backticks
+        fireEvent.click(screen.getByLabelText('Text'))
+        expect(screen.getByRole('alert')).not.toHaveTextContent(/three backticks/)
+        fireEvent.keyDown(box, { key: 'Enter' })
+        expect(send.mutate).toHaveBeenCalled()
+    })
+
+    it('suggests code mode when plain text contains tags', () => {
+        render(<ChatPanel mentorship={makeMentorship()} active />)
+        expect(screen.queryByTestId('markup-hint')).toBeNull()
+        fireEvent.change(screen.getByLabelText('Write a message'), { target: { value: 'try <script>alert(1)</script>' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Send it as code' }))
+        expect(screen.queryByTestId('markup-hint')).toBeNull()
+        expect(screen.getByLabelText('Language')).toBeInTheDocument()
+    })
+
+    it('keeps messages that are still sending or failed in the list after the pages are refreshed', () => {
+        outbox.current = [makeMessage({ _id: 'pending-1', sender: { _id: 'me', username: 'grace' }, content: 'Still here', pending: 'failed' })]
+        render(<ChatPanel mentorship={makeMentorship()} active />)
+        expect(screen.getByText('Still here')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     })
 
     it('rejects a file that is too large before uploading', () => {

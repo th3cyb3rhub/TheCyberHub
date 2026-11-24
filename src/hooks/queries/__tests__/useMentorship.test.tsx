@@ -10,11 +10,11 @@ vi.mock('@/context/NotificationProvider', () => ({ useNotificationSocket: () => 
 const addToast = vi.fn()
 vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ addToast }) }))
 const api = vi.hoisted(() => ({
-    sendMessage: vi.fn(), pauseMentorship: vi.fn(), resumeMentorship: vi.fn(), cancelRequest: vi.fn(), listMessages: vi.fn(), getMentorship: vi.fn(),
+    sendMessage: vi.fn(), markMessagesRead: vi.fn(), pauseMentorship: vi.fn(), resumeMentorship: vi.fn(), cancelRequest: vi.fn(), listMessages: vi.fn(), getMentorship: vi.fn(),
 }))
 vi.mock('@/lib/api/mentorship', () => api)
 
-import { mentorshipKeys, optimisticMentorship, flattenMessagePages, useCancelRequest, useMessages, useSendMessage, useToggleMentorshipPause } from '../useMentorship'
+import { mentorshipKeys, optimisticMentorship, flattenMessagePages, useCancelRequest, useMarkRead, useMessages, useOutbox, useSendMessage, useToggleMentorshipPause } from '../useMentorship'
 
 let qc: QueryClient
 const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -85,8 +85,9 @@ describe('cancel request', () => {
 
 describe('sending a message', () => {
     const key = mentorshipKeys.messages(mid, 'u1')
+    const outboxKey = mentorshipKeys.outbox(mid, 'u1')
     const seed = () => qc.setQueryData(key, { pages: [{ data: [makeMessage({ _id: 'old' })], pagination: { limit: 30, hasMore: false, nextBefore: null } }], pageParams: [undefined] })
-    const list = () => flattenMessagePages(qc.getQueryData(key))
+    const list = () => flattenMessagePages(qc.getQueryData(key), (qc.getQueryData(outboxKey) as never) ?? [])
 
     it('shows the message while it is sending, then swaps in the saved one', async () => {
         seed()
@@ -106,6 +107,50 @@ describe('sending a message', () => {
         await act(async () => { result.current.mutate({ content: 'Hi', contentType: 'text' }) })
         await waitFor(() => expect(list().some((m) => m.pending === 'failed')).toBe(true))
         expect(addToast).toHaveBeenCalled()
+    })
+
+    it('keeps a failed message when the pages are fetched again, and can retry it', async () => {
+        api.listMessages.mockResolvedValue({ data: [makeMessage({ _id: 'old' })], pagination: { limit: 30, hasMore: false, nextBefore: null } })
+        const chat = renderHook(() => ({ messages: useMessages(mid), outbox: useOutbox(mid), send: useSendMessage(mid) }), { wrapper })
+        await waitFor(() => expect(chat.result.current.messages.isSuccess).toBe(true))
+        api.sendMessage.mockRejectedValueOnce(new ApiError('Down', 503, 'TRANSACTIONS_UNAVAILABLE'))
+        await act(async () => { chat.result.current.send.mutate({ content: 'Are you there?', contentType: 'text' }) })
+        await waitFor(() => expect(chat.result.current.outbox).toHaveLength(1))
+        expect(chat.result.current.outbox[0].pending).toBe('failed')
+
+        // Polling, and a refresh of everything mentorship, replace the pages but not the outbox
+        await act(async () => { await chat.result.current.messages.refetch() })
+        await act(async () => { await qc.invalidateQueries({ queryKey: mentorshipKeys.all }) })
+        const shown = () => flattenMessagePages(chat.result.current.messages.data, chat.result.current.outbox)
+        expect(shown().map((m) => m.content)).toContain('Are you there?')
+        expect(shown().find((m) => m.content === 'Are you there?')?.pending).toBe('failed')
+
+        const failedId = chat.result.current.outbox[0]._id
+        api.sendMessage.mockResolvedValueOnce(makeMessage({ _id: 'saved', content: 'Are you there?' }))
+        await act(async () => { chat.result.current.send.mutate({ content: 'Are you there?', contentType: 'text', retryOf: failedId }) })
+        await waitFor(() => expect(chat.result.current.outbox).toHaveLength(0))
+        expect(shown().filter((m) => m.content === 'Are you there?')).toHaveLength(1)
+    })
+})
+
+describe('marking messages read', () => {
+    it('marks again when a new batch of the same size arrives after everything was read', async () => {
+        api.markMessagesRead.mockResolvedValue({ marked: 2 })
+        const { rerender } = renderHook(({ unread }) => useMarkRead(mid, unread, true), { wrapper, initialProps: { unread: 2 } })
+        await waitFor(() => expect(api.markMessagesRead).toHaveBeenCalledTimes(1))
+        rerender({ unread: 2 })
+        expect(api.markMessagesRead).toHaveBeenCalledTimes(1)
+        rerender({ unread: 0 })
+        rerender({ unread: 2 })
+        await waitFor(() => expect(api.markMessagesRead).toHaveBeenCalledTimes(2))
+    })
+
+    it('waits while the tab is hidden and marks when it is shown again', async () => {
+        api.markMessagesRead.mockResolvedValue({ marked: 1 })
+        const { rerender } = renderHook(({ active }) => useMarkRead(mid, 1, active), { wrapper, initialProps: { active: false } })
+        expect(api.markMessagesRead).not.toHaveBeenCalled()
+        rerender({ active: true })
+        await waitFor(() => expect(api.markMessagesRead).toHaveBeenCalledTimes(1))
     })
 })
 

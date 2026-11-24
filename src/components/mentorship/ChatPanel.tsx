@@ -4,12 +4,13 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { AlertCircle, ArrowDown, Code2, FileText, Flag, Loader2, Lock, Paperclip, Send } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
-    flattenMessagePages, useDiscardMessage, useMarkRead, useMessages, useReport, useSendFile, useSendMessage,
+    flattenMessagePages, useDiscardMessage, useMarkRead, useMessages, useOutbox, useReport, useSendFile, useSendMessage,
 } from '@/hooks/queries/useMentorship';
+import { useDocumentVisible } from '@/hooks/useDocumentVisible';
 import { useNow, useViewerZone } from '@/lib/events/clock';
 import { toLocalParts } from '@/lib/events/time';
-import { CODE_LANGUAGES, groupByDay, languageLabel, unfenceCode } from '@/lib/mentorship/chat';
-import { displayName, formatBytes } from '@/lib/mentorship/display';
+import { CODE_LANGUAGES, codeProblem, groupByDay, languageLabel, looksLikeMarkup, unfenceCode } from '@/lib/mentorship/chat';
+import { displayName, formatBytes, safeHttpsUrl } from '@/lib/mentorship/display';
 import { chatFileProblem, CHAT_FILE_ACCEPT, LIMITS, messageProblem } from '@/lib/mentorship/schemas';
 import type { Mentorship, MentorshipMessage } from '@/types/mentorship';
 import { ReportDialog } from './FeedbackDialog';
@@ -29,6 +30,8 @@ export function MessageBubble({ message, mine, zone, onRetry, onDiscard, onRepor
 }) {
     const code = message.contentType === 'code' && message.content !== null ? unfenceCode(message.content, message.codeLanguage) : null;
     const lang = code ? languageLabel(code.language) : null;
+    // Only an https address is ever linked, whatever the message carries
+    const attachmentHref = safeHttpsUrl(message.attachment?.url);
     return (
         <li className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`} data-testid="message" data-mine={mine} data-pending={message.pending ?? ''}>
             {!mine && <Avatar person={message.sender} size={28} />}
@@ -37,12 +40,20 @@ export function MessageBubble({ message, mine, zone, onRetry, onDiscard, onRepor
                     {message.hidden || message.content === null ? (
                         <p className="italic opacity-80">This message was hidden by a moderator.</p>
                     ) : message.contentType === 'file' && message.attachment ? (
-                        <a href={message.attachment.url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${focusRing}`}>
-                            <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span className="break-all">{message.attachment.filename}</span>
-                            <span className="shrink-0 text-xs opacity-80">{formatBytes(message.attachment.size)}</span>
-                            <span className="sr-only">(opens in a new tab)</span>
-                        </a>
+                        attachmentHref ? (
+                            <a href={attachmentHref} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${focusRing}`}>
+                                <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                <span className="break-all">{message.attachment.filename}</span>
+                                <span className="shrink-0 text-xs opacity-80">{formatBytes(message.attachment.size)}</span>
+                                <span className="sr-only">(opens in a new tab)</span>
+                            </a>
+                        ) : (
+                            <span className="flex items-center gap-2" data-testid="attachment-unavailable">
+                                <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                <span className="break-all">{message.attachment.filename}</span>
+                                <span className="text-xs opacity-80">(link unavailable)</span>
+                            </span>
+                        )
                     ) : code ? (
                         <figure className="min-w-0" data-testid="code-message">
                             {lang && <figcaption className="mb-1 text-xs font-medium uppercase tracking-wide opacity-80">{lang}</figcaption>}
@@ -95,9 +106,11 @@ function Composer({ mentorship }: { mentorship: Mentorship }) {
         );
     }
 
+    const fenceProblem = mode === 'code' ? codeProblem(text) : null;
+    const showMarkupHint = mode === 'text' && looksLikeMarkup(text);
     const limit = mode === 'code' ? LIMITS.message - CODE_OVERHEAD : LIMITS.message;
     const submit = () => {
-        const bad = messageProblem(text) ?? (text.trim().length > limit ? `A message cannot exceed ${limit} characters.` : null);
+        const bad = messageProblem(text) ?? (mode === 'code' ? codeProblem(text) : null) ?? (text.trim().length > limit ? `A message cannot exceed ${limit} characters.` : null);
         if (bad) { setProblem(bad); return; }
         setProblem(null);
         send.mutate({ content: mode === 'code' ? text.replace(/\s+$/, '') : text.trim(), contentType: mode, codeLanguage: language || undefined });
@@ -127,7 +140,7 @@ function Composer({ mentorship }: { mentorship: Mentorship }) {
                 <div className="inline-flex rounded-lg border border-gray-300 p-0.5 dark:border-neutral-700" role="radiogroup" aria-label="Message type">
                     {(['text', 'code'] as const).map((m) => (
                         <label key={m} className={`inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium focus-within:ring-2 focus-within:ring-orange-500 ${mode === m ? 'bg-orange-700 text-white' : 'text-gray-700 dark:text-gray-300'}`}>
-                            <input type="radio" className="sr-only" name={`${id}-mode`} checked={mode === m} onChange={() => setMode(m)} />
+                            <input type="radio" className="sr-only" name={`${id}-mode`} checked={mode === m} onChange={() => { setMode(m); setProblem(null); }} />
                             {m === 'code' && <Code2 className="h-3.5 w-3.5" aria-hidden="true" />}{m === 'text' ? 'Text' : 'Code'}
                         </label>
                     ))}
@@ -156,7 +169,14 @@ function Composer({ mentorship }: { mentorship: Mentorship }) {
                 <button type="button" className={`${btnPrimary} !px-4`} onClick={submit} disabled={!text.trim()} aria-label="Send message"><Send className="h-4 w-4" aria-hidden="true" /></button>
             </div>
             <div className="mt-1 flex justify-between text-xs">
-                <p id={`${id}-problem`} role="alert" className="text-red-700 dark:text-red-400">{problem ?? (sendFile.isError ? 'The file could not be sent.' : '')}</p>
+                <div>
+                    <p id={`${id}-problem`} role="alert" className="text-red-700 dark:text-red-400">{problem ?? fenceProblem ?? (sendFile.isError ? 'The file could not be sent.' : '')}</p>
+                    {showMarkupHint && !problem && (
+                        <p className={muted} data-testid="markup-hint">
+                            This looks like code or HTML. The server removes tags from text messages. <button type="button" className={`underline ${focusRing}`} onClick={() => { setMode('code'); setProblem(null); }}>Send it as code</button> to keep it as written.
+                        </p>
+                    )}
+                </div>
                 {text.length > limit * 0.8 && <span className={text.length > limit ? 'text-red-700 dark:text-red-400' : muted}>{text.length}/{limit}</span>}
             </div>
         </div>
@@ -168,6 +188,8 @@ export function ChatPanel({ mentorship, active }: { mentorship: Mentorship; acti
     const zone = useViewerZone();
     const now = useNow(60_000);
     const query = useMessages(mentorship._id, { enabled: active });
+    const outbox = useOutbox(mentorship._id);
+    const visible = useDocumentVisible();
     const send = useSendMessage(mentorship._id);
     const discard = useDiscardMessage(mentorship._id);
     const report = useReport(mentorship._id);
@@ -179,11 +201,24 @@ export function ChatPanel({ mentorship, active }: { mentorship: Mentorship; acti
     const prevHeight = useRef(0);
     const [away, setAway] = useState(false);
 
-    const messages = useMemo(() => flattenMessagePages(query.data), [query.data]);
+    const messages = useMemo(() => flattenMessagePages(query.data, outbox), [query.data, outbox]);
     const groups = useMemo(() => groupByDay(messages, zone, now ?? new Date(0)), [messages, zone, now]);
     const viewerId = user?.id;
     const unread = messages.filter((m) => m.sender._id !== viewerId && !m.isRead && !m.pending).length;
-    useMarkRead(mentorship._id, unread, active && typeof document !== 'undefined' && document.visibilityState === 'visible');
+    useMarkRead(mentorship._id, unread, active && visible);
+
+    // Screen readers hear only a message that arrives at the end, not the older pages that load above
+    const [announcement, setAnnouncement] = useState('');
+    const lastId = useRef<string | null>(null);
+    useEffect(() => {
+        const last = messages[messages.length - 1];
+        if (!last) return;
+        if (lastId.current !== null && lastId.current !== last._id && last.sender._id !== viewerId && !last.pending) {
+            const what = last.hidden || last.content === null ? 'a message that was hidden' : last.contentType === 'file' ? `a file, ${last.attachment?.filename ?? ''}` : last.contentType === 'code' ? 'a code snippet' : last.content.slice(0, 200);
+            setAnnouncement(`${displayName(last.sender)}: ${what}`);
+        }
+        lastId.current = last._id;
+    }, [messages, viewerId]);
 
     // Stay at the bottom while new messages arrive, unless the reader scrolled up
     useLayoutEffect(() => {
@@ -231,7 +266,7 @@ export function ChatPanel({ mentorship, active }: { mentorship: Mentorship; acti
 
     return (
         <section aria-label="Messages" className={`${card} flex h-[62vh] min-h-[26rem] flex-col sm:h-[70vh] overflow-hidden`} data-testid="chat">
-            <div ref={listRef} onScroll={onScroll} className="relative flex-1 overflow-y-auto p-4" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation">
+            <div ref={listRef} onScroll={onScroll} className="relative flex-1 overflow-y-auto p-4" role="log" aria-live="off" aria-label="Conversation">
                 {query.isLoading ? (
                     <div className="space-y-3" role="status" aria-label="Loading messages"><Skeleton className="h-10 w-2/3" /><Skeleton className="ml-auto h-10 w-1/2" /><Skeleton className="h-10 w-3/5" /></div>
                 ) : query.isError && messages.length === 0 ? (
@@ -265,6 +300,7 @@ export function ChatPanel({ mentorship, active }: { mentorship: Mentorship; acti
                     </>
                 )}
             </div>
+            <p className="sr-only" role="status" aria-live="polite" data-testid="chat-announcement">{announcement}</p>
             {away && (
                 <div className="flex justify-center border-t border-gray-100 bg-white py-1 dark:border-neutral-800 dark:bg-neutral-900">
                     <button type="button" className={`${btnGhost} !py-1 text-xs`} onClick={toBottom}><ArrowDown className="h-3.5 w-3.5" aria-hidden="true" /> New messages</button>

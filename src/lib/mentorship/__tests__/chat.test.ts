@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayLabel, fenceCode, groupByDay, languageLabel, mergeMessages, optimisticMessage, unfenceCode } from '../chat'
+import { codeProblem, dayLabel, fenceCode, looksLikeMarkup, groupByDay, languageLabel, mergeMessages, optimisticMessage, unfenceCode } from '../chat'
 import { makeMessage } from './fixtures'
 
 describe('mergeMessages', () => {
@@ -56,5 +56,29 @@ describe('code messages', () => {
     })
     it('shows an unfenced code message as it is, with the language the API stored', () => {
         expect(unfenceCode('plain code', 'python')).toEqual({ code: 'plain code', language: 'python' })
+    })
+})
+
+describe('code the composer refuses', () => {
+    it('refuses three backticks in a row and explains what to do', () => {
+        expect(codeProblem('echo "```"')).toMatch(/three backticks/)
+        expect(codeProblem('a ```` b')).not.toBeNull()
+    })
+    it('allows single and double backticks', () => {
+        expect(codeProblem('echo `date` and ``x``')).toBeNull()
+        expect(codeProblem('print(1)')).toBeNull()
+    })
+})
+
+describe('text that looks like markup', () => {
+    it('spots tags', () => {
+        expect(looksLikeMarkup('<script>alert(1)</script>')).toBe(true)
+        expect(looksLikeMarkup('use <img src=x onerror=y> here')).toBe(true)
+        expect(looksLikeMarkup('</div>')).toBe(true)
+    })
+    it('leaves ordinary text and comparisons alone', () => {
+        expect(looksLikeMarkup('Hello there')).toBe(false)
+        expect(looksLikeMarkup('if a < b and c > d')).toBe(false)
+        expect(looksLikeMarkup('I <3 this')).toBe(false)
     })
 })

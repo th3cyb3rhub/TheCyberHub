@@ -7,11 +7,11 @@ import { CheckCircle2, ExternalLink, Flag, Hourglass, PauseCircle, PlayCircle, S
 import { FullPageSpinner, PageShell, useRequireLogin } from '@/components/events/PageShell';
 import { TabBar } from '@/components/events/TabBar';
 import {
-    useCompleteMentorship, useExtendMentorship, useFinalFeedback, useLiveMentorship, useMentorship, useMentorshipFeedback,
+    useCompleteMentorship, useExtendMentorship, useFinalFeedback, useMentorship, useMentorshipFeedback,
     useReport, useSessions, useToggleMentorshipPause,
 } from '@/hooks/queries/useMentorship';
 import { useViewerZone } from '@/lib/events/clock';
-import { displayName, formatDate, safeMeetingUrl } from '@/lib/mentorship/display';
+import { displayName, formatDate, isObjectId, safeMeetingUrl } from '@/lib/mentorship/display';
 import { isNotFound, mentorshipErrorMessage } from '@/lib/mentorship/errors';
 import { LIMITS } from '@/lib/mentorship/schemas';
 import { sessionTimes } from '@/lib/mentorship/time';
@@ -193,13 +193,20 @@ function Workspace({ id }: { id: string }) {
     const params = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
-    const query = useMentorship(id);
-    useLiveMentorship(id);
+    const valid = isObjectId(id);
+    const query = useMentorship(valid ? id : '');
     const requested = params.get('tab');
     const tab: Tab = isTab(requested) ? requested : 'overview';
     const setTab = (next: string) => router.replace(`${pathname}${next === 'overview' ? '' : `?tab=${next}`}`, { scroll: false });
 
     if (!ready) return <FullPageSpinner />;
+    if (!valid) {
+        return (
+            <PageShell title="Mentorship" backHref="/mentorship/dashboard" backLabel="My mentorships">
+                <EmptyBlock icon={UserX} title="Mentorship not found" action={<Link href="/mentorship/dashboard" className={btnPrimary}>My mentorships</Link>}>This address is not a mentorship. It may be mistyped.</EmptyBlock>
+            </PageShell>
+        );
+    }
     if (query.isLoading) {
         return <PageShell wide title="Mentorship" backHref="/mentorship/dashboard" backLabel="My mentorships"><div className="space-y-4" role="status" aria-label="Loading the mentorship"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div></PageShell>;
     }

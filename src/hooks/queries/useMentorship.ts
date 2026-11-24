@@ -36,6 +36,7 @@ export const mentorshipKeys = {
     detail: (id: string, uid: string | null) => ['mentorship', 'detail', uid, id] as const,
     summary: (uid: string | null) => ['mentorship', 'summary', uid] as const,
     messages: (id: string, uid: string | null) => ['mentorship', 'messages', uid, id] as const,
+    outbox: (id: string, uid: string | null) => ['mentorship', 'outbox', uid, id] as const,
     sessions: (uid: string | null) => ['mentorship', 'sessions', uid] as const,
     sessionList: (id: string, scope: string, uid: string | null) => ['mentorship', 'sessions', uid, id, scope] as const,
     upcoming: (uid: string | null) => ['mentorship', 'sessions', uid, 'upcoming'] as const,
@@ -218,11 +219,14 @@ export function useMentorshipFeedback(id: string, enabled = true) {
 
 type MessagesData = InfiniteData<MessagePage, string | null>;
 
-/** Oldest first, across every loaded page (page 0 is the newest) */
-export function flattenMessagePages(data: InfiniteData<MessagePage, unknown> | undefined): MentorshipMessage[] {
-    if (!data) return [];
+/**
+ * Oldest first, across every loaded page (page 0 is the newest), then the messages that are still
+ * being sent or failed to send. Those live apart from the fetched pages, so a refresh never drops them.
+ */
+export function flattenMessagePages(data: InfiniteData<MessagePage, unknown> | undefined, outbox: MentorshipMessage[] = []): MentorshipMessage[] {
     const out: MentorshipMessage[] = [];
-    for (let i = data.pages.length - 1; i >= 0; i -= 1) out.push(...data.pages[i].data);
+    if (data) for (let i = data.pages.length - 1; i >= 0; i -= 1) out.push(...data.pages[i].data);
+    for (const m of outbox) if (!out.some((x) => x._id === m._id)) out.push(m);
     return out;
 }
 
@@ -268,7 +272,7 @@ export function useLiveMentorship(activeId?: string) {
     }, [socket, uid, activeId, qc]);
 }
 
-function pushMessage(qc: QueryClient, id: string, uid: string, message: MentorshipMessage) {
+function pushMessage(qc: QueryClient, id: string, uid: string | null, message: MentorshipMessage) {
     qc.setQueryData<MessagesData>(mentorshipKeys.messages(id, uid), (old) => {
         if (!old || !old.pages.length) return old;
         if (old.pages.some((p) => p.data.some((m) => m._id === message._id))) return old;
@@ -605,12 +609,29 @@ export function useReport(id: string) {
 
 let pendingCounter = 0;
 
-function patchMessages(qc: QueryClient, key: readonly unknown[], patch: (messages: MentorshipMessage[]) => MentorshipMessage[]) {
-    qc.setQueryData<MessagesData>(key, (old) => {
-        if (!old || !old.pages.length) return old;
-        const [first, ...rest] = old.pages;
-        return { ...old, pages: [{ ...first, data: patch(first.data) }, ...rest] };
+type Outbox = MentorshipMessage[];
+
+function patchOutbox(qc: QueryClient, key: readonly unknown[], patch: (messages: Outbox) => Outbox) {
+    qc.setQueryData<Outbox>(key, (old) => patch(old ?? []));
+}
+
+/** The messages of this chat that are still being sent or failed to send. Kept in their own query so polling cannot replace them. */
+export function useOutbox(id: string): MentorshipMessage[] {
+    const qc = useQueryClient();
+    const { uid } = useUserId();
+    const key = mentorshipKeys.outbox(id, uid);
+    const query = useQuery<Outbox>({
+        queryKey: key,
+        // Never fetched: a refresh of "everything mentorship" hands back what is already there
+        queryFn: () => qc.getQueryData<Outbox>(key) ?? [],
+        initialData: [],
+        staleTime: Infinity,
+        gcTime: 30 * 60_000,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
     });
+    return query.data;
 }
 
 /** Sends a text or code message. It shows at once, and stays in the list marked as failed if the API says no. */
@@ -618,24 +639,25 @@ export function useSendMessage(id: string) {
     const qc = useQueryClient();
     const { uid, user } = useUserId();
     const fail = useFailureToast();
-    const key = mentorshipKeys.messages(id, uid);
+    const outbox = mentorshipKeys.outbox(id, uid);
     return useMutation<MentorshipMessage, unknown, { content: string; contentType: 'text' | 'code'; codeLanguage?: string; retryOf?: string }, { tempId: string }>({
         mutationFn: ({ content, contentType, codeLanguage }) => api.sendMessage(id, { content, contentType, codeLanguage }),
         retry: 0,
-        onMutate: async (v) => {
-            await qc.cancelQueries({ queryKey: key });
+        onMutate: (v) => {
             const tempId = v.retryOf ?? `pending-${Date.now()}-${pendingCounter += 1}`;
             const sender = { _id: user?.id ?? '', username: user?.username ?? '', name: user?.name, avatar: user?.avatar ?? null };
             const temp = optimisticMessage({ id: tempId, sender, channel: '', content: v.content, contentType: v.contentType, codeLanguage: v.codeLanguage });
-            patchMessages(qc, key, (list) => [...list.filter((m) => m._id !== tempId), temp]);
+            patchOutbox(qc, outbox, (list) => (list.some((m) => m._id === tempId) ? list.map((m) => (m._id === tempId ? temp : m)) : [...list, temp]));
             return { tempId };
         },
         onSuccess: (message, _v, ctx) => {
-            patchMessages(qc, key, (list) => [...list.filter((m) => m._id !== ctx?.tempId && m._id !== message._id), message]);
+            // Swap in the saved message, so it does not flash out between the two lists
+            pushMessage(qc, id, uid, message);
+            patchOutbox(qc, outbox, (list) => list.filter((m) => m._id !== ctx?.tempId));
             qc.invalidateQueries({ queryKey: mentorshipKeys.lists(uid) });
         },
         onError: (err, _v, ctx) => {
-            patchMessages(qc, key, (list) => list.map((m) => (m._id === ctx?.tempId ? { ...m, pending: 'failed' as const } : m)));
+            patchOutbox(qc, outbox, (list) => list.map((m) => (m._id === ctx?.tempId ? { ...m, pending: 'failed' as const } : m)));
             fail(err);
         },
     });
@@ -645,7 +667,7 @@ export function useSendMessage(id: string) {
 export function useDiscardMessage(id: string) {
     const qc = useQueryClient();
     const { uid } = useUserId();
-    return (messageId: string) => patchMessages(qc, mentorshipKeys.messages(id, uid), (list) => list.filter((m) => m._id !== messageId));
+    return (messageId: string) => patchOutbox(qc, mentorshipKeys.outbox(id, uid), (list) => list.filter((m) => m._id !== messageId));
 }
 
 /** Uploads a file, then posts it to the chat */
@@ -656,11 +678,12 @@ export function useSendFile(id: string) {
     return useMutation({
         mutationFn: async ({ file }: { file: File }) => {
             const uploaded = await api.uploadChatFile(file);
-            return api.sendFileMessage(id, { filename: file.name, url: uploaded.url, size: file.size, mimeType: file.type });
+            // What the upload service stored is what the chat records, not what the browser claimed
+            return api.sendFileMessage(id, { filename: uploaded.filename || file.name, url: uploaded.url, size: uploaded.size || file.size, mimeType: uploaded.mimetype || file.type });
         },
         retry: 0,
         onSuccess: (message) => {
-            patchMessages(qc, mentorshipKeys.messages(id, uid), (list) => (list.some((m) => m._id === message._id) ? list : [...list, message]));
+            if (uid) pushMessage(qc, id, uid, message);
             qc.invalidateQueries({ queryKey: mentorshipKeys.lists(uid) });
         },
         onError: fail,
@@ -673,7 +696,9 @@ export function useMarkRead(id: string, unread: number, active: boolean) {
     const { uid } = useUserId();
     const sent = useRef(0);
     useEffect(() => {
-        if (!active || !uid || unread <= 0 || sent.current === unread) return;
+        // Nothing unread: the next batch of new messages, of any size, is marked again
+        if (unread <= 0) { sent.current = 0; return; }
+        if (!active || !uid || sent.current === unread) return;
         sent.current = unread;
         api.markMessagesRead(id).then(() => {
             qc.setQueryData<Mentorship>(mentorshipKeys.detail(id, uid), (old) => (old ? { ...old, unreadMessages: 0 } : old));

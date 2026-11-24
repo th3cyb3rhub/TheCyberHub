@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { filtersFromParams, filtersToParams, hasActiveFilters } from '../filters'
-import { expertiseLabel, displayName, initials, requestBlockReason, safeMeetingUrl, spotsLabel, ratingLabel, formatBytes, daysLeftLabel } from '../display'
+import { expertiseLabel, displayName, initials, requestBlockReason, safeMeetingUrl, safeHttpsUrl, isObjectId, activeMentorshipId, spotsLabel, ratingLabel, formatBytes, daysLeftLabel } from '../display'
 
 const p = (qs: string) => new URLSearchParams(qs)
 
@@ -64,5 +64,29 @@ describe('display helpers', () => {
         expect(daysLeftLabel('2026-12-04T10:00:00Z', now)).toBe('3 days left')
         expect(daysLeftLabel('2026-12-02T09:00:00Z', now)).toBe('1 day left')
         expect(daysLeftLabel('2026-11-30T10:00:00Z', now)).toBe('expired')
+    })
+})
+
+describe('addresses and links', () => {
+    it('knows an id when it sees one', () => {
+        expect(isObjectId('64b0000000000000000000b1')).toBe(true)
+        expect(isObjectId('not-an-id')).toBe(false)
+        expect(isObjectId('64b0000000000000000000b1/../x')).toBe(false)
+        expect(isObjectId('')).toBe(false)
+    })
+    it('finds the open mentorship from the page address', () => {
+        expect(activeMentorshipId('/mentorship/64b0000000000000000000b1')).toBe('64b0000000000000000000b1')
+        expect(activeMentorshipId('/mentorship/64b0000000000000000000b1/')).toBe('64b0000000000000000000b1')
+        for (const path of ['/mentorship', '/mentorship/dashboard', '/mentorship/requests', '/mentorship/mentor/abc', '/mentorship/become-mentor', '/events', null]) {
+            expect(activeMentorshipId(path)).toBeNull()
+        }
+    })
+    it('links only https', () => {
+        expect(safeHttpsUrl('https://cdn.example.org/a.pdf')).toBe('https://cdn.example.org/a.pdf')
+        expect(safeHttpsUrl('http://cdn.example.org/a.pdf')).toBeNull()
+        expect(safeHttpsUrl('javascript:alert(1)')).toBeNull()
+        expect(safeHttpsUrl('data:text/html,x')).toBeNull()
+        expect(safeHttpsUrl(null)).toBeNull()
+        expect(safeMeetingUrl('https://meet.example.org/x')).toBe('https://meet.example.org/x')
     })
 })

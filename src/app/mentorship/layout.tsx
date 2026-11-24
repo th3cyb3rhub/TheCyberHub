@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { MentorshipLive } from '@/components/mentorship/MentorshipLive';
 
 export const metadata: Metadata = {
     title: 'Mentorship',
@@ -11,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function MentorshipLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
+    return <><MentorshipLive />{children}</>;
 }

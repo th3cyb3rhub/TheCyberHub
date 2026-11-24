@@ -77,3 +77,16 @@ export function unfenceCode(content: string, language?: string | null): { code: 
     if (!m) return { code: content, language: languageLabel(language) };
     return { code: m[3], language: languageLabel(language) ?? languageLabel(m[2]) };
 }
+
+/** Why a code message cannot be sent, or null. The server treats a triple backtick as the end of the code block, so such code is refused instead of being altered. */
+export function codeProblem(code: string): string | null {
+    if (code.includes('```')) {
+        return 'Code that contains three backticks in a row cannot be sent as a code message. Split it into smaller pieces, or share it as a text file with Attach.';
+    }
+    return null;
+}
+
+/** Plain text that looks like markup (tags): the server removes tags from text, so code mode keeps them */
+export function looksLikeMarkup(text: string): boolean {
+    return /<\/?[a-z][a-z0-9-]*(\s[^>]*)?\/?>/i.test(text);
+}

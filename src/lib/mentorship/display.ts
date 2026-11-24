@@ -74,7 +74,7 @@ export function requestBlockReason(mentor: { isPaused: boolean; hasCapacity: boo
 }
 
 /** A link from the API is shown only when it is https */
-export function safeMeetingUrl(url: string | null | undefined): string | null {
+export function safeHttpsUrl(url: string | null | undefined): string | null {
     if (!url) return null;
     try {
         const parsed = new URL(url);
@@ -83,6 +83,9 @@ export function safeMeetingUrl(url: string | null | undefined): string | null {
         return null;
     }
 }
+
+/** Same rule for a meeting link */
+export const safeMeetingUrl = safeHttpsUrl;
 
 export function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -102,4 +105,15 @@ export function daysLeftLabel(iso: string, now: Date): string {
 
 export function formatDate(iso: string): string {
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso));
+}
+
+/** An id as the API issues it (24 hex characters). Anything else cannot exist, so no call is made for it. */
+export const isObjectId = (value: string | null | undefined): value is string => !!value && /^[0-9a-f]{24}$/i.test(value);
+
+const RESERVED_SEGMENTS = new Set(['mentor', 'become-mentor', 'my-profile', 'request', 'requests', 'dashboard']);
+
+/** The mentorship open in the workspace, from the page address; null on every other mentorship page */
+export function activeMentorshipId(pathname: string | null | undefined): string | null {
+    const segment = (pathname ?? '').split('/')[2];
+    return segment && !RESERVED_SEGMENTS.has(segment) ? segment : null;
 }
