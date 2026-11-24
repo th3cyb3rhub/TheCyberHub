@@ -61,6 +61,13 @@ describe('what Apply does', () => {
         expect(isEmail('<x>@c.co')).toBe(false)
         expect(mailtoHref('nope')).toBeNull()
     })
+
+    it('gives no mailto link to an address that could add a header or a field', () => {
+        for (const bad of ['a@b.co?bcc=x@evil.example', 'a&cc=x@evil.example@b.co', 'a#x@b.co', 'a%0Abcc:x@b.co', 'a=b@c.co', 'a/b@c.co']) {
+            expect(mailtoHref(bad, 'Job')).toBeNull()
+        }
+        expect(mailtoHref('jobs+eu@a.example', 'Job')).toBe('mailto:jobs+eu@a.example?subject=Application%20for%20Job')
+    })
 })
 
 describe('status and dates', () => {

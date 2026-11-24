@@ -47,6 +47,14 @@ describe('JobPosting structured data', () => {
         expect(JSON.stringify(data.hiringOrganization)).not.toContain('javascript')
     })
 
+    it('escapes the two line separators too, so older script parsers keep one line', () => {
+        const html = renderToStaticMarkup(<StructuredData data={{ name: 'a\u2028b\u2029c' }} />)
+        expect(html).not.toMatch(/[\u2028\u2029]/)
+        expect(html).toContain('a\\u2028b\\u2029c')
+        const body = html.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')
+        expect(JSON.parse(body)).toEqual({ name: 'a\u2028b\u2029c' })
+    })
+
     it('escapes the description before it becomes HTML, and `<` before it is written into the page', () => {
         const evil = job({ title: '</script><script>alert(1)</script>', description: '<img src=x onerror=alert(1)> and </script><script>alert(2)</script>\n\nSecond paragraph' })
         const data = jobPostingJsonLd(evil)

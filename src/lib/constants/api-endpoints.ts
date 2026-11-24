@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
     COMPANIES: {
         BECOME_EMPLOYER: '/api/companies/become-employer',
         MY_PROFILE: '/api/companies/my/profile',
+        MY_RESUBMIT: '/api/companies/my/resubmit',
         ADMIN: '/api/companies/admin',
         BY_SLUG: (slug: string) => `/api/companies/${slug}`,
         JOBS: (slug: string) => `/api/companies/${slug}/jobs`,

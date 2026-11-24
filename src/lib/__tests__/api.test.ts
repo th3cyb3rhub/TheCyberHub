@@ -231,4 +231,20 @@ describe('fetchApi', () => {
         const none = await fail({ code: 'X', message: 'm' })
         expect(none.meta).toBeUndefined()
     })
+
+    it('reads the wait from the Retry-After header when the body has none, and lets the body win', async () => {
+        const fail = (error: Record<string, unknown>, retryAfter: string | null) => {
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: false, status: 429, headers: { get: (name: string) => (name.toLowerCase() === 'retry-after' ? retryAfter : null) },
+                json: () => Promise.resolve({ success: false, error }),
+            })
+            return fetchApi('/api/x', { requireAuth: false }).catch((e) => e)
+        }
+        expect((await fail({ code: 'RATE_LIMIT_EXCEEDED', message: 'slow' }, '90')).meta).toEqual({ retryAfter: 90 })
+        expect((await fail({ code: 'X', message: 'm', meta: { reason: 'r' } }, '30')).meta).toEqual({ reason: 'r', retryAfter: 30 })
+        expect((await fail({ code: 'X', message: 'm', retryAfter: 5 }, '90')).meta).toEqual({ retryAfter: 5 })
+        // A date, nothing or zero is not a wait
+        expect((await fail({ code: 'X', message: 'm' }, 'Wed, 21 Oct 2030 07:28:00 GMT')).meta).toBeUndefined()
+        expect((await fail({ code: 'X', message: 'm' }, null)).meta).toBeUndefined()
+    })
 })

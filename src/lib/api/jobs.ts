@@ -31,15 +31,21 @@ export function listJobs(filters: JobListFilters = {}): Promise<JobsPage<JobCard
     return fetchApi(`${J.BASE}${jobsApiQuery(filters)}`);
 }
 
-/** One job by id or any slug it had. `meta` says when the address was an old slug. */
+/**
+ * One job by id or any slug it had. `meta` says when the address was an old slug. The read is never
+ * served from a cache: the API counts a view on it, once per visitor and job.
+ */
 export async function getJob(ref: string): Promise<{ job: Job; meta: JobMeta }> {
-    const body = await fetchApi(J.BY_REF(enc(ref)));
+    const body = await fetchApi(J.BY_REF(enc(ref)), { cache: 'no-store' });
     return { job: body.data as Job, meta: (body.meta ?? {}) as JobMeta };
 }
 
-/** Count an apply click and learn where to apply. Public: no token is needed. */
+/**
+ * Count an apply click and learn where to apply. Signing in is optional: the token is sent when there
+ * is one, so the API counts a member once by account and never counts the poster's own clicks.
+ */
 export async function applyToJob(id: string): Promise<ApplyDetails> {
-    const body = await fetchApi(J.APPLY(enc(id)), { method: 'POST', requireAuth: false });
+    const body = await fetchApi(J.APPLY(enc(id)), { method: 'POST' });
     return { applyUrl: body?.data?.applyUrl ?? null, applyEmail: body?.data?.applyEmail ?? null };
 }
 
@@ -89,8 +95,10 @@ export async function submitJob(id: string): Promise<Job> {
     return (await send(J.SUBMIT(enc(id)), 'POST', {})).data;
 }
 
-export async function closeJob(id: string): Promise<Job> {
-    return (await send(J.CLOSE(enc(id)), 'POST', {})).data;
+/** `reason` is read for a close by staff of somebody else's job: it goes into the notice to the poster */
+export async function closeJob(id: string, reason?: string): Promise<Job> {
+    const trimmed = reason?.trim();
+    return (await send(J.CLOSE(enc(id)), 'POST', trimmed ? { reason: trimmed } : {})).data;
 }
 
 export async function reopenJob(id: string, expiresAt?: string): Promise<Job> {
@@ -114,6 +122,11 @@ export async function saveMyCompany(body: CompanyPayload): Promise<Company> {
     return (await send(C.MY_PROFILE, 'POST', body)).data;
 }
 
+/** A rejected company asks for a new review. A save of the profile does not do it. */
+export async function resubmitMyCompany(): Promise<Company> {
+    return (await send(C.MY_RESUBMIT, 'POST', {})).data;
+}
+
 // ---- Reviewers (moderator, admin, owner) ----
 
 export function listAdminJobs(filters: AdminJobFilters = {}): Promise<JobsPage<Job>> {
@@ -124,13 +137,16 @@ export async function getAdminStats(): Promise<AdminStats> {
     return (await fetchApi(J.ADMIN_STATS)).data;
 }
 
-export async function approveJob(id: string, note?: string): Promise<Job> {
+/** What a decision carries: the reviewer's note, and the `updatedAt` their screen showed (a changed job answers 409 JOB_STALE) */
+export interface DecisionOptions { note?: string; updatedAt?: string }
+
+export async function approveJob(id: string, { note, updatedAt }: DecisionOptions = {}): Promise<Job> {
     const trimmed = note?.trim();
-    return (await send(J.ADMIN_APPROVE(enc(id)), 'POST', trimmed ? { note: trimmed } : {})).data;
+    return (await send(J.ADMIN_APPROVE(enc(id)), 'POST', { ...(trimmed ? { note: trimmed } : {}), ...(updatedAt ? { updatedAt } : {}) })).data;
 }
 
-export async function rejectJob(id: string, reason: string): Promise<Job> {
-    return (await send(J.ADMIN_REJECT(enc(id)), 'POST', { reason: reason.trim() })).data;
+export async function rejectJob(id: string, reason: string, { updatedAt }: Pick<DecisionOptions, 'updatedAt'> = {}): Promise<Job> {
+    return (await send(J.ADMIN_REJECT(enc(id)), 'POST', { reason: reason.trim(), ...(updatedAt ? { updatedAt } : {}) })).data;
 }
 
 /** A decision on a reported job through the shared moderation queue (dismiss, hide, remove or restore) */
@@ -143,11 +159,11 @@ export function listAdminCompanies(params: { status?: 'pending' | 'verified' | '
     return fetchApi(`${C.ADMIN}${query({ status: params.status, q: params.q?.trim(), page: params.page, limit: params.limit })}`);
 }
 
-export async function approveCompany(id: string, note?: string): Promise<Company> {
+export async function approveCompany(id: string, { note, updatedAt }: DecisionOptions = {}): Promise<Company> {
     const trimmed = note?.trim();
-    return (await send(C.ADMIN_APPROVE(enc(id)), 'POST', trimmed ? { note: trimmed } : {})).data;
+    return (await send(C.ADMIN_APPROVE(enc(id)), 'POST', { ...(trimmed ? { note: trimmed } : {}), ...(updatedAt ? { updatedAt } : {}) })).data;
 }
 
-export async function rejectCompany(id: string, reason: string): Promise<Company> {
-    return (await send(C.ADMIN_REJECT(enc(id)), 'POST', { reason: reason.trim() })).data;
+export async function rejectCompany(id: string, reason: string, { updatedAt }: Pick<DecisionOptions, 'updatedAt'> = {}): Promise<Company> {
+    return (await send(C.ADMIN_REJECT(enc(id)), 'POST', { reason: reason.trim(), ...(updatedAt ? { updatedAt } : {}) })).data;
 }

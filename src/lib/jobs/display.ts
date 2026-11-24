@@ -100,9 +100,11 @@ export const isEmail = (value: string | null | undefined): value is string => !!
 
 /** A `mailto:` link for an apply address, or null when the address is not one. The subject names the job. */
 export function mailtoHref(email: string | null | undefined, title?: string): string | null {
-    if (!isEmail(email)) return null;
+    // A mail address is a valid one for the form, but it is also put into a link: a `?`, `&`, `#`, `%`, `=` or `/`
+    // would add a header (`?bcc=`) or another field, so such an address gets no mailto link at all.
+    if (!isEmail(email) || /[?&#%=/]/.test(email)) return null;
     const subject = title ? `?subject=${encodeURIComponent(`Application for ${title}`)}` : '';
-    return `mailto:${email}${subject}`;
+    return `mailto:${encodeURI(email)}${subject}`;
 }
 
 /** The text of a count: "1 view", "12 views" */

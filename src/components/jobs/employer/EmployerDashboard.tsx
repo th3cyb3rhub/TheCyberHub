@@ -139,7 +139,7 @@ export function EmployerDashboard() {
     const [removing, setRemoving] = useState<EmployerJob | null>(null);
 
     const rows = jobs.data?.pages.flatMap((p) => p.data) ?? [];
-    const clicks = stats.data?.totalApplicationClicks ?? stats.data?.totalApplications ?? 0;
+    const clicks = stats.data?.totalApplications ?? 0;
     const maxDays = admin ? 365 : JOB_LIMITS.maxExpiryDays;
     const dayOptions = [14, 30, 60, 90, 180, 365].filter((d) => d <= maxDays);
 

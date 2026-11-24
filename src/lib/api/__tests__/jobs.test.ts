@@ -37,11 +37,13 @@ describe('the jobs client', () => {
         expect(urls()[1]).toContain('page=2')
     })
 
-    it('counts the apply click without needing a session and returns where to apply', async () => {
+    it('counts the apply click, sends the token when there is one and returns where to apply', async () => {
         fetchApi.mockResolvedValueOnce({ data: { applyUrl: 'https://a.example/apply', applyEmail: null } })
         expect(await jobs.applyToJob('j1')).toEqual({ applyUrl: 'https://a.example/apply', applyEmail: null })
         expect(urls()[0]).toBe('/api/jobs/j1/apply')
-        expect(init()).toMatchObject({ method: 'POST', requireAuth: false })
+        // Sign-in is optional on this route: the token goes along (fetchApi adds it), it is never switched off
+        expect(init()).toEqual({ method: 'POST' })
+        expect(init()?.requireAuth).not.toBe(false)
         fetchApi.mockResolvedValueOnce({ data: null })
         expect(await jobs.applyToJob('j2')).toEqual({ applyUrl: null, applyEmail: null })
     })
@@ -84,5 +86,41 @@ describe('the jobs client', () => {
         await jobs.listAdminJobs({ reported: true, status: 'all', q: ' acme ', page: 3 })
         expect(urls()[0]).toBe('/api/jobs/admin?status=pending&sort=oldest&limit=20')
         expect(urls()[1]).toBe('/api/jobs/admin?status=all&reported=true&q=acme&page=3')
+    })
+})
+
+describe('decisions and the new calls', () => {
+    it('binds every decision to the updatedAt the reviewer saw, and sends none when there is none', async () => {
+        await jobs.approveJob('j1', { note: ' fine ', updatedAt: '2030-01-02T00:00:00.000Z' })
+        await jobs.rejectJob('j1', 'No', { updatedAt: '2030-01-02T00:00:00.000Z' })
+        await jobs.approveCompany('c1', { updatedAt: '2030-02-01T00:00:00.000Z' })
+        await jobs.rejectCompany('c1', 'No site', { updatedAt: '2030-02-01T00:00:00.000Z' })
+        await jobs.approveJob('j2')
+        const bodies = [0, 1, 2, 3, 4].map((n) => JSON.parse(init(n)!.body!))
+        expect(bodies).toEqual([
+            { note: 'fine', updatedAt: '2030-01-02T00:00:00.000Z' },
+            { reason: 'No', updatedAt: '2030-01-02T00:00:00.000Z' },
+            { updatedAt: '2030-02-01T00:00:00.000Z' },
+            { reason: 'No site', updatedAt: '2030-02-01T00:00:00.000Z' },
+            {},
+        ])
+    })
+
+    it('closes with an optional reason', async () => {
+        await jobs.closeJob('j1', '  Duplicate  ')
+        await jobs.closeJob('j2')
+        expect(JSON.parse(init(0)!.body!)).toEqual({ reason: 'Duplicate' })
+        expect(JSON.parse(init(1)!.body!)).toEqual({})
+    })
+
+    it('asks for a new review of a rejected company on its own route', async () => {
+        await jobs.resubmitMyCompany()
+        expect(urls()[0]).toBe('/api/companies/my/resubmit')
+        expect(init()?.method).toBe('POST')
+    })
+
+    it('reads a job without a cache, so the API counts the view', async () => {
+        await jobs.getJob('j1')
+        expect(init()).toMatchObject({ cache: 'no-store' })
     })
 })

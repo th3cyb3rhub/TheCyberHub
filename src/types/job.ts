@@ -88,6 +88,8 @@ export interface JobModeration {
     at?: string | null;
     /** Reviewers only */
     by?: string | null;
+    /** Reviewers only: a decision against the job holds, so the poster's submit or reopen only goes to review */
+    locked?: boolean;
 }
 
 export interface JobPoster {
@@ -127,7 +129,7 @@ export interface Job extends JobCard {
 }
 
 /** A row of the poster's own list: no long text */
-export type EmployerJob = JobCard & Pick<Job, 'status' | 'moderation' | 'applicationCount' | 'postedBy'>;
+export type EmployerJob = JobCard & Pick<Job, 'status' | 'moderation' | 'applicationCount' | 'postedBy' | 'updatedAt'>;
 
 export interface JobsPagination {
     page: number;
@@ -182,9 +184,8 @@ export interface MineStats {
     totalJobs: number;
     activeJobs: number;
     totalViews: number;
-    /** Clicks on the apply link. The API documents `totalApplicationClicks`; some builds send `totalApplications`. */
-    totalApplicationClicks?: number;
-    totalApplications?: number;
+    /** Clicks on the apply link */
+    totalApplications: number;
     byStatus: Record<string, number>;
 }
 
@@ -222,8 +223,19 @@ export interface Company {
     status: CompanyStatus;
     isVerified?: boolean;
     createdAt?: string;
-    /** The owner's own company only */
+    /** The owner's own company only (and reviewers') */
     moderation?: { reason?: string | null; at?: string | null; by?: string | null };
+    /** Owner and reviewers: what the public sees (the last approved name, website and logo); null until a reviewer approved it */
+    reviewed?: CompanyIdentity | null;
+    /** Owner and reviewers: the instant a decision can be bound to */
+    updatedAt?: string;
+}
+
+/** The name, website and logo a reviewer approved */
+export interface CompanyIdentity {
+    name: string;
+    website?: string | null;
+    logo?: string | null;
 }
 
 export interface AdminCompany extends Company {
@@ -255,7 +267,8 @@ export interface JobPayload {
     experienceLevel?: ExperienceLevel;
     locationType?: LocationType;
     location?: string | null;
-    salary?: JobSalary;
+    /** `null` clears the whole pay; a field set to `null` inside it removes just that figure */
+    salary?: JobSalary | null;
     applicationDeadline?: string | null;
     applyUrl?: string | null;
     applyEmail?: string | null;
