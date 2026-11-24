@@ -31,6 +31,8 @@ export const labKeys = {
     stats: (userId: string | null = null) => ['labs', 'stats', userId] as const,
     boards: () => ['labs', 'leaderboard'] as const,
     globalBoard: (params: { category?: LabCategory | ''; limit?: number } = {}) => ['labs', 'leaderboard', 'global', params.category ?? '', params.limit ?? null] as const,
+    /** The cards of one category, for "what to do next" */
+    next: (category: string, userId: string | null = null) => ['labs', 'list', 'next', category, userId] as const,
     labBoard: (slug: string, limit?: number) => ['labs', 'leaderboard', 'lab', slug, limit ?? null] as const,
     admin: () => ['labs', 'admin'] as const,
     adminList: (params: object, userId: string | null = null) => ['labs', 'admin', 'list', userId, params] as const,
@@ -104,6 +106,17 @@ export function useLab(slug: string, serverLab?: LabDetail | null) {
         placeholderData: signedIn ? (serverLab ?? undefined) : undefined,
         staleTime: 30_000,
         retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 2,
+    });
+}
+
+/** The other labs of a category, so a finished lab can suggest the next one. Not fetched until `enabled`. */
+export function useNextLabCards(category: LabCategory | undefined, enabled: boolean) {
+    const { user, loading } = useAuth();
+    return useQuery({
+        queryKey: labKeys.next(category ?? '', user?.id ?? null),
+        queryFn: async () => (await api.listLabs({ category, sort: 'difficulty', limit: 20 })).data,
+        enabled: enabled && !!category && !loading,
+        staleTime: 60_000,
     });
 }
 

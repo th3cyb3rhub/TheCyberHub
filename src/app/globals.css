@@ -658,6 +658,34 @@ html[data-theme="light"] .event-md hr {
   border-color: rgba(0, 0, 0, 0.12) !important;
 }
 
+/* Markdown on lab pages (instructions and hints): the renderer's classes assume a dark page */
+html[data-theme="light"] .lab-md h1,
+html[data-theme="light"] .lab-md h2,
+html[data-theme="light"] .lab-md h3 {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .lab-md p,
+html[data-theme="light"] .lab-md li {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] .lab-md blockquote {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .lab-md a {
+  color: #c2410c !important;
+}
+
+html[data-theme="light"] .lab-md code {
+  color: #c2410c !important;
+}
+
+html[data-theme="light"] .lab-md hr {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
 /* ============================
    Printing a certificate: the page chrome stays out of the printout
    ============================ */

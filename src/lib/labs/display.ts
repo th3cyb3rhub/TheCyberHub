@@ -100,3 +100,25 @@ export function pointsAfterHint(available: number, penalty: number): number {
 export function pointsText(points: number): string {
     return `${points} ${points === 1 ? 'point' : 'points'}`;
 }
+
+/**
+ * The lab to suggest after one: from the same category, not completed, not the one just done.
+ * Labs of the same or a higher difficulty come first, in the order the list gave them.
+ */
+export function pickNextLab<T extends { slug: string; difficultyRank: number; myStatus?: LabViewerStatus }>(
+    cards: readonly T[], current: { slug: string; difficultyRank: number },
+): T | null {
+    const open = cards.filter((c) => c.slug !== current.slug && c.myStatus !== 'completed');
+    return open.find((c) => c.difficultyRank >= current.difficultyRank) ?? open[0] ?? null;
+}
+
+/** Whether a start can still be taken back: the server keeps any row with a hint or a wrong flag */
+export function canStop(viewer: { myStatus: LabViewerStatus; hintsUsed: number; attempts: number } | null | undefined): boolean {
+    return !!viewer && viewer.myStatus === 'in-progress' && viewer.hintsUsed === 0 && viewer.attempts === 0;
+}
+
+/** Plain text for a description in a meta tag */
+export function excerpt(text: string | null | undefined, max = 160): string {
+    const clean = (text ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return clean.length <= max ? clean : `${clean.slice(0, max - 1).trimEnd()}\u2026`;
+}
