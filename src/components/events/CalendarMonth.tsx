@@ -6,6 +6,7 @@ import { Ban, Repeat } from 'lucide-react';
 import {
     addDays, addMonths, bucketByDay, countLabel, dayLong, gridWeekdays, monthGrid, monthOf, monthTitle, type DayItem, type DayKey,
 } from '@/lib/events/calendar';
+import { CATEGORY_LABELS } from '@/lib/events/form';
 import { formatClock } from '@/lib/events/time';
 import type { CalendarItem } from '@/types/event';
 import { CalendarItemRow } from './CalendarItemRow';
@@ -24,6 +25,15 @@ interface Props {
     /** Move the calendar to this day (another month, from the keyboard) */
     onNavigate: (day: DayKey) => void;
 }
+
+const CATEGORY_SWATCH: Record<string, string> = {
+    ctf: 'bg-red-600',
+    webinar: 'bg-blue-600',
+    workshop: 'bg-emerald-600',
+    meetup: 'bg-purple-600',
+    conference: 'bg-amber-600',
+    hackathon: 'bg-pink-600',
+};
 
 const CATEGORY_BAR: Record<string, string> = {
     ctf: 'border-l-red-600',
@@ -46,10 +56,11 @@ function CellItem({ entry, zone }: { entry: DayItem; zone: string }) {
             className={`flex min-w-0 items-center gap-1 rounded border-l-4 bg-gray-100 px-1.5 py-0.5 text-xs text-gray-900 hover:bg-orange-100 dark:bg-neutral-800 dark:text-gray-100 dark:hover:bg-neutral-700 ${CATEGORY_BAR[item.category] ?? 'border-l-gray-500'} ${cancelled ? 'text-gray-600 line-through dark:text-gray-400' : ''}`}
         >
             {cancelled && <Ban className="h-3 w-3 shrink-0" aria-hidden="true" />}
-            {live && <span className="h-2 w-2 shrink-0 rounded-full bg-green-600" aria-hidden="true" />}
+            {live && <span className="shrink-0 rounded bg-green-100 px-1 text-[10px] font-semibold uppercase leading-4 text-green-900 dark:bg-green-500/20 dark:text-green-200" aria-hidden="true" data-testid="live-mark">Live</span>}
             {item.seriesId && <Repeat className="h-3 w-3 shrink-0 text-purple-700 dark:text-purple-300" aria-hidden="true" />}
             {!item.isAllDay && !continued && <span className="shrink-0 font-medium">{formatClock(item.startDate, zone)}</span>}
             <span className="truncate">{item.title}</span>
+            <span className="sr-only">, {CATEGORY_LABELS[item.category as keyof typeof CATEGORY_LABELS] ?? item.category}</span>
             {cancelled && <span className="sr-only"> (cancelled)</span>}
             {live && <span className="sr-only"> (live now)</span>}
             {item.seriesId && <span className="sr-only"> (recurring)</span>}
@@ -120,13 +131,30 @@ export function CalendarMonth({ date, today, items, zone, onNavigate }: Props) {
         moveTo(target);
     };
 
+    // Colour is never the only signal: each category on screen is named next to its colour
+    const legend = useMemo(() => {
+        const seen = new Set<string>();
+        for (const entries of Array.from(byDay.values())) for (const entry of entries) seen.add(entry.item.category);
+        return Array.from(seen).sort();
+    }, [byDay]);
+
     const weekdays = gridWeekdays();
     const openItems = openDay ? byDay.get(openDay) ?? [] : [];
 
     return (
         <>
+            {legend.length > 0 && (
+                <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700 dark:text-gray-300" aria-label="Category colours" data-testid="month-legend">
+                    {legend.map((category) => (
+                        <li key={category} className="inline-flex items-center gap-1.5">
+                            <span className={`h-2.5 w-2.5 rounded-sm ${CATEGORY_SWATCH[category] ?? 'bg-gray-500'}`} aria-hidden="true" />
+                            {CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ?? category}
+                        </li>
+                    ))}
+                </ul>
+            )}
             <div role="grid" aria-label={monthTitle(date)} aria-rowcount={7} aria-colcount={7} className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-900/60" data-testid="month-grid">
-                <div role="row" className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 dark:border-neutral-800 dark:bg-neutral-900">
+                <div role="row" aria-rowindex={1} className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 dark:border-neutral-800 dark:bg-neutral-900">
                     {weekdays.map((name) => (
                         <div key={name} role="columnheader" aria-label={name} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300">
                             <span aria-hidden="true">{name.slice(0, 3)}</span>

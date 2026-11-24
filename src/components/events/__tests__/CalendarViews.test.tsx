@@ -53,6 +53,19 @@ describe('CalendarMonth', () => {
         expect(within(cell('2026-12-11')).getByText('(recurring)')).toBeInTheDocument()
     })
 
+    it('names each category on screen in a legend and shows a visible Live mark', () => {
+        renderMonth()
+        const legend = screen.getByTestId('month-legend')
+        expect(within(legend).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['CTF'])
+        expect(within(cell('2026-12-11')).getByTestId('live-mark')).toHaveTextContent('Live')
+        expect(screen.getAllByRole('row')[0]).toHaveAttribute('aria-rowindex', '1')
+    })
+
+    it('has no legend for an empty month', () => {
+        render(<CalendarMonth date="2027-03-09" today="2026-12-09" items={[]} zone="UTC" onNavigate={onNavigate} />)
+        expect(screen.queryByTestId('month-legend')).not.toBeInTheDocument()
+    })
+
     it('has one tab stop: the day in the address, moving with the arrow keys', () => {
         renderMonth()
         const tabbable = () => screen.getAllByRole('gridcell').filter((c) => c.tabIndex === 0).map((c) => c.getAttribute('data-day'))
