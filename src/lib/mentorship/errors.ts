@@ -54,6 +54,11 @@ const MESSAGES: Record<string, string> = {
     TRANSACTIONS_UNAVAILABLE: 'The service is temporarily unavailable. Please try again later.',
     FLAG_CLOSED: 'This report was already handled by another moderator.',
     MENTEE_UNAVAILABLE: 'This member cannot take part in a mentorship right now.',
+    SESSION_CHANGED: 'This session changed while you were editing it. Reload and try again.',
+    SESSION_NOT_SCHEDULED: 'This session was already held or cancelled, so it cannot be changed.',
+    MENTORSHIP_STATE_CONFLICT: 'This mentorship changed in the meantime. Reload the page and try again.',
+    REQUEST_STILL_OPEN: 'This request is still open, so it does not need to be renewed.',
+    MENTOR_SUSPENDED: 'Your mentor profile is suspended. Contact the team to find out more.',
     AUTHZ_FORBIDDEN: 'You are not allowed to do that.',
 };
 

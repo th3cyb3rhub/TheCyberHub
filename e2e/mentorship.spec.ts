@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signInAs, testUser } from './helpers';
-import { MENTORSHIP_ID, MENTOR_ID, defaultState, iso, mentor, mentorship, message, mockMentorshipApi, session, viewerBlock } from './mentorship-mocks';
+import { MENTORSHIP_ID, MENTOR_ID, iso, mentor, mentorship, message, mockMentorshipApi, session, viewerBlock } from './mentorship-mocks';
 
 // The API's /auth/me answers with `id`
 const me = { ...testUser, id: 'user-1' };
@@ -356,6 +356,37 @@ test.describe('Workspace', () => {
         await page.getByRole('dialog').getByRole('button', { name: 'Send report' }).click();
         await expect.poll(() => calls.some((c) => c.path.endsWith('/report'))).toBe(true);
         expect(calls.find((c) => c.path.endsWith('/report'))?.body).toMatchObject({ target: 'message' });
+    });
+
+    test('chat: code with three backticks is refused with a reason and keeps what was typed', async ({ page }) => {
+        await signInAs(page, me);
+        const { calls } = await mockMentorshipApi(page);
+        await page.goto(`/mentorship/${MENTORSHIP_ID}?tab=messages`);
+        await page.getByLabel('Code', { exact: true }).check({ force: true });
+        await page.getByLabel('Write a message').fill('echo "```"');
+        await expect(page.getByRole('alert').filter({ hasText: 'three backticks' })).toBeVisible();
+        await page.getByLabel('Send message').click();
+        await expect(page.getByLabel('Write a message')).toHaveValue('echo "```"');
+        expect(calls.filter((c) => c.path.endsWith('/messages'))).toHaveLength(0);
+    });
+
+    test('chat: plain text that looks like HTML suggests code mode', async ({ page }) => {
+        await signInAs(page, me);
+        await mockMentorshipApi(page);
+        await page.goto(`/mentorship/${MENTORSHIP_ID}?tab=messages`);
+        await page.getByLabel('Write a message').fill('<script>alert(1)</script>');
+        await page.getByRole('button', { name: 'Send it as code' }).click();
+        await expect(page.getByLabel('Language')).toBeVisible();
+    });
+
+    test('says so, without asking the API, when the address is not a mentorship id', async ({ page }) => {
+        await signInAs(page, me);
+        const requested: string[] = [];
+        page.on('request', (r) => { if (r.url().includes('/api/mentorships/')) requested.push(r.url()); });
+        await mockMentorshipApi(page);
+        await page.goto('/mentorship/not-an-id');
+        await expect(page.getByText('Mentorship not found')).toBeVisible();
+        expect(requested.filter((u) => u.includes('not-an-id'))).toHaveLength(0);
     });
 
     test('says so when the mentorship does not exist', async ({ page }) => {
