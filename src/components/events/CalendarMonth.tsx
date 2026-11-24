@@ -73,10 +73,12 @@ export function CalendarMonth({ date, today, items, zone, onNavigate }: Props) {
 
     // When the month changes, focus lands on the day that was asked for, else the day in the URL
     useEffect(() => {
-        const target = pending.current ?? date;
+        const requested = pending.current;
         pending.current = null;
+        const target = requested ?? date;
         setFocusDay(target >= grid.first && target <= grid.last ? target : date);
-        if (target !== date || document.activeElement?.getAttribute('role') === 'gridcell') cells.current.get(target)?.focus();
+        // Only a keyboard move asks for focus; the buttons of the toolbar keep it
+        if (requested) cells.current.get(target)?.focus();
     }, [date, grid.first, grid.last]);
 
     const moveTo = (day: DayKey) => {
