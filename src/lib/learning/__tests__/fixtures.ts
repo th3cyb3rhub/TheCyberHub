@@ -24,7 +24,7 @@ export const viewer = (over: Partial<PathViewer> = {}): PathViewer => ({
 
 export const makeDetail = (over: Partial<LearningDetail> = {}): LearningDetail => ({
     id: 'p1', slug: 'web-hacking', title: 'Web hacking', kind: 'roadmap', shortDescription: 'From HTTP to exploits', description: 'A roadmap.',
-    category: 'web-security', difficulty: 'beginner', estimatedDuration: '6 weeks', skills: ['http'], moduleCount: 4, requiredCount: 3,
+    category: 'offensive', difficulty: 'beginner', estimatedDuration: '6 weeks', skills: ['http'], moduleCount: 4, requiredCount: 3,
     enrollmentCount: 10, completionCount: 2, isFeatured: false, publishedAt: '2026-10-01T10:00:00Z', prerequisites: [],
     stages: [{ title: 'Basics', moduleIds: ['a', 'b'] }, { title: 'Attacks', moduleIds: ['c', 'd'] }], modules: modules(), archived: false,
     updatedAt: '2026-11-01T10:00:00Z', viewer: viewer(), ...over,
