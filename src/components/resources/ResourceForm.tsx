@@ -31,7 +31,7 @@ const CHECK_MESSAGES: Record<string, string> = {
 };
 
 /** What the duplicate check found, in words, with a link to the existing entry when there is one */
-export function UrlCheckNote({ check, checking, own }: { check: UrlCheck | undefined; checking: boolean; own?: boolean }) {
+export function UrlCheckNote({ check, checking }: { check: UrlCheck | undefined; checking: boolean }) {
     if (checking) return <p className={`mt-1 flex items-center gap-1.5 text-xs ${muted}`} role="status"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Checking the library</p>;
     if (!check) return null;
     if (!check.valid) return <p role="alert" className="mt-1 flex items-start gap-1.5 text-sm text-red-700 dark:text-red-400"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{CHECK_MESSAGES[check.reason ?? 'invalid'] ?? CHECK_MESSAGES.invalid}</p>;
@@ -43,9 +43,10 @@ export function UrlCheckNote({ check, checking, own }: { check: UrlCheck | undef
                 <span>
                     {dup.status === 'approved' && dup.slug
                         ? <>Already in the library: <Link href={`/resources/${dup.slug}`} className="font-medium underline">{dup.title ?? 'view it'}</Link>.</>
-                        : own || dup.slug
+                        // The server names a pending entry (id or slug) only when it is the caller's own
+                        : dup.id || dup.slug
                             ? <>You already submitted this link. <Link href={`/resources/${dup.slug ?? dup.id}`} className="font-medium underline">{dup.title ?? 'View it'}</Link> is waiting for review.</>
-                            : <>Someone already submitted this link and it is waiting for review.</>}
+                            : <>This link is already waiting for review.</>}
                 </span>
             </p>
         );
@@ -207,7 +208,7 @@ export function ResourceForm({ resource, from }: ResourceFormProps) {
                 />
                 <div id={`${uid}-url-note`}>
                     {errors.url ? <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.url}</p> : (
-                        <UrlCheckNote check={checkData} checking={check.isFetching && !unchangedLink && !!checkedUrl} own />
+                        <UrlCheckNote check={checkData} checking={check.isFetching && !unchangedLink && !!checkedUrl} />
                     )}
                     {!errors.url && !checkData && <p className={`mt-1 text-xs ${muted}`}>Use the full web address (http or https). Shortened links are not accepted.</p>}
                 </div>

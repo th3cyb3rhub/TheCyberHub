@@ -99,6 +99,22 @@ describe('duplicate preview', () => {
         expect(screen.getByTestId('duplicate')).toHaveTextContent('Already in the library')
         expect(screen.getByRole('button', { name: 'Submit for review' })).toBeDisabled()
     })
+    it('says "you submitted this" with a link only when the server names the entry', () => {
+        check.current = { isFetching: false, data: { valid: true, domain: 'a.org', duplicate: { status: 'pending', id: 'r9', title: 'My guide' } } }
+        render(<ResourceForm />)
+        const note = screen.getByTestId('duplicate')
+        expect(note).toHaveTextContent('You already submitted this link')
+        expect(within(note).getByRole('link', { name: 'My guide' })).toHaveAttribute('href', '/resources/r9')
+    })
+    it('shows a neutral message, with no link, for someone else\'s pending entry', () => {
+        check.current = { isFetching: false, data: { valid: true, domain: 'a.org', duplicate: { status: 'pending' } } }
+        render(<ResourceForm />)
+        const note = screen.getByTestId('duplicate')
+        expect(note).toHaveTextContent('This link is already waiting for review.')
+        expect(note).not.toHaveTextContent('You already submitted')
+        expect(within(note).queryByRole('link')).toBeNull()
+        expect(document.body.innerHTML).not.toContain('/resources/undefined')
+    })
     it('says the link is new when nothing matches', () => {
         check.current = { isFetching: false, data: { valid: true, domain: 'owasp.org', duplicate: null } }
         render(<ResourceForm />)

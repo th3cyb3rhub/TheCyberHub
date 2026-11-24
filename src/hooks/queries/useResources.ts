@@ -21,7 +21,7 @@ export const resourceKeys = {
     mine: (status: string, userId: string | null) => ['resources', 'my', status, userId] as const,
     reading: (status: string, userId: string | null) => ['resources', 'reading', status, userId] as const,
     review: (queue: string, q: string, userId: string | null) => ['resources', 'review', queue, q, userId] as const,
-    checkUrl: (url: string) => ['resources', 'check-url', url] as const,
+    checkUrl: (url: string, userId: string | null) => ['resources', 'check-url', url, userId] as const,
 };
 
 const PAGE_SIZE = 12;
@@ -99,9 +99,11 @@ export function useResourceReviewQueue(queue: ReviewQueue, q: string, { enabled 
 
 /** Duplicate and shortener check for a link the member typed. No request is made for a link that cannot be valid. */
 export function useCheckUrl(url: string) {
+    const { user } = useAuth();
     const trimmed = url.trim();
     return useQuery<UrlCheck>({
-        queryKey: resourceKeys.checkUrl(trimmed),
+        // The answer names the caller's own pending entry, so it is cached per member
+        queryKey: resourceKeys.checkUrl(trimmed, user?.id ?? null),
         queryFn: () => api.checkUrl(trimmed),
         enabled: trimmed.length > 0 && !!parseHttpUrl(trimmed),
         staleTime: 30_000,

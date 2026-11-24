@@ -86,6 +86,14 @@ describe('moderating', () => {
         fireEvent.click(within(screen.getAllByTestId('queue-row')[0]).getByRole('button', { name: /Approve/ }))
         expect(approve.mutate).toHaveBeenCalledWith({ slug: 'pending-one', title: 'Pending One' })
     })
+    it('offers approve only for entries waiting for review', () => {
+        queue.current = page([pending, makeResource({ id: 'r3', slug: 'gone', title: 'Rejected One', status: 'rejected' }), reported])
+        render(<AdminResourcesView />)
+        const rows = screen.getAllByTestId('queue-row')
+        expect(within(rows[0]).getByRole('button', { name: /Approve/ })).toBeInTheDocument()
+        expect(within(rows[1]).queryByRole('button', { name: /Approve/ })).toBeNull()
+        expect(within(rows[2]).queryByRole('button', { name: /Approve/ })).toBeNull()
+    })
     it('does not offer to approve what is already approved', () => {
         render(<AdminResourcesView />)
         expect(within(screen.getAllByTestId('queue-row')[1]).queryByRole('button', { name: /Approve/ })).toBeNull()

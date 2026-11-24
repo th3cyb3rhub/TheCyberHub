@@ -100,6 +100,10 @@ describe('queries', () => {
         expect(api.listResources).toHaveBeenCalledWith({ limit: 12, type: 'video', page: 1 })
         expect(result.current.hasNextPage).toBe(true)
     })
+    it('keeps one member\'s link check apart from another\'s', () => {
+        expect(resourceKeys.checkUrl('https://a.org/x', 'u1')).not.toEqual(resourceKeys.checkUrl('https://a.org/x', 'u2'))
+        expect(resourceKeys.checkUrl('https://a.org/x', 'u1')).toContain('u1')
+    })
     it('checks a link only when it is a valid http link', async () => {
         api.checkUrl.mockResolvedValue({ normalizedUrl: 'https://a.org/x', domain: 'a.org', duplicate: null })
         const bad = renderHook(() => useCheckUrl('javascript:alert(1)'), { wrapper })

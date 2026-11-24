@@ -119,7 +119,8 @@ function Row({ resource, viewer, onDialog, now }: { resource: Resource; viewer: 
                 {href && <a href={href} target="_blank" rel={EXTERNAL_REL} className={btnSecondary}><ExternalLink className="h-4 w-4" aria-hidden="true" /> Open link<span className="sr-only"> for {resource.title} (new tab)</span></a>}
                 {own ? <span className={`text-xs ${muted}`} data-testid="own-submission">Your own submission: another moderator reviews it.</span> : (
                     <>
-                        {resource.status !== 'approved' && (
+                        {/* The API approves only what is waiting for review (409 otherwise) */}
+                        {resource.status === 'pending' && (
                             <button type="button" className={btnPrimary} disabled={approve.isPending} onClick={() => approve.mutate({ slug: resource.slug, title: resource.title })}>
                                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Approve<span className="sr-only"> {resource.title}</span>
                             </button>
