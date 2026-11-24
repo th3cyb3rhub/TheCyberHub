@@ -17,6 +17,8 @@ export class ApiError extends Error {
     details?: ApiErrorDetail[];
     /** Machine-readable context some errors carry (`reason`, `scope`, `retryAfter` on the tools API) */
     meta?: Record<string, unknown>;
+    /** The API's own clock when it built the error (`timestamp` of the error body), an ISO instant */
+    serverTime?: string;
     constructor(message: string, status: number, code?: string, details?: ApiErrorDetail[], meta?: Record<string, unknown>) {
         super(message);
         this.name = 'ApiError';
@@ -93,9 +95,11 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         let errorCode: string | undefined;
         let errorDetails: ApiErrorDetail[] | undefined;
         let errorMeta: Record<string, unknown> | undefined;
+        let errorTime: string | undefined;
         try {
             const data = await response.json();
             errorMessage = data.message || data.error?.message || errorMessage;
+            if (typeof data.timestamp === 'string') errorTime = data.timestamp;
             if (typeof data.error?.code === 'string') errorCode = data.error.code;
             // Rate limiters answer with the wait at `error.retryAfter` (seconds); a lock puts it in `meta`.
             // Either way callers read `meta.retryAfter`.
@@ -118,7 +122,9 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         } catch {
             // Ignore JSON parsing errors
         }
-        throw new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
+        const failure = new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
+        if (errorTime) failure.serverTime = errorTime;
+        throw failure;
     }
 
     if (raw) return response;

@@ -27,7 +27,8 @@ import {
     Wrench,
     Route,
     Library,
-    FlaskConical
+    FlaskConical,
+    Trophy
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -143,6 +144,14 @@ const adminSections = [
         icon: Users,
         href: '/admin/internships',
         color: 'from-orange-500 to-amber-500',
+        minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'CTF Competitions',
+        description: 'Timed competitions: dates, teams, scoring, prizes and the challenge set',
+        icon: Trophy,
+        href: '/admin/ctf',
+        color: 'from-yellow-500 to-orange-600',
         minRole: 'moderator' as MinRole,
     },
     {
