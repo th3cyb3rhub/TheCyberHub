@@ -37,7 +37,7 @@ export function internshipErrorMessage(err: unknown, fallback = 'Something went 
         if (err.status === 401) return 'Sign in to do that.';
         if (err.status === 403) return 'You are not allowed to do that.';
         if (err.status === 404) return MESSAGES.INTERNSHIP_NOT_FOUND;
-        if (err.status === 429) return 'You are doing that too quickly. Please wait a minute and try again.';
+        if (err.status === 429) return 'Too many requests. Try again in a moment.';
         if (err.code === 'VALIDATION_ERROR' && err.details?.length) return err.details.map((d) => d.message).join(' ');
         return err.message || fallback;
     }

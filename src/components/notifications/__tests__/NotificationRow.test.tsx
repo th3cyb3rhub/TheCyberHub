@@ -62,4 +62,12 @@ describe('NotificationRow', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Delete this notification' }))
         expect(onDelete).toHaveBeenCalledWith('g1')
     })
+
+    it('shows an internship update that has no actor, with the internships icon and its link', () => {
+        const n: NotificationData = { _id: 'i1', type: 'internship-update', title: 'Application update', message: 'Your application to Summer Internship is now in review.', read: false, createdAt: new Date().toISOString(), link: '/internships/abc' }
+        const { container } = render(<ul><NotificationRow notification={n} onRead={vi.fn()} /></ul>)
+        expect(screen.getByRole('link', { name: /Your application to Summer Internship is now in review/ })).toHaveAttribute('href', '/internships/abc')
+        expect(screen.queryByText(/^@/)).toBeNull()
+        expect(container.querySelector('svg')).not.toBeNull()
+    })
 })

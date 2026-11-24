@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { isHttpUrl } from './application';
+import { isPublicHttpUrl } from './application';
+import { formFieldPath } from './errors';
 import type {
     AnswerType, CohortDetail, CohortPayload, CohortPayloadField, CohortStatus, CohortType, ShowcaseProject, SyllabusWeek,
 } from '@/types/internship';
@@ -238,7 +239,7 @@ export function buildUpdatePayload(initial: CohortFormValues, current: CohortFor
 // Validation
 // ---------------------------------------------------------------------------
 
-const link = z.string().max(FORM_LIMITS.url, 'This link is too long').refine((v) => isHttpUrl(v), 'Use a link that starts with http:// or https://');
+const link = z.string().max(FORM_LIMITS.url, 'This link is too long').refine((v) => isPublicHttpUrl(v), 'Use a public link that starts with http:// or https://');
 const lines = (label: string, maxItems: number, maxLength: number) => z.array(z.string().max(maxLength, `Each ${label} line can be up to ${maxLength} characters`)).max(maxItems, `At most ${maxItems} lines`);
 
 const syllabusSchema = z.object({
@@ -304,7 +305,7 @@ export function validateCohort(values: CohortFormValues, options: ValidateOption
 
     const parsed = cohortSchema.safeParse(payload);
     if (!parsed.success) {
-        for (const issue of parsed.error.issues) note(issue.path.map(String).join('.'), issue.message);
+        for (const issue of parsed.error.issues) note(formFieldPath(issue.path.map(String).join('.')), issue.message);
     }
 
     // Dates that are typed but not real
@@ -333,7 +334,13 @@ export function validateCohort(values: CohortFormValues, options: ValidateOption
         if (weeks.has(w.week)) note(`syllabus.${i}.week`, 'Another week already has this number');
         weeks.add(w.week);
     });
+    // The API refuses two questions with the same id: ids come from the server and are never typed, but check anyway
+    const ids = new Set<string>();
     payload.customFields.forEach((f, i) => {
+        if (f._id) {
+            if (ids.has(f._id)) note(`customFields.${i}`, 'This question appears twice');
+            ids.add(f._id);
+        }
         if (f.type === 'dropdown') {
             const opts = f.options ?? [];
             if (opts.length === 0) note(`customFields.${i}.options`, 'A dropdown needs at least one option');

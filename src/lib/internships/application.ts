@@ -21,8 +21,29 @@ export function isHttpUrl(value: string): boolean {
     }
 }
 
+/** An IPv4 address in a private, loopback, link-local or otherwise non-public range */
+function isPrivateIPv4(host: string): boolean {
+    const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+    if (!m) return false;
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+}
+
+/**
+ * A link the API accepts: http(s), no credentials, a public-looking host (no localhost, private or
+ * internal addresses) and at most 2048 characters. The API is the judge; this only saves a round trip.
+ */
+export function isPublicHttpUrl(value: string): boolean {
+    if (value.length > 2048 || !isHttpUrl(value)) return false;
+    const host = new URL(value).hostname.toLowerCase().replace(/\.$/, '');
+    if (host.startsWith('[') || host.includes(':')) return false; // IPv6 literals
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return false;
+    if (isPrivateIPv4(host)) return false;
+    return host.includes('.');
+}
+
 const optionalLink = (label: string) => z.string().trim().max(LIMITS.url, `${label} is too long`)
-    .refine((v) => v === '' || isHttpUrl(v), `${label} must be a link that starts with http:// or https://`);
+    .refine((v) => v === '' || isPublicHttpUrl(v), `${label} must be a public link that starts with http:// or https://`);
 
 /** The fixed part of the application form */
 export const applicationSchema = z.object({
@@ -62,7 +83,7 @@ export function validateAnswers(fields: CustomField[], values: Record<string, st
         if (field.type === 'dropdown') {
             if (!field.options.includes(value)) errors[key] = `${field.label} must be one of the options`;
         } else if (field.type === 'file') {
-            if (value.length > LIMITS.url || !isHttpUrl(value)) errors[key] = `${field.label} must be a valid http or https link`;
+            if (!isPublicHttpUrl(value)) errors[key] = `${field.label} must be a valid public http or https link`;
         } else {
             const max = field.type === 'textarea' ? LIMITS.answerTextarea : LIMITS.answerText;
             if (value.length > max) errors[key] = `${field.label} cannot exceed ${max} characters`;
