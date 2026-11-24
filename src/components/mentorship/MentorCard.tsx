@@ -1,145 +1,37 @@
-'use client';
-
 import Link from 'next/link';
-import Image from 'next/image';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { RatingStars } from './RatingStars';
-import { ExpertiseBadge } from './ExpertiseBadge';
-import type { MentorProfile } from '@/lib/mentorship/types';
+import { Clock, Users } from 'lucide-react';
+import { displayName, spotsLabel } from '@/lib/mentorship/display';
+import type { Mentor } from '@/types/mentorship';
+import { Avatar, ExpertiseChips, RatingStars } from './shared';
+import { card, chip, focusRing, muted } from './styles';
 
-interface MentorCardProps {
-    mentor: MentorProfile;
-    onClick?: () => void;
-    featured?: boolean;
-}
-
-export function MentorCard({ mentor, onClick, featured }: MentorCardProps) {
-    const isAvailable = !mentor.isPaused && mentor.currentMenteeCount < mentor.maxMentees;
-    const displayedExpertise = mentor.expertiseAreas.slice(0, 3);
-    const remainingCount = mentor.expertiseAreas.length - 3;
-
-    const content = (
-        <Card
-            className={`group cursor-pointer hover:shadow-md transition-shadow h-full ${featured ? 'ring-2 ring-orange-500/30' : ''}`}
-            role="article"
-            aria-label={`Mentor profile: ${mentor.user.name}`}
-        >
-            <CardContent className="p-4">
-                {/* Header with Avatar and Status */}
-                <div className="flex items-start gap-3 mb-3">
-                    <div className="relative">
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                            {mentor.user.avatar ? (
-                                <Image
-                                    src={mentor.user.avatar}
-                                    alt={`${mentor.user.name}'s avatar`}
-                                    width={48}
-                                    height={48}
-                                    className="w-full h-full object-cover"
-                                    unoptimized
-                                />
-                            ) : (
-                                <span className="text-lg font-semibold text-muted-foreground" aria-hidden="true">
-                                    {mentor.user.name.charAt(0).toUpperCase()}
-                                </span>
-                            )}
-                        </div>
-                        {mentor.isVerified && (
-                            <div
-                                className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center"
-                                title="Verified mentor"
-                                aria-label="Verified mentor"
-                            >
-                                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-                            {mentor.user.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground truncate">@{mentor.user.username}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <span
-                            className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}
-                            aria-hidden="true"
-                        />
-                        <Badge
-                            variant={isAvailable ? 'default' : 'secondary'}
-                            className="text-xs"
-                            aria-label={isAvailable ? 'Mentor is available' : 'Mentor is unavailable'}
-                        >
-                            {isAvailable ? 'Available' : 'Unavailable'}
-                        </Badge>
-                    </div>
-                </div>
-
-                {/* Rating */}
-                <div className="flex items-center gap-2 mb-3">
-                    <RatingStars rating={mentor.rating} size="sm" />
-                    <span className="text-xs text-muted-foreground">
-                        ({mentor.totalRatings} review{mentor.totalRatings !== 1 ? 's' : ''})
-                    </span>
-                </div>
-
-                {/* Expertise Areas */}
-                <div className="flex flex-wrap gap-1 mb-3" role="list" aria-label="Expertise areas">
-                    {displayedExpertise.map((area) => (
-                        <ExpertiseBadge key={area} area={area} size="sm" />
-                    ))}
-                    {remainingCount > 0 && (
-                        <Badge variant="outline" className="text-xs" aria-label={`${remainingCount} more expertise areas`}>
-                            +{remainingCount} more
-                        </Badge>
-                    )}
-                </div>
-
-                {/* Video Intro indicator */}
-                {mentor.videoIntroUrl && (
-                    <div className="flex items-center gap-1.5 text-xs text-blue-400 mb-2">
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                        Video Intro
-                    </div>
-                )}
-
-                {/* Stats */}
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                    <span aria-label={`${mentor.completedMentorships} completed mentorships`}>
-                        {mentor.completedMentorships} mentorship{mentor.completedMentorships !== 1 ? 's' : ''}
-                    </span>
-                    <span aria-label={`${mentor.availability.hoursPerWeek} hours available per week`}>
-                        {mentor.availability.hoursPerWeek}h/week
-                    </span>
-                </div>
-            </CardContent>
-        </Card>
-    );
-
-    if (onClick) {
-        return (
-            <button
-                onClick={onClick}
-                className="w-full text-left focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 rounded-lg"
-                aria-label={`View ${mentor.user.name}'s profile`}
-            >
-                {content}
-            </button>
-        );
-    }
-
+/** A mentor in the directory. A full or paused mentor says so; the card never assumes a name or an avatar. */
+export function MentorCard({ mentor }: { mentor: Mentor }) {
+    const name = displayName(mentor.user);
+    const unavailable = mentor.isPaused || !mentor.hasCapacity;
     return (
-        <Link
-            href={`/mentorship/mentor/${mentor._id}`}
-            className="block focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 rounded-lg"
-            aria-label={`View ${mentor.user.name}'s profile`}
-        >
-            {content}
-        </Link>
+        <li className={`${card} relative flex min-w-0 flex-col p-5 transition-shadow hover:shadow-md`} data-testid="mentor-card" data-available={!unavailable}>
+            <div className="flex items-start gap-3">
+                <Avatar person={mentor.user} size={44} />
+                <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-base font-semibold text-gray-900 dark:text-white">
+                        <Link href={`/mentorship/mentor/${mentor._id}`} className={`rounded after:absolute after:inset-0 hover:underline ${focusRing}`}>{name}</Link>
+                    </h3>
+                    <p className={`truncate text-xs ${muted}`}>@{mentor.user.username}</p>
+                    <div className="mt-1"><RatingStars rating={mentor.rating} total={mentor.totalRatings} /></div>
+                </div>
+                {mentor.isPaused ? (
+                    <span className={`${chip} bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300`}>Paused</span>
+                ) : !mentor.hasCapacity ? (
+                    <span className={`${chip} bg-gray-200 text-gray-800 dark:bg-neutral-700/60 dark:text-gray-300`}>Full</span>
+                ) : null}
+            </div>
+            <p className="mt-3 line-clamp-3 text-sm text-gray-700 dark:text-gray-300">{mentor.bio}</p>
+            <ExpertiseChips areas={mentor.expertiseAreas} max={3} className="mt-3" />
+            <dl className={`mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-xs dark:border-neutral-800 ${muted}`}>
+                <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" aria-hidden="true" /><dt className="sr-only">Spots</dt><dd>{spotsLabel(mentor)}</dd></div>
+                <div className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden="true" /><dt className="sr-only">Time zone</dt><dd>{mentor.availability.timezone}</dd></div>
+            </dl>
+        </li>
     );
 }

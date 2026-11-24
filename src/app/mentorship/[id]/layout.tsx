@@ -1,10 +1,11 @@
-import type { Metadata } from 'next'
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Mentorship Session | TheCyberHub',
-    description: 'View your mentorship session details and progress on TheCyberHub.',
-}
+    title: 'Mentorship',
+    description: 'Your mentorship workspace.',
+    robots: { index: false, follow: false },
+};
 
-export default function MentorshipSessionLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>
+export default function Layout({ children }: { children: React.ReactNode }) {
+    return <>{children}</>;
 }
