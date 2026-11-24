@@ -1,10 +1,11 @@
 'use client';
 
-import { CalendarPlus, ChevronDown, Download, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarPlus, Check, ChevronDown, Copy, Download, ExternalLink } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { eventIcsUrl } from '@/lib/api/events';
+import { eventIcsUrl, webcalUrl } from '@/lib/api/events';
 import { endOf } from '@/lib/events/time';
-import { SITE_URL } from '@/lib/events/server';
+import { SITE_URL } from '@/lib/events/site';
 import { btnSecondary } from './styles';
 
 interface Props {
@@ -33,6 +34,16 @@ export function googleCalendarUrl({ slug, title, startDate, endDate, endsAt, loc
 
 /** Add one event to a calendar: Google Calendar, or the .ics file the API builds (Apple, Outlook, others) */
 export function AddToCalendarMenu(props: Props) {
+    const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+    const copyLink = async () => {
+        try {
+            await navigator.clipboard.writeText(webcalUrl(eventIcsUrl(props.slug)));
+            setCopy('copied');
+        } catch {
+            setCopy('failed');
+        }
+        setTimeout(() => setCopy('idle'), 2500);
+    };
     return (
         <DropdownMenu>
             <DropdownMenuTrigger className={`${btnSecondary} ${props.className ?? ''}`}>
@@ -49,6 +60,10 @@ export function AddToCalendarMenu(props: Props) {
                     <a href={eventIcsUrl(props.slug)} download={`${props.slug}.ics`}>
                         <Download className="h-4 w-4" aria-hidden="true" /> Apple, Outlook and others (.ics)
                     </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void copyLink(); }}>
+                    {copy === 'copied' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                    {copy === 'copied' ? 'Copied the webcal link' : copy === 'failed' ? 'Could not copy, use the .ics file' : 'Copy webcal link'}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

@@ -3,7 +3,9 @@ import type { EventDetail, Series } from '@/types/event';
 import { plainExcerpt } from './display';
 import { effectiveStatus } from './time';
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://thecyberhub.org').replace(/\/$/, '');
+import { SITE_URL } from './site';
+
+export { SITE_URL };
 
 export type ServerEvent =
     | { state: 'ok'; event: EventDetail }

@@ -31,5 +31,7 @@ export default async function SeriesPage({ params }: PageProps) {
     // Not an id, so not a series: no request is made
     if (!isSeriesId(id)) notFound();
     const result = await fetchPublicSeries(id);
+    // A real 404 for a series that is gone; a failed lookup falls through so the page can ask again in the browser
+    if (result.state === 'missing') notFound();
     return <SeriesView id={id} initialSeries={result.state === 'ok' ? result.series : null} />;
 }
