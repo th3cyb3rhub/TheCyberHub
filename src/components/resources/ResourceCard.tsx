@@ -23,9 +23,11 @@ interface ResourceCardProps {
     footer?: React.ReactNode;
     /** Hide the vote control (entries that are not public yet cannot be voted on) */
     showVotes?: boolean;
+    /** Show the status chip even for approved entries (the member's own list) */
+    showStatus?: boolean;
 }
 
-export function ResourceCard({ resource, footer, showVotes = true }: ResourceCardProps) {
+export function ResourceCard({ resource, footer, showVotes = true, showStatus = false }: ResourceCardProps) {
     const { user } = useAuth();
     const bookmark = useBookmarkResource();
     const viewer = resource.viewer;
@@ -54,7 +56,7 @@ export function ResourceCard({ resource, footer, showVotes = true }: ResourceCar
             <p className={`mt-3 line-clamp-3 break-words text-sm ${muted}`}>{resource.description}</p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-                {resource.status && <ResourceStatusChip status={resource.status} />}
+                {resource.status && (showStatus || resource.status !== 'approved') && <ResourceStatusChip status={resource.status} />}
                 <Chip tone="blue">{label(RESOURCE_TYPE_LABELS, resource.type)}</Chip>
                 <DifficultyChip difficulty={resource.difficulty} />
                 <Chip>{resource.isFree ? 'Free' : 'Paid'}</Chip>

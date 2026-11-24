@@ -40,6 +40,7 @@ function Submissions() {
                                 <li key={r.id}>
                                     <ResourceCard
                                         resource={r}
+                                        showStatus
                                         footer={(
                                             <div className="flex flex-wrap gap-2">
                                                 <Link href={`/resources/${r.slug}/edit`} className={`${btnSecondary} !px-3 !py-1.5 !text-xs`}><Pencil className="h-3.5 w-3.5" aria-hidden="true" /> {r.status === 'rejected' ? 'Edit and resubmit' : 'Edit'}<span className="sr-only"> {r.title}</span></Link>

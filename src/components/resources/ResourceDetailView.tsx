@@ -100,7 +100,7 @@ export function ResourceDetailView({ slug, initialResource }: { slug: string; in
 
             <header className="mb-6">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                    {resource.status && <ResourceStatusChip status={resource.status} />}
+                    {resource.status && resource.status !== 'approved' && <ResourceStatusChip status={resource.status} />}
                     <Chip tone="blue">{label(RESOURCE_TYPE_LABELS, resource.type)}</Chip>
                     <DifficultyChip difficulty={resource.difficulty} />
                     <Chip>{resource.isFree ? 'Free' : 'Paid'}</Chip>
