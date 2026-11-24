@@ -14,7 +14,7 @@ const corsHeaders = (route: Route) => ({
     'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
 });
 
-const json = (route: Route, body: unknown, status = 200) =>
+export const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({
         status,
         contentType: 'application/json',
@@ -23,7 +23,7 @@ const json = (route: Route, body: unknown, status = 200) =>
     });
 
 /** Answers CORS preflights, which the browser sends before any JSON request. */
-const preflight = (route: Route) => route.fulfill({ status: 204, headers: corsHeaders(route) });
+export const preflight = (route: Route) => route.fulfill({ status: 204, headers: corsHeaders(route) });
 
 /** Every API GET returns an empty list; other methods get a plain success. */
 export async function mockEmptyApi(page: Page) {
