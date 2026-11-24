@@ -20,11 +20,11 @@ function Banner({ tone, icon: Icon, title, children, action, id }: { tone: Tone;
     return (
         <div className={`flex flex-wrap items-start gap-3 rounded-xl border px-4 py-3 text-sm ${TONES[tone]}`} data-testid={`banner-${id}`}>
             <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-56">
                 <p className="font-semibold">{title}</p>
                 {children && <p className="mt-0.5">{children}</p>}
             </div>
-            {action && <div className="shrink-0">{action}</div>}
+            {action && <div className="shrink-0 max-sm:ml-7">{action}</div>}
         </div>
     );
 }
