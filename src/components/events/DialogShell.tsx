@@ -1,6 +1,7 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
+import { useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface DialogShellProps {
@@ -15,11 +16,24 @@ interface DialogShellProps {
 
 /** A dialog for content (the day of a calendar, an address to copy). Radix handles focus, Escape and the backdrop. */
 export function DialogShell({ open, onOpenChange, title, description, children, footer, wide = false }: DialogShellProps) {
+    // These dialogs are opened by state, not by a Radix trigger, so remember what had focus and give it back on close
+    const opener = useRef<HTMLElement | null>(null);
+    const wasOpen = useRef(false);
+    if (open && !wasOpen.current && typeof document !== 'undefined') {
+        opener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    }
+    wasOpen.current = open;
+
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange}>
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-                <Dialog.Content className={`fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 ${wide ? 'max-w-xl' : 'max-w-md'}`}>
+                <Dialog.Content
+                    onCloseAutoFocus={(e) => {
+                        const target = opener.current;
+                        if (target?.isConnected) { e.preventDefault(); target.focus(); }
+                    }}
+                    className={`fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 ${wide ? 'max-w-xl' : 'max-w-md'}`}>
                     <Dialog.Close asChild>
                         <button type="button" aria-label="Close" className="absolute right-4 top-4 rounded p-1 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:hover:text-white">
                             <X className="h-4 w-4" aria-hidden="true" />

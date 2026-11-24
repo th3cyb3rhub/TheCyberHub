@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { CalendarItem } from '@/types/event'
 import { CalendarMonth } from '../CalendarMonth'
@@ -98,6 +98,14 @@ describe('CalendarMonth', () => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
         fireEvent.keyDown(cell('2026-12-12'), { key: ' ' })
         expect(screen.getByText('Nothing is scheduled on this day.')).toBeInTheDocument()
+    })
+
+    it('gives focus back to the day it was opened from', async () => {
+        renderMonth()
+        cell('2026-12-09').focus()
+        fireEvent.keyDown(cell('2026-12-09'), { key: 'Enter' })
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+        await waitFor(() => expect(cell('2026-12-09')).toHaveFocus())
     })
 
     it('opens the day from "+N more" with the mouse', () => {

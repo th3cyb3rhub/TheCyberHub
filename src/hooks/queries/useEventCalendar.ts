@@ -18,6 +18,8 @@ export function useEventsCalendar(range: { from: string; to: string } | null, ca
         queryFn: () => api.getCalendar({ from: range!.from, to: range!.to, category }),
         enabled: !!range,
         staleTime: 60_000,
+        // Moving to another month keeps the grid on screen (dimmed) so keyboard focus stays where it is
+        placeholderData: keepPreviousData,
         retry: (count, err) => (err as { status?: number })?.status !== 400 && count < 2,
     });
 }

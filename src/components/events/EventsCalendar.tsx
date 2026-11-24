@@ -70,7 +70,9 @@ export function EventsCalendar() {
 
     const { view, date, category } = state;
     const items = query.data?.items ?? [];
-    const truncated = !!query.data?.meta.truncated;
+    // While the next range loads, the last one stays up, dimmed, and says nothing about what is missing
+    const stale = query.isPlaceholderData;
+    const truncated = !!query.data?.meta.truncated && !stale;
     const title = view === 'week' ? weekTitle(weekOf(date)) : monthTitle(date);
     const unit = view === 'week' ? 'week' : 'month';
     const views = (env.phone ? ['week', 'agenda'] : ['month', 'week', 'agenda']) as CalendarView[];
@@ -120,7 +122,7 @@ export function EventsCalendar() {
                     <CalendarSubscribe query={{ from: range.from, to: range.to, category }} rangeLabel={rangeLabel} />
                 </div>
 
-                <div id="calendar-view-panel" role="tabpanel" aria-labelledby={`calendar-view-${view}`} aria-busy={query.isLoading}>
+                <div id="calendar-view-panel" role="tabpanel" aria-labelledby={`calendar-view-${view}`} aria-busy={query.isLoading || stale} className={stale ? 'opacity-60 transition-opacity' : undefined}>
                     {query.isLoading ? (
                         <CalendarSkeleton view={view} />
                     ) : query.isError ? (
@@ -133,11 +135,11 @@ export function EventsCalendar() {
                                     This range has more events than can be shown ({query.data?.meta.count} are listed). Pick a category or a shorter view to see the rest.
                                 </p>
                             )}
-                            {items.length === 0 && view === 'agenda' ? (
+                            {items.length === 0 && !stale && view === 'agenda' ? (
                                 <EmptyState icon={CalendarDays} title={`Nothing scheduled in ${monthTitle(date)}`} description="Try another month or category, or host an event yourself." actionLabel="Host an event" actionHref="/events/submit" />
                             ) : (
                                 <>
-                                    {items.length === 0 && (
+                                    {items.length === 0 && !stale && (
                                         <p role="status" className={`mb-4 text-sm ${muted}`} data-testid="empty-range">
                                             No events from {rangeLabel}. <Link href="/events/submit" className="font-medium text-orange-800 underline dark:text-orange-300">Host one</Link>
                                         </p>
