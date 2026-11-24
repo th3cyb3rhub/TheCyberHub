@@ -50,6 +50,28 @@ for (const width of [390, 1280]) {
                 await expect(page.getByTestId('job-card')).toHaveCount(2);
             });
 
+            test('keeps the filter when the visitor opens a job and comes back with Back (and goes forward again)', async ({ page }) => {
+                await open(page, 'visitor', '/jobs');
+                if (width < 600) await page.getByRole('button', { name: /Filters/ }).click();
+                await page.getByLabel('Category').selectOption('soc');
+                await expect(page).toHaveURL(/category=soc/);
+                await expect(page.getByTestId('job-card')).toHaveCount(1);
+
+                await page.getByTestId('job-card').getByRole('link', { name: 'SOC Analyst' }).first().click();
+                await expect(page).toHaveURL(/\/jobs\/[^?]+$/);
+                await page.goBack();
+                await expect(page).toHaveURL(/\/jobs\?category=soc/);
+                if (width < 600) await page.getByRole('button', { name: /Filters/ }).click();
+                await expect(page.getByLabel('Category')).toHaveValue('soc');
+                await expect(page.getByTestId('job-card')).toHaveCount(1);
+                await expect(page.getByTestId('job-card')).toContainText('SOC Analyst');
+
+                await page.goForward();
+                await expect(page).toHaveURL(/\/jobs\/[^?]+$/);
+                await page.goBack();
+                await expect(page.getByTestId('job-card')).toHaveCount(1);
+            });
+
             test('opens a filtered address with the filter applied', async ({ page }) => {
                 await open(page, 'visitor', '/jobs?category=soc');
                 await expect(page.getByTestId('job-card')).toHaveCount(1);
