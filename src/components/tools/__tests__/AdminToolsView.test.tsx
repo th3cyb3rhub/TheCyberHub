@@ -16,7 +16,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/admin/tools', useRouter
 import { AdminToolsView } from '../AdminToolsView'
 import { apiError, renderWithQuery } from './testkit'
 
-const settings = (over: Record<string, unknown> = {}) => ({
+const settings = (over: Record<string, unknown> = {}): { masterEnabled: boolean; activeToolsAllowed: boolean; tools: Record<string, unknown>[]; blockedTargets: string[] } => ({
     masterEnabled: true,
     activeToolsAllowed: false,
     tools: [
@@ -130,7 +130,7 @@ describe('AdminToolsView', () => {
     it('adds and removes blocked targets, normalising the domain', async () => {
         api.updateAdminToolSettings.mockResolvedValue(settings())
         renderWithQuery(<AdminToolsView />)
-        await userEvent.type(await screen.findByLabelText('Domain to block'), 'https://Blocked.Example/path')
+        await userEvent.type(await screen.findByLabelText('Domain or IP to block'), 'https://Blocked.Example/path')
         await userEvent.click(screen.getByRole('button', { name: /^block$/i }))
         await waitFor(() => expect(api.updateAdminToolSettings).toHaveBeenCalledWith({ blockedTargets: ['optout.example', 'blocked.example'] }, expect.anything()))
 
@@ -138,9 +138,28 @@ describe('AdminToolsView', () => {
         await waitFor(() => expect(api.updateAdminToolSettings).toHaveBeenCalledWith({ blockedTargets: [] }, expect.anything()))
     })
 
+    it('blocks an IP address as well as a domain', async () => {
+        api.updateAdminToolSettings.mockResolvedValue(settings())
+        renderWithQuery(<AdminToolsView />)
+        await userEvent.type(await screen.findByLabelText('Domain or IP to block'), '203.0.113.7')
+        await userEvent.click(screen.getByRole('button', { name: /^block$/i }))
+        await waitFor(() => expect(api.updateAdminToolSettings).toHaveBeenCalledWith({ blockedTargets: ['optout.example', '203.0.113.7'] }, expect.anything()))
+    })
+
+    it('reports the cap the server saved when it limited the value', async () => {
+        const clamped = settings()
+        clamped.tools[0] = { ...clamped.tools[0], dailyCap: 5000 }
+        api.updateAdminToolSettings.mockResolvedValue(clamped)
+        renderWithQuery(<AdminToolsView />)
+        const field = await screen.findByLabelText(/daily cap \(default 5,000\)/i, { selector: '#cap-cve' })
+        await userEvent.type(field, '90000')
+        await userEvent.click(within(field.closest('li')!).getByRole('button', { name: 'Save' }))
+        expect(await screen.findByText(/cap is now 5,000 a day \(the server limited your 90,000\)/i)).toBeInTheDocument()
+    })
+
     it('refuses a duplicate or invalid blocked domain', async () => {
         renderWithQuery(<AdminToolsView />)
-        const field = await screen.findByLabelText('Domain to block')
+        const field = await screen.findByLabelText('Domain or IP to block')
         await userEvent.type(field, 'optout.example')
         await userEvent.click(screen.getByRole('button', { name: /^block$/i }))
         expect(await screen.findByText(/already blocked/i)).toBeInTheDocument()

@@ -7,9 +7,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAdminToolSettings, useAdminToolStats, useUpdateToolSettings } from '@/hooks/queries/useTools';
 import { toolErrorMessage, disabledMessage } from '@/lib/tools/errors';
 import { FALLBACK_TOOLS } from '@/lib/tools/registry';
-import { checkDomain } from '@/lib/tools/validate';
+import { checkDomain, checkIp } from '@/lib/tools/validate';
 import { isAdminRole } from '@/lib/events/roles';
-import type { AdminToolState } from '@/types/tools';
+import type { AdminToolSettings, AdminToolState } from '@/types/tools';
 import { Pill } from './ResultParts';
 import { btnPrimary, btnSecondary, card, focusRing, input, label as labelClass, muted } from './styles';
 
@@ -106,9 +106,11 @@ function BlockedTargets({ targets, onSave, busy }: { targets: string[]; onSave: 
     const [error, setError] = useState<string | null>(null);
 
     const add = () => {
-        const checked = checkDomain(value);
-        if (!checked.ok) { setError(checked.error); return; }
-        if (targets.includes(checked.value)) { setError('That domain is already blocked.'); return; }
+        const asDomain = checkDomain(value);
+        const asIp = asDomain.ok ? null : checkIp(value);
+        const checked = asDomain.ok ? asDomain : asIp && asIp.ok ? asIp : null;
+        if (!checked) { setError('Enter a domain such as example.org or an IP address.'); return; }
+        if (targets.includes(checked.value)) { setError('That target is already blocked.'); return; }
         setError(null);
         setValue('');
         onSave([...targets, checked.value]);
@@ -117,17 +119,17 @@ function BlockedTargets({ targets, onSave, busy }: { targets: string[]; onSave: 
     return (
         <section className={`${card} p-5`} aria-labelledby="blocked-targets">
             <h2 id="blocked-targets" className="mb-1 text-lg font-semibold text-gray-900 dark:text-white">Blocked targets</h2>
-            <p className={`mb-4 text-sm ${muted}`}>Domains (and their subdomains) that no tool will contact, for owners who asked to opt out. Changes apply within 15 seconds.</p>
+            <p className={`mb-4 text-sm ${muted}`}>Domains (with their subdomains) and IP addresses that no tool will contact, for owners who asked to opt out. Changes apply within 15 seconds.</p>
             <form className="mb-4 flex flex-col gap-2 sm:flex-row" noValidate onSubmit={(e) => { e.preventDefault(); add(); }}>
                 <div className="flex-1">
-                    <label htmlFor="blocked-domain" className={labelClass}>Domain to block</label>
-                    <input id="blocked-domain" type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="example.org" className={input} autoComplete="off" spellCheck={false} aria-invalid={!!error} aria-describedby={error ? 'blocked-error' : undefined} />
+                    <label htmlFor="blocked-domain" className={labelClass}>Domain or IP to block</label>
+                    <input id="blocked-domain" type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="example.org or 203.0.113.7" className={input} autoComplete="off" spellCheck={false} aria-invalid={!!error} aria-describedby={error ? 'blocked-error' : undefined} />
                     {error && <p id="blocked-error" role="alert" className="mt-1 text-sm text-red-800 dark:text-red-300">{error}</p>}
                 </div>
                 <button type="submit" className={`${btnSecondary} self-start sm:mt-[1.7rem]`} disabled={busy}><Plus className="h-4 w-4" aria-hidden="true" /> Block</button>
             </form>
             {targets.length === 0 ? (
-                <p className={`text-sm ${muted}`} data-testid="no-blocked">No domains are blocked.</p>
+                <p className={`text-sm ${muted}`} data-testid="no-blocked">Nothing is blocked.</p>
             ) : (
                 <ul className="flex flex-wrap gap-2" data-testid="blocked-list">
                     {targets.map((t) => (
@@ -211,9 +213,10 @@ export function AdminToolsView() {
     if (!ready) return <FullPageSpinner label="Loading" />;
     if (!allowed) return <NoAccess message="Only administrators can change the security tools settings." href="/admin" label="Back to admin" />;
 
-    const run = (change: Parameters<typeof update.mutate>[0], message: string) => {
+    // The message may depend on what the server saved (it can clamp a cap), so it can be a function of the answer
+    const run = (change: Parameters<typeof update.mutate>[0], message: string | ((saved: AdminToolSettings) => string)) => {
         setSaved(null);
-        update.mutate(change, { onSuccess: () => setSaved(message) });
+        update.mutate(change, { onSuccess: (answer) => setSaved(typeof message === 'function' ? message(answer) : message) });
     };
     const toggle = (tool: AdminToolState) => {
         if (tool.enabled) setConfirm(tool);
@@ -249,7 +252,11 @@ export function AdminToolsView() {
                             {data.tools.map((tool) => (
                                 <ToolRow key={tool.id} tool={tool} busy={update.isPending}
                                     onToggle={toggle}
-                                    onCap={(t, cap) => run({ tools: { [t.id]: { dailyCap: cap } } }, cap === null ? `${toolName(t.id)} uses its default cap.` : `${toolName(t.id)} cap set to ${cap.toLocaleString()} a day.`)} />
+                                    onCap={(t, cap) => run({ tools: { [t.id]: { dailyCap: cap } } }, (answer) => {
+                                        const now = answer.tools.find((x) => x.id === t.id)?.dailyCap ?? null;
+                                        if (now === null) return `${toolName(t.id)} uses its default cap.`;
+                                        return `${toolName(t.id)} cap is now ${now.toLocaleString()} a day${cap !== null && now !== cap ? ` (the server limited your ${cap.toLocaleString()})` : ''}.`;
+                                    })} />
                             ))}
                         </ul>
                     </section>
