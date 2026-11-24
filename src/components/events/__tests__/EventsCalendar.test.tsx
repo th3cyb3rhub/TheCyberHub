@@ -1,11 +1,12 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { CalendarItem } from '@/types/event'
 
 const push = vi.fn()
+const replace = vi.fn()
 let search = ''
 vi.mock('next/navigation', () => ({
-    useRouter: () => ({ push, replace: vi.fn() }),
+    useRouter: () => ({ push, replace }),
     usePathname: () => '/events/calendar',
     useSearchParams: () => new URLSearchParams(search),
 }))
@@ -77,7 +78,7 @@ describe('EventsCalendar', () => {
         expect(screen.getByTestId('week-grid')).toBeInTheDocument()
     })
 
-    it('pushes the new address for next, previous, today, view and category (so back works)', () => {
+    it('pushes the new address for next, previous, today and view (so back works), and replaces it for a category', () => {
         search = 'date=2026-12-24'
         render(<EventsCalendar />)
         fireEvent.click(screen.getByRole('button', { name: 'Next month' }))
@@ -88,8 +89,17 @@ describe('EventsCalendar', () => {
         expect(push).toHaveBeenLastCalledWith('/events/calendar', { scroll: false })
         fireEvent.click(screen.getByRole('tab', { name: 'Agenda' }))
         expect(push).toHaveBeenLastCalledWith('/events/calendar?view=agenda&date=2026-12-24', { scroll: false })
+        const pushes = push.mock.calls.length
         fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'ctf' } })
-        expect(push).toHaveBeenLastCalledWith('/events/calendar?date=2026-12-24&category=ctf', { scroll: false })
+        expect(replace).toHaveBeenLastCalledWith('/events/calendar?date=2026-12-24&category=ctf', { scroll: false })
+        expect(push.mock.calls.length).toBe(pushes)
+    })
+
+    it('marks the new day as today after midnight, when the tab is focused again', () => {
+        render(<EventsCalendar />)
+        expect(document.querySelector('[aria-current="date"]')).toHaveAttribute('data-day', '2026-12-09')
+        act(() => { vi.setSystemTime(new Date('2026-12-10T00:05:00Z')); window.dispatchEvent(new Event('focus')) })
+        expect(document.querySelector('[aria-current="date"]')).toHaveAttribute('data-day', '2026-12-10')
     })
 
     it('moves by a week in the week view', () => {

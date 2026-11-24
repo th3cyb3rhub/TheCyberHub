@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronLeft, ChevronRight, Globe2, Info } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useEventsCalendar } from '@/hooks/queries/useEventCalendar';
 import {
     calendarSearch, dayShort, monthTitle, parseCalendarParams, shiftDay, todayIn, visibleRange, weekOf, weekTitle,
-    type CalendarState, type CalendarView,
+    type CalendarState, type CalendarView, type DayKey,
 } from '@/lib/events/calendar';
 import { useIsPhone, useViewerZone } from '@/lib/events/clock';
 import { CATEGORY_LABELS } from '@/lib/events/form';
@@ -33,6 +33,29 @@ export function CalendarSkeleton({ view = 'month' }: { view?: CalendarView }) {
 }
 
 /**
+ * Today's date in the viewer's zone. It is looked at again every minute and whenever the tab is shown
+ * or focused, so a page left open overnight does not keep marking yesterday as today.
+ */
+function useToday(zone: string | null): DayKey | null {
+    const [today, setToday] = useState<DayKey | null>(null);
+    useEffect(() => {
+        if (!zone) { setToday(null); return; }
+        const refresh = () => setToday(todayIn(zone));
+        refresh();
+        const timer = setInterval(refresh, 60_000);
+        const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', refresh);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', refresh);
+        };
+    }, [zone]);
+    return today;
+}
+
+/**
  * The calendar of public events: month, week and agenda over one range of the API, kept in the
  * address bar (`view`, `date`, `category`) so refresh, back and shared links agree. Days are the
  * viewer's own, because that is the clock on their wall; each event also names its own zone.
@@ -45,16 +68,20 @@ export function EventsCalendar() {
     const zone = useViewerZone();
     const phone = useIsPhone();
 
-    const ready = !!zone && phone !== null;
-    const env = useMemo(() => (ready ? { today: todayIn(zone), phone } : null), [ready, zone, phone]);
+    const today = useToday(zone);
+    const ready = !!zone && phone !== null && !!today;
+    const env = useMemo(() => (ready ? { today, phone } : null), [ready, today, phone]);
     const state: CalendarState | null = env ? parseCalendarParams(new URLSearchParams(search.toString()), env) : null;
     const range = state && zone ? visibleRange(state.view, state.date, zone) : null;
     const query = useEventsCalendar(range ? { from: range.from, to: range.to } : null, state?.category ?? '');
 
-    const go = (changes: Partial<CalendarState>) => {
+    // A change of filter replaces the entry: Back goes to the last place, not through every filter tried
+    const go = (changes: Partial<CalendarState>, { replace = false }: { replace?: boolean } = {}) => {
         if (!state || !env) return;
         const qs = calendarSearch({ ...state, ...changes }, env);
-        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        const href = qs ? `${pathname}?${qs}` : pathname;
+        if (replace) router.replace(href, { scroll: false });
+        else router.push(href, { scroll: false });
     };
 
     if (!state || !env || !zone || !range) {
@@ -110,7 +137,7 @@ export function EventsCalendar() {
                         />
                         <div>
                             <label htmlFor="calendar-category" className="sr-only">Category</label>
-                            <select id="calendar-category" value={category} onChange={(e) => go({ category: e.target.value as EventCategory | '' })} className={`${input} !w-auto`}>
+                            <select id="calendar-category" value={category} onChange={(e) => go({ category: e.target.value as EventCategory | '' }, { replace: true })} className={`${input} !w-auto`}>
                                 <option value="">All categories</option>
                                 {EVENT_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
                             </select>
