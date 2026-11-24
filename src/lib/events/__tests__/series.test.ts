@@ -188,6 +188,18 @@ describe('editing one date or all future ones', () => {
         expect(validateSeriesEdit({ ...initial, until: '2027-01-01', count: '4' }, 'future').ok).toBe(false)
     })
 
+    it('needs a place for an in-person or hybrid series, like the create form', () => {
+        const place = (over: Partial<typeof initial>, admin = true) => {
+            const r = validateSeriesEdit({ ...initial, ...over }, 'future', { admin })
+            return r.ok ? undefined : r.errors.location
+        }
+        expect(place({ locationType: 'online', location: '', venue: '' })).toBeUndefined()
+        expect(place({ locationType: 'in-person', location: '', venue: '' })).toMatch(/Say where it happens/)
+        expect(place({ locationType: 'hybrid', location: '  ', venue: ' ' })).toMatch(/Say where it happens/)
+        expect(place({ locationType: 'in-person', location: 'Berlin', venue: '' })).toBeUndefined()
+        expect(place({ locationType: 'in-person', location: '', venue: 'Hall 3' })).toBeUndefined()
+    })
+
     it('clears the end with null', () => {
         const withEnd = seriesToEditValues(series({ recurrence: { ...series().recurrence, until: '2027-01-01' } }))
         expect(toSeriesPatch(withEnd, { ...withEnd, until: '' }, 'future')).toEqual({ scope: 'future', until: null })

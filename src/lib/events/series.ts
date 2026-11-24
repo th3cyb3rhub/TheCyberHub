@@ -376,6 +376,9 @@ export function validateSeriesEdit(
     check('registrationLink', httpsLink('The registration link'), values.registrationLink);
     check('streamLink', httpsLink('The stream link'), values.streamLink);
     check('durationMinutes', wholeNumber('The length', SERIES_LIMITS.durationMinutes.min, SERIES_LIMITS.durationMinutes.max), values.durationMinutes);
+    if (values.locationType !== 'online' && values.location.trim() === '' && values.venue.trim() === '') {
+        fail('location', 'Say where it happens (a city or a venue)');
+    }
     const capacityMax = admin ? EVENT_LIMITS.capacity : EVENT_LIMITS.memberCapacity;
     check('maxParticipants', z.string().trim().refine((v) => {
         if (v === '') return admin;
