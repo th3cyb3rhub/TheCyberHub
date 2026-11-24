@@ -3,6 +3,7 @@ import {
     useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
+import { placeholderForViewer } from '@/lib/queryPlaceholder';
 import { useNotificationSocket } from '@/context/NotificationProvider';
 import { useDocumentVisible } from '@/hooks/useDocumentVisible';
 import * as api from '@/lib/api/ctf';
@@ -45,17 +46,7 @@ export const ctfKeys = {
 export const CTF_PAGE_SIZE = CTF_LIMITS.pageDefault;
 const ADMIN_PAGE_SIZE = 20;
 
-/**
- * Placeholder data for a key that changed (another filter, another page): the previous answer, but
- * only when it was asked by the same viewer. After a sign-in, a sign-out or an account switch the
- * previous answer belongs to somebody else (a draft, a staff only board), so it is never shown.
- * `at` is where the user id sits in the query key.
- */
-export function placeholderForViewer<T>(userId: string | null, at: number) {
-    return (previous: T | undefined, previousQuery?: { queryKey: readonly unknown[] }): T | undefined => (
-        previousQuery && previousQuery.queryKey[at] === userId ? previous : undefined
-    );
-}
+export { placeholderForViewer };
 
 type Pages<T> = InfiniteData<CtfPage<T>, number>;
 const nextPage = <T,>(last: CtfPage<T>) => (last.pagination.page < last.pagination.pages ? last.pagination.page + 1 : undefined);

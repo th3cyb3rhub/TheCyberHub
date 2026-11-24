@@ -201,49 +201,6 @@ export const flagSubmissionSchema = z.object({
 export const submitFlagSchema = flagSubmissionSchema;
 
 // ============================================
-// Job Schemas
-// ============================================
-
-export const jobSchema = z.object({
-    title: z.string().min(3, 'Title must be at least 3 characters').max(150, 'Title cannot exceed 150 characters'),
-    company: z.string().min(2, 'Company name must be at least 2 characters').max(100, 'Company name cannot exceed 100 characters'),
-    description: z.string().min(50, 'Description must be at least 50 characters').max(10000, 'Description cannot exceed 10000 characters'),
-    requirements: z.array(z.string().max(500)).optional(),
-    responsibilities: z.array(z.string().max(500)).optional(),
-    skills: z.array(z.string().max(50, 'Skill cannot exceed 50 characters')).max(20, 'Maximum 20 skills').optional(),
-    category: z.enum([
-        'pentesting', 'soc', 'grc', 'devsecops', 'forensics',
-        'malware', 'cloud-security', 'appsec', 'other',
-    ]).default('other'),
-    employmentType: z.enum(['full-time', 'part-time', 'contract', 'freelance', 'internship']).default('full-time'),
-    experienceLevel: z.enum(['entry', 'mid', 'senior', 'lead', 'executive']).default('mid'),
-    locationType: z.enum(['remote', 'hybrid', 'onsite']).default('remote'),
-    location: z.string().max(100, 'Location cannot exceed 100 characters').optional(),
-    salary: z.object({
-        min: z.number().min(0, 'Salary must be positive').optional(),
-        max: z.number().min(0, 'Salary must be positive').optional(),
-        currency: z.string().max(3).default('USD'),
-        period: z.enum(['hourly', 'monthly', 'yearly']).default('yearly'),
-    }).refine((data) => {
-        if (data.min !== undefined && data.max !== undefined) {
-            return data.max >= data.min;
-        }
-        return true;
-    }, {
-        message: 'Maximum salary must be greater than or equal to minimum salary',
-        path: ['max'],
-    }).optional(),
-    benefits: z.array(z.string().max(100)).optional(),
-    companyWebsite: urlSchema,
-    companyDescription: z.string().max(2000, 'Company description cannot exceed 2000 characters').optional(),
-    companyLogo: urlSchema,
-    applicationDeadline: z.string().optional(),
-    applyUrl: urlSchema,
-    applyEmail: z.string().email('Please enter a valid email').optional().or(z.literal('')),
-    applicationUrl: urlSchema,
-});
-
-// ============================================
 // Feed Post Schemas
 // ============================================
 
@@ -348,8 +305,6 @@ export type FeedbackFormData = z.infer<typeof feedbackSchema>;
 export type DiscussionFormData = z.infer<typeof discussionSchema>;
 export type DiscussionInput = DiscussionFormData;
 export type ReplyFormData = z.infer<typeof replySchema>;
-export type JobFormData = z.infer<typeof jobSchema>;
-export type JobInput = JobFormData;
 export type CommentFormData = z.infer<typeof commentSchema>;
 export type BookmarkCollectionFormData = z.infer<typeof bookmarkCollectionSchema>;
 export type AddBookmarkFormData = z.infer<typeof addBookmarkSchema>;
