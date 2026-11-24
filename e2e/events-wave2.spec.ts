@@ -205,6 +205,10 @@ test.describe('Calendar, desktop', () => {
         // Cancelled and live are words as well as styles
         await expect(page.locator('[data-day="2026-12-10"]').getByText('(cancelled)')).toBeAttached();
         await expect(page.locator('[data-day="2026-12-11"]').getByText('(live now)')).toBeAttached();
+        // Colour is explained in words: a legend with every category on screen, and a visible Live mark
+        const legend = page.getByTestId('month-legend');
+        for (const name of ['CTF', 'Workshop', 'Meetup', 'Webinar']) await expect(legend).toContainText(name);
+        await expect(page.locator('[data-day="2026-12-11"]').getByTestId('live-mark')).toBeVisible();
 
         await day.getByText('+1 more').click();
         const dialog = page.getByRole('dialog', { name: 'Wednesday, December 9, 2026' });
@@ -337,8 +341,7 @@ test.describe('Subscribe and download', () => {
         await expect(dialog.getByRole('link', { name: /Open in my calendar app/ })).toHaveAttribute('href', /^webcal:/);
     });
 
-    test('my calendar feed: show the address once, then it is gone from the page', async ({ page, context }) => {
-        await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:3000' }).catch(() => undefined);
+    test('my calendar feed: show the address once, then it is gone from the page', async ({ page }) => {
         const calls = await mockApi(page, { signedIn: true });
         await page.goto('/events/calendar');
 
@@ -350,7 +353,8 @@ test.describe('Subscribe and download', () => {
         await expect(dialog.getByRole('alert')).toContainText('Anyone who has this link can see the events you registered for');
         await expect(dialog.getByLabel(/Calendar address/)).toHaveValue(new RegExp(SECRET));
         await dialog.getByRole('button', { name: /Copy/ }).first().click();
-        await expect(dialog.getByRole('button', { name: /Copied/ }).first()).toBeVisible();
+        // Where the browser allows the clipboard the button says Copied; where it does not, the text is selected for Ctrl+C
+        await expect(dialog.getByRole('button', { name: /Copied/ }).first().or(dialog.getByText(/Could not copy\. The text is selected/).first())).toBeVisible();
 
         await dialog.getByRole('button', { name: 'I have copied it' }).click();
         await expect(dialog).toBeHidden();
