@@ -28,7 +28,8 @@ import {
     Route,
     Library,
     FlaskConical,
-    Trophy
+    Trophy,
+    Briefcase
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -144,6 +145,14 @@ const adminSections = [
         icon: Users,
         href: '/admin/internships',
         color: 'from-orange-500 to-amber-500',
+        minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'Jobs',
+        description: 'Review job posts and companies, and handle reported jobs',
+        icon: Briefcase,
+        href: '/admin/jobs',
+        color: 'from-sky-500 to-blue-600',
         minRole: 'moderator' as MinRole,
     },
     {
