@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-    keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient,
+    useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient,
 } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useNotificationSocket } from '@/context/NotificationProvider';
@@ -45,6 +45,18 @@ export const ctfKeys = {
 export const CTF_PAGE_SIZE = CTF_LIMITS.pageDefault;
 const ADMIN_PAGE_SIZE = 20;
 
+/**
+ * Placeholder data for a key that changed (another filter, another page): the previous answer, but
+ * only when it was asked by the same viewer. After a sign-in, a sign-out or an account switch the
+ * previous answer belongs to somebody else (a draft, a staff only board), so it is never shown.
+ * `at` is where the user id sits in the query key.
+ */
+export function placeholderForViewer<T>(userId: string | null, at: number) {
+    return (previous: T | undefined, previousQuery?: { queryKey: readonly unknown[] }): T | undefined => (
+        previousQuery && previousQuery.queryKey[at] === userId ? previous : undefined
+    );
+}
+
 type Pages<T> = InfiniteData<CtfPage<T>, number>;
 const nextPage = <T,>(last: CtfPage<T>) => (last.pagination.page < last.pagination.pages ? last.pagination.page + 1 : undefined);
 
@@ -71,7 +83,7 @@ export function useCtfCompetitions(filters: CtfListFilters = {}, initialPage?: C
         staleTime: 60_000,
         initialData: !signedIn ? seed : undefined,
         initialDataUpdatedAt: initialUpdatedAt,
-        placeholderData: (previous) => previous ?? (signedIn ? seed : undefined),
+        placeholderData: (previous, previousQuery) => placeholderForViewer<Pages<CtfCompetitionCard>>(user?.id ?? null, 3)(previous, previousQuery) ?? (signedIn ? seed : undefined),
     });
 }
 
@@ -82,7 +94,7 @@ export function useAdminCtfList(params: { page?: number; status?: CtfListFilters
         queryKey: ctfKeys.adminList(params, user?.id ?? null),
         queryFn: () => api.listCompetitions({ status: params.status, page: params.page, limit: ADMIN_PAGE_SIZE }),
         enabled: enabled && !!user,
-        placeholderData: keepPreviousData,
+        placeholderData: placeholderForViewer<CtfPage<CtfCompetitionCard>>(user?.id ?? null, 3),
         staleTime: 15_000,
     });
 }
@@ -165,7 +177,7 @@ export function useCtfLeaderboard(slug: string, options: { enabled?: boolean; st
         enabled: enabled && !!slug && !loading,
         staleTime: 10_000,
         refetchInterval: visible ? every : false,
-        placeholderData: keepPreviousData,
+        placeholderData: placeholderForViewer<CtfLeaderboard>(user?.id ?? null, 3),
     });
 }
 
@@ -216,7 +228,7 @@ export function useCtfPickerChallenges(search: string, enabled = true) {
         queryKey: ctfKeys.picker(search.trim().toLowerCase(), user?.id ?? null),
         queryFn: () => api.listPickerChallenges({ search }),
         enabled: enabled && !!user,
-        placeholderData: keepPreviousData,
+        placeholderData: placeholderForViewer<Awaited<ReturnType<typeof api.listPickerChallenges>>>(user?.id ?? null, 2),
         staleTime: 30_000,
     });
 }

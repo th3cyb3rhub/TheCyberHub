@@ -25,7 +25,7 @@ const revalidate = vi.hoisted(() => ({ refreshPublicCtf: vi.fn() }))
 vi.mock('@/lib/ctf/revalidate', () => revalidate)
 
 import {
-    NOT_STARTED_RETRY_MS, boardPollMs, ctfKeys, useCreateCtf, useCreateCtfTeam, useCtfChallenges, useCtfCompetition, useCtfCompetitions, useCtfLeaderboard, useCtfLiveBoard,
+    NOT_STARTED_RETRY_MS, boardPollMs, ctfKeys, useAdminCtfList, useCreateCtf, useCreateCtfTeam, useCtfChallenges, useCtfCompetition, useCtfCompetitions, useCtfLeaderboard, useCtfLiveBoard,
     useJoinCtfTeam, useKickCtfMember, useLeaveCtfTeam, useRegisterCtf, useRemoveCtfChallenge, useSubmitCtfFlag, useUpdateCtf, useDeleteCtf,
 } from '../useCtf'
 
@@ -337,5 +337,68 @@ describe('admin writes', () => {
         await act(async () => { await rem.result.current.mutateAsync({ id: 'c1', challengeId: 'ch1' }).catch(() => undefined) })
         expect(spy).toHaveBeenCalledWith({ queryKey: ctfKeys.details() })
         expect(revalidate.refreshPublicCtf).toHaveBeenCalledTimes(2)
+    })
+})
+
+describe('placeholder data never crosses viewers', () => {
+    const deferred = <T,>() => {
+        let resolve!: (v: T) => void
+        const promise = new Promise<T>((r) => { resolve = r })
+        return { promise, resolve }
+    }
+
+    it('keeps the previous list while another filter loads for the same viewer', async () => {
+        api.listCompetitions.mockResolvedValueOnce(page([makeCompetition({ slug: 'a' })]))
+        const slow = deferred<ReturnType<typeof page>>()
+        api.listCompetitions.mockReturnValueOnce(slow.promise)
+        const { result, rerender } = renderHook(({ status }: { status: 'live' | 'ended' }) => useCtfCompetitions({ status }), { wrapper, initialProps: { status: 'live' } })
+        await waitFor(() => expect(result.current.data?.pages[0].data).toHaveLength(1))
+        rerender({ status: 'ended' })
+        expect(result.current.isPlaceholderData).toBe(true)
+        expect(result.current.data?.pages[0].data[0]).toMatchObject({ slug: 'a' })
+        slow.resolve(page([]))
+        await waitFor(() => expect(result.current.isPlaceholderData).toBe(false))
+    })
+
+    it('shows no list from another account after an account switch', async () => {
+        api.listCompetitions.mockResolvedValueOnce(page([makeCompetition({ slug: 'private-draft' })]))
+        const slow = deferred<ReturnType<typeof page>>()
+        api.listCompetitions.mockReturnValueOnce(slow.promise)
+        const { result, rerender } = renderHook(({ status }: { status: 'live' | 'ended' }) => useCtfCompetitions({ status }), { wrapper, initialProps: { status: 'live' } })
+        await waitFor(() => expect(result.current.data?.pages[0].data).toHaveLength(1))
+        // Another account signs in on the same page, with another filter
+        auth.current = { user: { id: 'u2', role: 'user' }, loading: false, refreshUser: vi.fn() }
+        rerender({ status: 'ended' })
+        expect(result.current.data).toBeUndefined()
+        expect(result.current.isPlaceholderData).toBe(false)
+        slow.resolve(page([]))
+        await waitFor(() => expect(result.current.data?.pages[0].data).toHaveLength(0))
+    })
+
+    it('shows no board from another account while the new board loads', async () => {
+        api.getLeaderboard.mockResolvedValueOnce({ data: [{ rank: 1, username: 'staff-only', points: 1, solves: 1, lastSolveAt: null }], mode: 'solo', frozen: false, frozenAt: null, status: 'frozen', updatedAt: '' })
+        const slow = deferred<unknown>()
+        api.getLeaderboard.mockReturnValueOnce(slow.promise)
+        const { result, rerender } = renderHook(() => useCtfLeaderboard(SLUG), { wrapper })
+        await waitFor(() => expect(result.current.data?.data).toHaveLength(1))
+        auth.current = { user: { id: 'u2', role: 'user' }, loading: false, refreshUser: vi.fn() }
+        rerender()
+        expect(result.current.data).toBeUndefined()
+        slow.resolve({ data: [], mode: 'solo', frozen: true, frozenAt: null, status: 'frozen', updatedAt: '' })
+        await waitFor(() => expect(result.current.data?.frozen).toBe(true))
+    })
+
+    it('shows no admin list from another account either', async () => {
+        api.listCompetitions.mockResolvedValueOnce(page([makeCompetition({ slug: 'draft-a' })]))
+        const slow = deferred<ReturnType<typeof page>>()
+        api.listCompetitions.mockReturnValueOnce(slow.promise)
+        const { result, rerender } = renderHook(({ p }: { p: number }) => useAdminCtfList({ page: p }), { wrapper, initialProps: { p: 1 } })
+        await waitFor(() => expect(result.current.data?.data).toHaveLength(1))
+        rerender({ p: 2 })
+        expect(result.current.isPlaceholderData).toBe(true)
+        auth.current = { user: { id: 'u2', role: 'admin' }, loading: false, refreshUser: vi.fn() }
+        rerender({ p: 2 })
+        expect(result.current.data).toBeUndefined()
+        slow.resolve(page([]))
     })
 })
