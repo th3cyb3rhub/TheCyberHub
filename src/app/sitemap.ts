@@ -1,5 +1,6 @@
 import { fetchMentorIdsForSitemap } from '@/lib/mentorship/server'
 import { MetadataRoute } from 'next'
+import { fetchSitemapRows } from '@/lib/learning/server'
 import { FALLBACK_TOOLS, toolHref } from '@/lib/tools/registry'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
@@ -43,16 +44,6 @@ const staticRoutes = [
         priority: 0.7,
     },
     {
-        url: '/cheatsheets/nmap',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
-        url: '/cheatsheets/burp-suite',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
-    },
-    {
         url: '/jobs',
         changeFrequency: 'daily' as const,
         priority: 0.9,
@@ -79,8 +70,13 @@ const staticRoutes = [
     },
     {
         url: '/roadmaps',
-        changeFrequency: 'monthly' as const,
-        priority: 0.7,
+        changeFrequency: 'weekly' as const,
+        priority: 0.8,
+    },
+    {
+        url: '/resources',
+        changeFrequency: 'daily' as const,
+        priority: 0.8,
     },
     {
         url: '/ctf',
@@ -192,13 +188,6 @@ const staticRoutes = [
         url: '/internships',
         changeFrequency: 'weekly' as const,
         priority: 0.5,
-    },
-
-    // Learning Paths
-    {
-        url: '/learning-paths',
-        changeFrequency: 'weekly' as const,
-        priority: 0.6,
     },
 
     // Labs
@@ -369,5 +358,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.5,
     }))
 
-    return [...staticPages, ...jobPages, ...eventPages, ...mentorPages]
+    // Published roadmaps, paths and approved resources. Drafts and anything private never appear in these lists.
+    const [roadmaps, paths, resources] = await Promise.all([
+        fetchSitemapRows('/api/learning-paths?kind=roadmap'),
+        fetchSitemapRows('/api/learning-paths?kind=path'),
+        fetchSitemapRows('/api/resources'),
+    ])
+    const learningPages: MetadataRoute.Sitemap = [
+        ...roadmaps.map((r) => ({ url: `${baseUrl}/roadmaps/${r.slug}`, lastModified: r.updatedAt ? new Date(r.updatedAt) : currentDate, changeFrequency: 'weekly' as const, priority: 0.7 })),
+        ...paths.map((r) => ({ url: `${baseUrl}/learning-paths/${r.slug}`, lastModified: r.updatedAt ? new Date(r.updatedAt) : currentDate, changeFrequency: 'weekly' as const, priority: 0.6 })),
+        ...resources.map((r) => ({ url: `${baseUrl}/resources/${r.slug}`, lastModified: r.updatedAt ? new Date(r.updatedAt) : currentDate, changeFrequency: 'monthly' as const, priority: 0.5 })),
+    ]
+
+    return [...staticPages, ...jobPages, ...eventPages, ...mentorPages, ...learningPages]
 }
