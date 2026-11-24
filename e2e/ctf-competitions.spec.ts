@@ -119,7 +119,14 @@ test.describe('Competition states', () => {
         await open(page, ADMIN, `${comp(FROZEN)}?tab=scoreboard`);
         await expect(page.getByTestId('board-row')).toHaveCount(2);
         await expect(page.getByTestId('frozen-note')).toHaveCount(0);
-        await expect(page.getByText(/because you are staff/)).toBeVisible();
+        await expect(page.getByTestId('staff-live-note')).toContainText('because you are an administrator');
+    });
+
+    test('frozen: a moderator sees the frozen board and no staff note', async ({ page }) => {
+        await open(page, MODERATOR, `${comp(FROZEN)}?tab=scoreboard`);
+        await expect(page.getByTestId('board-row')).toHaveCount(1);
+        await expect(page.getByTestId('frozen-note')).toBeVisible();
+        await expect(page.getByTestId('staff-live-note')).toHaveCount(0);
     });
 
     test('ended: says so, closes the flag form and links to the results', async ({ page }) => {

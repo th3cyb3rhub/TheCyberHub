@@ -419,7 +419,7 @@ export async function mockCtfApi(page: Page, who: Role, state: MockState = fresh
         }
 
         if (area === 'leaderboard' && method === 'GET') {
-            const frozen = status === 'frozen' && !staff;
+            const frozen = status === 'frozen' && !writer;
             const rows = board(c, frozen ? c.frozenAt : null);
             return send(route, 200, { success: true, data: rows.slice(0, 100), mode: c.teamsEnabled ? 'team' : 'solo', frozen, frozenAt: frozen ? iso(c.frozenAt) : null, status, updatedAt: new Date().toISOString() });
         }
@@ -452,12 +452,12 @@ export async function mockCtfApi(page: Page, who: Role, state: MockState = fresh
         if (area === 'me' && method === 'GET') {
             const team = teamOf(c, who.id);
             const scope = scopeOf(c, who.id);
-            const rows = board(c, status === 'frozen' && !staff ? c.frozenAt : null);
+            const rows = board(c, status === 'frozen' && !writer ? c.frozenAt : null);
             const mine = scope ? rows.find((r) => ('teamId' in r ? `team:${r.teamId}` : `user:${PEOPLE[who.id]}`) === scope || ('username' in r && r.username === PEOPLE[who.id] && scope === `user:${who.id}`)) : undefined;
             const my = solvesOf(c).filter((s) => s.scope === scope);
             return send(route, 200, { success: true, data: {
                 status, registered: c.teamsEnabled ? !!team : (state.regs[c._id] ?? []).includes(who.id), team: team ? teamView(team) : null,
-                points: my.reduce((n, s) => n + s.points, 0), solveCount: my.length, rank: mine ? mine.rank : null, rankFrozen: status === 'frozen' && !staff,
+                points: my.reduce((n, s) => n + s.points, 0), solveCount: my.length, rank: mine ? mine.rank : null, rankFrozen: status === 'frozen' && !writer,
                 solves: my.map((s) => ({ challenge: { _id: s.challenge }, pointsEarned: s.points, solvedAt: iso(s.at), solvedBy: null })),
             } });
         }
