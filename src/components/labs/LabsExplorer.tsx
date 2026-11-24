@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FlaskConical, Loader2, Search, Settings, X } from 'lucide-react';
 import { btnPrimary, btnSecondary, focusRing, input, muted } from '@/components/events/styles';
+import { TabBar } from '@/components/events/TabBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/context/AuthContext';
 import { useLabCategories, useLabs } from '@/hooks/queries/useLabs';
@@ -14,9 +15,10 @@ import {
     type UrlFilters,
 } from '@/lib/labs/filters';
 import {
-    LAB_CATEGORIES, LAB_DIFFICULTIES, LAB_SORTS, LAB_VIEWER_STATUSES, type LabCard as LabCardData, type LabFacets, type Page,
+    LAB_CATEGORIES, LAB_DIFFICULTIES, LAB_SORTS, LAB_VIEWER_STATUSES, type LabCard as LabCardData, type LabCategory, type LabFacets, type Page,
 } from '@/types/lab';
 import { LabCard } from './LabCard';
+import { LabsLeaderboard, LabsStatsCard } from './LeaderboardViews';
 import { ErrorState, GridSkeleton } from './ListStates';
 
 const chipClass = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${focusRing} ${active
@@ -89,11 +91,26 @@ export function LabsExplorer({ initialPage, initialFacets }: ExplorerProps) {
 
     return (
         <div>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            {signedIn && <LabsStatsCard />}
+
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <TabBar
+                    label="Labs views"
+                    idPrefix="labs-tab"
+                    active={url.tab}
+                    onChange={(id) => update({ tab: id })}
+                    tabs={[{ id: 'labs', label: 'Labs' }, { id: 'leaderboard', label: 'Leaderboard' }]}
+                />
                 <nav aria-label="Labs shortcuts" className="flex flex-wrap gap-2">
                     {isAdmin && <Link href="/admin/labs" className={btnPrimary}><Settings className="h-4 w-4" aria-hidden="true" /> Manage labs</Link>}
                 </nav>
             </div>
+
+            <div id="labs-tab-panel" role="tabpanel" aria-labelledby={`labs-tab-${url.tab}`}>
+            {url.tab === 'leaderboard' ? (
+                <LabsLeaderboard category={url.category} onCategoryChange={(c: LabCategory | '') => update({ category: c || null })} />
+            ) : (
+            <>
 
             <div className="mb-6 space-y-4" role="search" aria-label="Filter labs">
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
@@ -178,6 +195,9 @@ export function LabsExplorer({ initialPage, initialFacets }: ExplorerProps) {
                     )}
                 </div>
             )}
+            </>
+            )}
+            </div>
         </div>
     );
 }

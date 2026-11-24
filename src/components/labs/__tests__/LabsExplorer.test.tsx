@@ -7,9 +7,12 @@ const search = vi.hoisted(() => ({ current: '' }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }), usePathname: () => '/labs', useSearchParams: () => new URLSearchParams(search.current) }))
 const auth = vi.hoisted(() => ({ current: { user: null as { id: string; role: string } | null } }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth.current }))
+const board = vi.hoisted(() => ({ current: {} as Record<string, unknown>, calls: [] as unknown[] }))
 const list = vi.hoisted(() => ({ current: {} as Record<string, unknown>, calls: [] as unknown[][] }))
 vi.mock('@/hooks/queries/useLabs', () => ({
     useLabs: (filters: unknown, initial: unknown) => { list.calls.push([filters, initial]); return list.current },
+    useLabStats: () => ({ isLoading: false, isError: false, data: { totalStarted: 3, totalCompleted: 2, totalPoints: 150, totalHintsUsed: 1, totalTimeSpent: 0, byDifficulty: { easy: { started: 2, completed: 2, points: 100 }, hard: { started: 1, completed: 0, points: 0 } } } }),
+    useGlobalLeaderboard: (params: unknown) => { board.calls.push(params); return board.current },
     useLabCategories: () => ({ data: { total: 3, categories: [{ category: 'web-security', count: 2 }, { category: 'osint', count: 1 }], difficulties: [{ difficulty: 'easy', count: 2 }] } }),
 }))
 
@@ -29,6 +32,8 @@ beforeEach(() => {
     search.current = ''
     auth.current = { user: null }
     list.current = result(cards())
+    board.calls = []
+    board.current = { data: [], isLoading: false, isError: false, refetch: vi.fn() }
 })
 afterEach(() => { vi.useRealTimers(); window.history.replaceState(null, '', '/') })
 
@@ -189,5 +194,69 @@ describe('LabsExplorer list', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('boom')
         fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
         expect(refetch).toHaveBeenCalled()
+    })
+})
+
+describe('LabsExplorer leaderboard tab', () => {
+    const row = (rank: number, username: string, name: string | null, totalPoints: number, labsCompleted: number) => ({ rank, user: { username, name, avatar: null }, totalPoints, labsCompleted })
+
+    it('switches tab through the address and keeps the other filters', () => {
+        search.current = 'category=osint'
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(screen.getByRole('tab', { name: 'Labs' })).toHaveAttribute('aria-selected', 'true')
+        fireEvent.click(screen.getByRole('tab', { name: 'Leaderboard' }))
+        expect(replace).toHaveBeenLastCalledWith('/labs?category=osint&tab=leaderboard', { scroll: false })
+    })
+
+    it('shows the board for the category in the address, with people as name, username and a profile link', () => {
+        search.current = 'tab=leaderboard&category=osint'
+        board.current = { data: [row(1, 'ada', 'Ada Lovelace', 300, 4), row(2, 'linus', null, 150, 2)], isLoading: false, isError: false, refetch: vi.fn() }
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(board.calls[board.calls.length - 1]).toEqual({ category: 'osint', limit: 25 })
+        const rows = screen.getAllByTestId('board-row')
+        expect(rows).toHaveLength(2)
+        expect(rows[0]).toHaveTextContent('Ada Lovelace')
+        expect(rows[0]).toHaveTextContent('@ada')
+        expect(rows[0]).toHaveTextContent('300')
+        expect(rows[1]).toHaveTextContent('@linus')
+        expect(screen.getByRole('link', { name: 'Ada Lovelace' })).toHaveAttribute('href', '/user/ada')
+        expect(screen.queryByTestId('lab-grid')).not.toBeInTheDocument()
+        fireEvent.change(screen.getByLabelText('Category'), { target: { value: '' } })
+        expect(replace).toHaveBeenLastCalledWith('/labs?tab=leaderboard', { scroll: false })
+    })
+
+    it('marks the signed-in member on the board', () => {
+        auth.current = { user: { id: 'u1', role: 'user', username: 'ada' } as never }
+        search.current = 'tab=leaderboard'
+        board.current = { data: [row(1, 'ada', 'Ada Lovelace', 300, 4)], isLoading: false, isError: false, refetch: vi.fn() }
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(screen.getByTestId('board-row')).toHaveAttribute('aria-current', 'true')
+    })
+
+    it('shows an empty board and an error with a retry', () => {
+        search.current = 'tab=leaderboard'
+        const a = render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(screen.getByText('No completions yet')).toBeInTheDocument()
+        a.unmount()
+        const refetch = vi.fn()
+        board.current = { data: undefined, isLoading: false, isError: true, error: new Error('down'), refetch }
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
+        expect(refetch).toHaveBeenCalled()
+    })
+})
+
+describe('LabsExplorer stats card', () => {
+    it('shows a member their totals and the split by difficulty, and a visitor nothing', () => {
+        const a = render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(screen.queryByTestId('labs-stats')).not.toBeInTheDocument()
+        a.unmount()
+        auth.current = { user: { id: 'u1', role: 'user' } }
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        expect(screen.getByTestId('stat-started')).toHaveTextContent('3')
+        expect(screen.getByTestId('stat-completed')).toHaveTextContent('2')
+        expect(screen.getByTestId('stat-points')).toHaveTextContent('150')
+        expect(screen.getByTestId('stat-easy')).toHaveTextContent('2 of 2 completed, 100 pts')
+        expect(screen.getByTestId('stat-medium')).toHaveTextContent('0 of 0 completed, 0 pts')
     })
 })

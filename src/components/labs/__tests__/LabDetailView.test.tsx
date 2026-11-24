@@ -7,6 +7,7 @@ const auth = vi.hoisted(() => ({ current: { user: null as { id: string; role: st
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth.current }))
 vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ addToast: vi.fn() }) }))
 const q = vi.hoisted(() => ({ lab: {} as Record<string, unknown> }))
+const board = vi.hoisted(() => ({ rows: [] as unknown[] }))
 const start = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useLabs', () => ({
     useLab: () => q.lab,
@@ -15,7 +16,7 @@ vi.mock('@/hooks/queries/useLabs', () => ({
     useUnlockHint: () => ({ mutate: vi.fn(), isPending: false }),
     useSubmitFlag: () => ({ mutate: vi.fn(), reset: vi.fn() }),
     useNextLabCards: () => ({ data: [], isLoading: false }),
-    useLabLeaderboard: () => ({ data: [], isLoading: false, isError: false }),
+    useLabLeaderboard: () => ({ data: board.rows, isLoading: false, isError: false }),
 }))
 vi.mock('@/components/internships/ViewerTime', () => ({ ViewerTime: ({ iso }: { iso: string }) => <time>{iso}</time> }))
 
@@ -141,5 +142,31 @@ describe('LabDetailView states', () => {
         q.lab = result(undefined, { isLoading: true, isPending: true })
         render(<LabDetailView slug="x-lab" initialLab={null} />)
         expect(screen.getByRole('status', { name: 'Loading lab' })).toBeInTheDocument()
+    })
+})
+
+describe('LabDetailView top solvers', () => {
+    it('lists the best completions with name, username, points and hints only', () => {
+        q.lab = result(makeLab({ viewer: null }))
+        board.rows = [
+            { rank: 1, user: { username: 'ada', name: 'Ada Lovelace', avatar: null }, pointsEarned: 50, hintsUsed: 0, completedAt: '2030-01-01T00:00:00Z' },
+            { rank: 2, user: { username: 'linus', name: null, avatar: 'javascript:alert(1)' }, pointsEarned: 40, hintsUsed: 1, completedAt: '2030-01-02T00:00:00Z' },
+        ]
+        const { container } = render(<LabDetailView slug="sql-injection-basics" initialLab={null} />)
+        const rows = screen.getAllByTestId('solver-row')
+        expect(rows).toHaveLength(2)
+        expect(rows[0]).toHaveTextContent('Ada Lovelace')
+        expect(rows[0]).toHaveTextContent('50 pts')
+        expect(rows[1]).toHaveTextContent('1 hint')
+        expect(screen.getByRole('link', { name: 'Ada Lovelace' })).toHaveAttribute('href', '/user/ada')
+        // A non-http avatar is never put in an image
+        expect(container.querySelector('img[src^="javascript"]')).toBeNull()
+        board.rows = []
+    })
+
+    it('invites the first solver when there are none', () => {
+        q.lab = result(makeLab({ viewer: null }))
+        render(<LabDetailView slug="sql-injection-basics" initialLab={null} />)
+        expect(screen.getByTestId('top-solvers')).toHaveTextContent('Nobody has solved this lab yet')
     })
 })
