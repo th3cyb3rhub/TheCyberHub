@@ -133,3 +133,32 @@ describe('review queue', () => {
         expect(screen.getByText('Nothing waiting for review')).toBeInTheDocument()
     })
 })
+
+describe('series occurrences', () => {
+    const occurrence = makeEvent({ _id: 'o1', slug: 'weekly-2026-12-10', title: 'Weekly Night', status: 'upcoming', seriesId: '64b000000000000000000009', viewer: undefined })
+
+    it('links the series, cancels the occurrence and offers no delete', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        queue.current = page([occurrence, makeEvent({ _id: 'n1', slug: 'plain', title: 'Plain', viewer: undefined })])
+        render(<AdminEventsView />)
+        const rows = screen.getAllByTestId('queue-row')
+        expect(within(rows[0]).getByRole('link', { name: /Series/ })).toHaveAttribute('href', '/events/series/64b000000000000000000009')
+        expect(within(rows[0]).getByRole('button', { name: 'Cancel this occurrence' })).toBeInTheDocument()
+        expect(within(rows[0]).queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument()
+        expect(within(rows[1]).getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+        expect(within(rows[1]).getByRole('button', { name: /Delete Plain/ })).toBeInTheDocument()
+    })
+
+    it('explains that only this date is cancelled', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        queue.current = page([occurrence])
+        render(<AdminEventsView />)
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel this occurrence' }))
+        expect(screen.getByRole('dialog')).toHaveTextContent('Only this date is cancelled and the series goes on.')
+    })
+
+    it('links to the series screen for staff', () => {
+        render(<AdminEventsView />)
+        expect(screen.getByRole('link', { name: /Recurring series/ })).toHaveAttribute('href', '/admin/events/series')
+    })
+})
