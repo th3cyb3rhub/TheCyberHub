@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'Encoder / Decoder | TheCyberHub',
-    description: 'Encode and decode text using Base64, URL encoding, HTML entities, hex, and other common formats used in security testing.',
-}
+export const metadata = toolMetadata('encoder-decoder')
 
 export default function EncoderDecoderLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

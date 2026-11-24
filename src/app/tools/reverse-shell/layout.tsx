@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'Reverse Shell Generator | TheCyberHub',
-    description: 'Generate reverse shell payloads for penetration testing. Supports Bash, Python, PHP, PowerShell, and other languages.',
-}
+export const metadata = toolMetadata('reverse-shell')
 
 export default function ReverseShellLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'JWT Analyzer | TheCyberHub',
-    description: 'Decode, verify, and analyze JSON Web Tokens (JWT). Inspect headers, payloads, and signatures for security testing.',
-}
+export const metadata = toolMetadata('jwt-analyzer')
 
 export default function JWTAnalyzerLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

@@ -25,7 +25,7 @@
 TheCyberHub is an all-in-one cybersecurity education and community platform with:
 
 - **100+ CTF Challenges** — Web, Crypto, Forensics, Reverse Engineering, OSINT
-- **22+ Security Tools** — JWT Analyzer, Hash Cracker, Port Scanner, DNS Lookup, and more
+- **22 Security Tools** — JWT Analyzer, Hash Analyzer, payload references, and server-backed DNS, WHOIS, CVE, IP, HTTP header and TLS checks (lookups and analysis, no port scanning)
 - **8 Cheatsheet Categories** — Linux, Networking, XSS, SQL Injection, Privilege Escalation
 - **Community Forums** — Ask questions, share knowledge, vote on answers
 - **Social Feed** — Posts, likes, comments, reshares, hashtags

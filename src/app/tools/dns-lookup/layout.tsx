@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'DNS Lookup | TheCyberHub',
-    description: 'Perform DNS lookups to query A, AAAA, MX, TXT, NS, and other DNS records for any domain.',
-}
+export const metadata = toolMetadata('dns-lookup')
 
 export default function DNSLookupLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>
