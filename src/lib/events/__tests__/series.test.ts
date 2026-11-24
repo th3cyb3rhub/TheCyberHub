@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-    describeRecurrence, emptySeriesForm, formatDuration, isSeriesId, seriesToEditValues, startsOnBounds, toSeriesPatch, toSeriesPayload, touchesReviewFields,
+    describeRecurrence, emptySeriesForm, firstOccurrenceDay, formatDuration, isSeriesId, seriesToEditValues, startsOnBounds, toSeriesPatch, toSeriesPayload, touchesReviewFields,
     validateSeriesEdit, validateSeriesForm, type SeriesFormValues,
 } from '../series'
 import type { Series } from '@/types/event'
@@ -71,20 +71,42 @@ describe('create form validation', () => {
         expect(errorsOf(valid({ tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(',') })).tags).toMatch(/at most 10/)
     })
 
-    it('limits the first date to 366 days back and 731 days ahead', () => {
-        expect(startsOnBounds('Europe/London', NOW)).toEqual({ min: '2025-11-23', max: '2028-11-24' })
-        expect(errorsOf(valid({ startsOn: '2025-11-23' })).startsOn).toBeUndefined()
-        expect(errorsOf(valid({ startsOn: '2025-11-22' })).startsOn).toMatch(/366 days in the past/)
+    it('limits the first date like the server: UTC midnights between now minus 366 days and now plus 731 days', () => {
+        // 15:00Z: minus 366 days is 2025-11-23 15:00Z, so the first midnight at or after it is 2025-11-24
+        expect(startsOnBounds(new Date('2026-11-24T15:00:00Z'))).toEqual({ min: '2025-11-24', max: '2028-11-24' })
+        // On the dot, midnight itself is allowed
+        expect(startsOnBounds(new Date('2026-11-24T00:00:00Z'))).toEqual({ min: '2025-11-23', max: '2028-11-24' })
+        expect(startsOnBounds(new Date('2026-11-24T23:59:59Z'))).toEqual({ min: '2025-11-24', max: '2028-11-24' })
+        expect(errorsOf(valid({ startsOn: '2025-11-24' })).startsOn).toBeUndefined()
+        expect(errorsOf(valid({ startsOn: '2025-11-23' })).startsOn).toMatch(/366 days in the past/)
         expect(errorsOf(valid({ startsOn: '2028-11-24' })).startsOn).toBeUndefined()
         expect(errorsOf(valid({ startsOn: '2028-11-25' })).startsOn).toMatch(/731 days ahead/)
         expect(errorsOf(valid({ startsOn: '2026-02-30' })).startsOn).toBeDefined()
         expect(errorsOf(valid({ startsOn: '' })).startsOn).toMatch(/first date/)
     })
 
-    it('rejects a time the clock skips on the first date', () => {
-        // 29 March 2026, 01:30 does not exist in London
-        const e = errorsOf(valid({ startsOn: '2027-03-28', startTime: '01:30' }))
-        expect(e.startTime).toMatch(/does not exist/)
+    it('does not depend on the series zone, so Auckland gets the same bounds as London', () => {
+        const at = new Date('2026-11-24T15:00:00Z')
+        const options = { admin: false, now: at }
+        for (const timezone of ['Europe/London', 'Pacific/Auckland', 'America/Los_Angeles']) {
+            const early = validateSeriesForm(valid({ timezone, startsOn: '2025-11-23' }), options)
+            const late = validateSeriesForm(valid({ timezone, startsOn: '2028-11-24' }), options)
+            expect(early.ok ? undefined : early.errors.startsOn).toMatch(/366 days/)
+            expect(late.ok).toBe(true)
+        }
+    })
+
+    it('rejects a time the clock skips on the first date that really happens', () => {
+        // Sunday 28 March 2027, 01:30 does not exist in London
+        expect(errorsOf(valid({ weekday: '0', startsOn: '2027-03-28', startTime: '01:30' })).startTime).toMatch(/does not exist on 2027-03-28/)
+        // Asked from the Monday before, the first Sunday is still that day
+        expect(errorsOf(valid({ weekday: '0', startsOn: '2027-03-22', startTime: '01:30' })).startTime).toMatch(/does not exist on 2027-03-28/)
+        // The start date is a skipped day but the first Thursday is not: fine
+        expect(errorsOf(valid({ weekday: '4', startsOn: '2027-03-28', startTime: '01:30' })).startTime).toBeUndefined()
+        // The second Sunday of the month: the first one that fits is 2027-04-11
+        expect(errorsOf(valid({ rule: 'monthly-by-weekday', weekOfMonth: '2', weekday: '0', startsOn: '2027-03-01', startTime: '01:30' })).startTime).toBeUndefined()
+        // The last Sunday of March is the skipped one
+        expect(errorsOf(valid({ rule: 'monthly-by-weekday', weekOfMonth: '-1', weekday: '0', startsOn: '2027-03-01', startTime: '01:30' })).startTime).toMatch(/does not exist on 2027-03-28/)
     })
 
     it('does not allow both a last date and a count, or an end before the start', () => {
@@ -188,5 +210,15 @@ describe('touchesReviewFields', () => {
         for (const key of ['startTime', 'durationMinutes', 'maxParticipants', 'location', 'venue', 'waitlistEnabled']) {
             expect(touchesReviewFields({ scope: 'future', [key]: 'x' })).toBe(false)
         }
+    })
+})
+
+describe('firstOccurrenceDay', () => {
+    it('finds the weekday on or after the start, and the nth weekday of a month', () => {
+        expect(firstOccurrenceDay('2026-12-03', 'weekly', 4, null)).toBe('2026-12-03')
+        expect(firstOccurrenceDay('2026-12-04', 'biweekly', 4, null)).toBe('2026-12-10')
+        expect(firstOccurrenceDay('2026-12-01', 'monthly-by-weekday', 4, 3)).toBe('2026-12-17')
+        expect(firstOccurrenceDay('2026-12-18', 'monthly-by-weekday', 4, 3)).toBe('2027-01-21')
+        expect(firstOccurrenceDay('2026-12-01', 'monthly-by-weekday', 4, -1)).toBe('2026-12-31')
     })
 })

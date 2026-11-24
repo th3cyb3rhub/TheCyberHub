@@ -5,9 +5,9 @@
 
 import { z } from 'zod';
 import { EVENT_CATEGORIES, EVENT_FORMATS, SERIES_RULES, type CalendarItem, type EventCategory, type EventFormat, type Series, type SeriesRecurrence, type SeriesRule } from '@/types/event';
-import { addDays, MONTH_NAMES, parseDay, WEEKDAY_NAMES } from './calendar';
+import { addDays, MONTH_NAMES, parseDay, WEEKDAY_NAMES, weekdayOf } from './calendar';
 import { EVENT_LIMITS, isHttpsUrl, parseTags } from './form';
-import { browserTimeZone, isValidTimeZone, localToInstant, toLocalParts } from './time';
+import { browserTimeZone, isValidTimeZone, localToInstant } from './time';
 
 /** Mirrors the API (`SERIES` limits). `startsOn` may be one year back and two years ahead. */
 export const SERIES_LIMITS = {
@@ -139,10 +139,32 @@ const wholeNumber = (label: string, min: number, max: number, { optional = false
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-/** The first and last day `startsOn` may be, counted from today in the series' zone */
-export function startsOnBounds(zone: string, now: Date = new Date()): { min: string; max: string } {
-    const today = toLocalParts(now, isValidTimeZone(zone) ? zone : 'UTC').date;
-    return { min: addDays(today, -SERIES_LIMITS.startsOnBackDays), max: addDays(today, SERIES_LIMITS.startsOnAheadDays) };
+const DAY_MS = 86_400_000;
+
+/**
+ * The first and last day `startsOn` may be, worked out like the server: a day counts when its UTC
+ * midnight is no earlier than now minus 366 days and no later than now plus 731 days. So the first
+ * is the day after (or at) that instant rounded up, the last is rounded down, whatever the zone.
+ */
+export function startsOnBounds(now: Date = new Date()): { min: string; max: string } {
+    const key = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const earliest = now.getTime() - SERIES_LIMITS.startsOnBackDays * DAY_MS;
+    const latest = now.getTime() + SERIES_LIMITS.startsOnAheadDays * DAY_MS;
+    return { min: key(Math.ceil(earliest / DAY_MS) * DAY_MS), max: key(Math.floor(latest / DAY_MS) * DAY_MS) };
+}
+
+/** The date of the first occurrence: the first day on or after `startsOn` that fits the weekday (and the nth of the month) */
+export function firstOccurrenceDay(startsOn: string, rule: string, weekday: number, weekOfMonth: number | null): string {
+    let day = startsOn;
+    for (let i = 0; i < 400; i += 1, day = addDays(day, 1)) {
+        if (weekdayOf(day) !== weekday) continue;
+        if (rule !== 'monthly-by-weekday' || weekOfMonth === null) return day;
+        const dom = Number(day.slice(8));
+        const [y, m] = day.split('-').map(Number);
+        const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        if (weekOfMonth === -1 ? dom + 7 > last : Math.ceil(dom / 7) === weekOfMonth) return day;
+    }
+    return startsOn;
 }
 
 export interface SeriesSchemaOptions { admin?: boolean; now?: Date }
@@ -190,12 +212,15 @@ export function createSeriesFormSchema({ admin = false, now = new Date() }: Seri
         generateAheadDays: wholeNumber('Create ahead', SERIES_LIMITS.generateAheadDays.min, SERIES_LIMITS.generateAheadDays.max),
     }).superRefine((v, ctx) => {
         if (v.startsOn && parseDay(v.startsOn)) {
-            const { min, max } = startsOnBounds(v.timezone, now);
+            const { min, max } = startsOnBounds(now);
             if (v.startsOn < min) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date cannot be more than 366 days in the past (${min} or later)` });
             else if (v.startsOn > max) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date cannot be more than 731 days ahead (${max} or earlier)` });
-            else if (isValidTimeZone(v.timezone) && TIME_RE.test(v.startTime) && !localToInstant(v.startsOn, v.startTime, v.timezone)) {
-                // The first date is the one a clock change can skip; later dates are moved after the gap by the API
-                ctx.addIssue({ code: 'custom', path: ['startTime'], message: `That time does not exist on the first date in ${v.timezone} (the clock skips it). Pick another time` });
+            else if (isValidTimeZone(v.timezone) && TIME_RE.test(v.startTime) && /^[0-6]$/.test(v.weekday)) {
+                // The first date that really happens is the one a clock change can skip; later dates are moved after the gap by the API
+                const first = firstOccurrenceDay(v.startsOn, v.rule, Number(v.weekday), v.rule === 'monthly-by-weekday' ? Number(v.weekOfMonth) : null);
+                if (!localToInstant(first, v.startTime, v.timezone)) {
+                    ctx.addIssue({ code: 'custom', path: ['startTime'], message: `That time does not exist on ${first}, the first date, in ${v.timezone} (the clock skips it). Pick another time` });
+                }
             }
         }
         if (v.until && parseDay(v.until) && v.startsOn && v.until < v.startsOn) {

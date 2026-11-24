@@ -62,7 +62,7 @@ export function SeriesForm({ admin }: { admin: boolean }) {
     const [created, setCreated] = useState<SeriesCreated | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const zones = useMemo(() => timeZones(values.timezone), [values.timezone]);
-    const bounds = startsOnBounds(values.timezone);
+    const bounds = startsOnBounds();
 
     const set = <K extends keyof SeriesFormValues>(key: K, value: SeriesFormValues[K]) => {
         setValues((v) => ({ ...v, [key]: value }));
