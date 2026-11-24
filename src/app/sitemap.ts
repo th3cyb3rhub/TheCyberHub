@@ -288,18 +288,39 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: route.priority,
     }))
 
-    // Dynamic job pages
+    // Public jobs and the companies behind them. A job card has no update time, so the date is when it was
+    // posted; with none, the entry carries no date rather than a made-up one.
     let jobPages: MetadataRoute.Sitemap = []
+    let companyPages: MetadataRoute.Sitemap = []
     try {
         const res = await fetch(`${API_URL}/api/jobs?limit=50`, { next: { revalidate: 3600 } })
         if (res.ok) {
             const data = await res.json()
-            const jobs = data.data || []
-            jobPages = jobs.map((job: { slug?: string; _id: string; updatedAt?: string }) => ({
+            const jobs: { slug?: string; _id: string; createdAt?: string; companyRef?: { slug?: string } | null }[] = Array.isArray(data.data) ? data.data : []
+            const dateOf = (value?: string) => {
+                const at = value ? new Date(value) : null
+                return at && !Number.isNaN(at.getTime()) ? at : undefined
+            }
+            jobPages = jobs.map((job) => ({
                 url: `${baseUrl}/jobs/${job.slug || job._id}`,
-                lastModified: job.updatedAt ? new Date(job.updatedAt) : currentDate,
+                lastModified: dateOf(job.createdAt),
                 changeFrequency: 'weekly' as const,
                 priority: 0.7,
+            }))
+            // Each company once, dated by its newest listed job
+            const newest = new Map<string, Date | undefined>()
+            for (const job of jobs) {
+                const slug = job.companyRef?.slug
+                if (!slug) continue
+                const at = dateOf(job.createdAt)
+                const seen = newest.get(slug)
+                newest.set(slug, seen && at ? (seen > at ? seen : at) : seen ?? at)
+            }
+            companyPages = Array.from(newest).map(([slug, lastModified]) => ({
+                url: `${baseUrl}/company/${encodeURIComponent(slug)}`,
+                lastModified,
+                changeFrequency: 'weekly' as const,
+                priority: 0.5,
             }))
         }
     } catch {
@@ -329,5 +350,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ...resources.map((r) => ({ url: `${baseUrl}/resources/${r.slug}`, lastModified: r.updatedAt ? new Date(r.updatedAt) : currentDate, changeFrequency: 'monthly' as const, priority: 0.5 })),
     ]
 
-    return [...staticPages, ...jobPages, ...eventPages, ...mentorPages, ...learningPages]
+    return [...staticPages, ...jobPages, ...companyPages, ...eventPages, ...mentorPages, ...learningPages]
 }

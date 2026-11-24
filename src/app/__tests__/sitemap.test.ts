@@ -37,4 +37,38 @@ describe('sitemap', () => {
         }
         expect(new Set(urls).size).toBe(urls.length)
     })
+
+    it('lists public jobs dated by when they were posted, and each company page once', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                data: [
+                    { _id: 'a', slug: 'pentester-a', createdAt: '2026-10-01T00:00:00Z', companyRef: { slug: 'acme' } },
+                    { _id: 'b', slug: 'soc-b', createdAt: '2026-10-05T00:00:00Z', companyRef: { slug: 'acme' } },
+                    { _id: 'c', slug: 'grc-c', companyRef: null },
+                    { _id: 'd', createdAt: 'not a date', companyRef: { slug: 'zeta-co' } },
+                ],
+            }),
+        }))
+        const entries = await sitemap()
+        const at = (url: string) => entries.find((e) => e.url === url)
+        expect(at('https://thecyberhub.org/jobs/pentester-a')?.lastModified).toEqual(new Date('2026-10-01T00:00:00Z'))
+        expect(at('https://thecyberhub.org/jobs/grc-c')).toBeDefined()
+        // No date to give: none is invented
+        expect(at('https://thecyberhub.org/jobs/grc-c')?.lastModified).toBeUndefined()
+        expect(at('https://thecyberhub.org/jobs/d')?.lastModified).toBeUndefined()
+        const companies = entries.filter((e) => e.url.startsWith('https://thecyberhub.org/company/') && e.url !== 'https://thecyberhub.org/company/')
+        expect(companies.map((e) => e.url).filter((u) => u.endsWith('/acme'))).toHaveLength(1)
+        expect(at('https://thecyberhub.org/company/acme')?.lastModified).toEqual(new Date('2026-10-05T00:00:00Z'))
+        expect(at('https://thecyberhub.org/company/zeta-co')).toBeDefined()
+        const urls = entries.map((e) => e.url)
+        expect(new Set(urls).size).toBe(urls.length)
+    })
+
+    it('still lists the static pages when the jobs API is down', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')))
+        const urls = (await sitemap()).map((e) => e.url)
+        expect(urls).toContain('https://thecyberhub.org/jobs')
+        expect(urls.some((u) => /\/company\/[^/]+$/.test(u) && !u.endsWith('/company/'))).toBe(false)
+    })
 })
