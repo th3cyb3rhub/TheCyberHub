@@ -33,9 +33,4 @@ export const env = {
 
     // Error tracking — optional (Sentry disabled if not set)
     sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN ?? '',
-
-    // Security tools API endpoints — optional (features disabled if not set)
-    headerAnalyzerApiUrl: process.env.NEXT_PUBLIC_HEADER_ANALYZER_API_URL ?? '',
-    subfinderApiUrl: process.env.NEXT_PUBLIC_SUBFINDER_API_URL ?? '',
-    subTakeoverApiUrl: process.env.NEXT_PUBLIC_SUB_TAKEOVER_API_URL ?? '',
 } as const;
