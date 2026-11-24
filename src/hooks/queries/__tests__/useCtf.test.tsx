@@ -199,6 +199,24 @@ describe('live board', () => {
         vi.useRealTimers()
     })
 
+    it('reads the board again at once after a reconnect, and not on the first join', async () => {
+        const socket = fakeSocket()
+        socketCtx.current = { socket, connected: true }
+        const spy = vi.spyOn(qc, 'invalidateQueries')
+        const { result, rerender } = renderHook(() => useCtfLiveBoard(SLUG, { enabled: true }), { wrapper })
+        await waitFor(() => expect(result.current).toBe(true))
+        expect(spy).not.toHaveBeenCalled()
+        // The connection drops: pushes sent now never arrive
+        socketCtx.current = { socket, connected: false }
+        rerender()
+        expect(spy).not.toHaveBeenCalled()
+        // It comes back: the room is joined again and the board is read at once
+        socketCtx.current = { socket, connected: true }
+        rerender()
+        expect(socket.emit.mock.calls.filter((c) => c[0] === 'ctf:join')).toHaveLength(2)
+        expect(spy).toHaveBeenCalledWith({ queryKey: ctfKeys.leaderboard(SLUG, 'u1') })
+    })
+
     it('stays on the timer when the room refuses the join (rate limited)', async () => {
         const socket = fakeSocket()
         socket.emit.mockImplementation((name: string, _p: unknown, ack?: (a: { ok: boolean; error?: string }) => void) => { if (name === 'ctf:join') ack?.({ ok: false, error: 'rate_limited' }) })

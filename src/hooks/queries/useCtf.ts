@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient,
 } from '@tanstack/react-query';
@@ -256,6 +256,9 @@ export function useCtfLiveBoard(slug: string, options: { enabled: boolean; dynam
     const [joined, setJoined] = useState(false);
     const { enabled, dynamic = false } = options;
     const active = enabled && !!socket && connected && !!slug;
+    // Pushes sent while the socket was down are gone: the first time the room is joined the board was
+    // just fetched, but every later join (a reconnect) reads the board again at once
+    const joinedBefore = useRef(false);
 
     useEffect(() => {
         if (!active || !socket) { setJoined(false); return; }
@@ -274,6 +277,9 @@ export function useCtfLiveBoard(slug: string, options: { enabled: boolean; dynam
             if (timer) return;
             timer = setTimeout(() => { timer = null; last = Date.now(); refresh(); }, wait);
         };
+
+        if (joinedBefore.current) refresh();
+        joinedBefore.current = true;
 
         socket.on('scoreboard:update', onUpdate);
         // `{ ok: false, error: 'rate_limited' }` leaves the board on its timer, like a visitor's
