@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { CheckCircle2, Flag, Loader2, Lock, Send, Sparkles, Trophy, Users } from 'lucide-react';
 import { btnPrimary, btnSecondary, input, inputError, muted } from '@/components/events/styles';
 import { useSubmitCtfFlag } from '@/hooks/queries/useCtf';
@@ -24,6 +24,9 @@ interface Props {
 
 const panel = 'rounded-xl border p-3 text-sm';
 
+/** How long a "not started yet" answer keeps the box closed */
+export const NOT_STARTED_RECHECK_MS = 5000;
+
 /**
  * Where a member sends a flag for one challenge. The text lives in one input and is cleared the
  * moment it is sent: it is never kept in state, a cache, storage or an event. The server decides
@@ -39,6 +42,21 @@ export function CtfFlagForm({ slug, challenge, status, signedIn, teamIssue, onTe
 
     const until = state.phase === 'waiting' ? state.until : null;
     const seconds = useCountdown(until, () => dispatch({ type: 'unlocked' }));
+
+    // "Not started" is a disagreement between clocks, not a verdict: let the box open again when the
+    // competition's status moves, and every few seconds otherwise
+    const notStarted = state.phase === 'blocked' && state.reason === 'not-started';
+    useEffect(() => {
+        if (!notStarted) return;
+        const id = window.setTimeout(() => dispatch({ type: 'recheck' }), NOT_STARTED_RECHECK_MS);
+        return () => window.clearTimeout(id);
+    }, [notStarted]);
+    const lastStatus = useRef(status);
+    useEffect(() => {
+        if (lastStatus.current === status) return;
+        lastStatus.current = status;
+        dispatch({ type: 'recheck' });
+    }, [status]);
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();

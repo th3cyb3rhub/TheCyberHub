@@ -1,16 +1,30 @@
-import { fetchApi } from '@/lib/api';
+import { ApiError, fetchApi } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
 import type {
     CtfChallenge, CtfCompetition, CtfCompetitionCard, CtfDeleteResult, CtfLeaderboard, CtfListFilters, CtfMe, CtfPage, CtfPayload, CtfPickerChallenge,
     CtfResults, CtfSubmitResult, CtfTeam,
 } from '@/types/ctf';
 import { LIST_FILTER_QUERY } from '@/lib/ctf/constants';
+import { noteServerTime } from '@/lib/ctf/serverClock';
 
 const E = API_ENDPOINTS.CTF;
 const ref = (slug: string) => encodeURIComponent(slug);
 
+/**
+ * Every call of this file. An error body carries the API's own clock (`timestamp`), so even a
+ * refusal ("not started", a rate limit) teaches the page what time the server thinks it is.
+ */
+const call: typeof fetchApi = async (endpoint, options) => {
+    try {
+        return await fetchApi(endpoint, options);
+    } catch (err) {
+        if (err instanceof ApiError) noteServerTime(err.serverTime);
+        throw err;
+    }
+};
+
 const send = (path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown) =>
-    fetchApi(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    call(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
 /** Query string. Empty values are left out; page 1 is implied. */
 export function query(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -33,21 +47,23 @@ function statusParam(status: CtfListFilters['status']): string {
 // ---- Public reads. The token is sent when there is one: staff see drafts, `solved` is real. ----
 
 export function listCompetitions(filters: CtfListFilters = {}): Promise<CtfPage<CtfCompetitionCard>> {
-    return fetchApi(`${E.BASE}${query({ status: statusParam(filters.status), page: filters.page, limit: filters.limit })}`);
+    return call(`${E.BASE}${query({ status: statusParam(filters.status), page: filters.page, limit: filters.limit })}`);
 }
 
 export async function getCompetition(slug: string): Promise<CtfCompetition> {
-    return (await fetchApi(E.BY_REF(ref(slug)))).data;
+    return (await call(E.BY_REF(ref(slug)))).data;
 }
 
 /** With the token: the API marks what the viewer, or the viewer's team, solved. Without it `solved` is always false. */
 export async function getChallenges(slug: string): Promise<CtfChallenge[]> {
-    return (await fetchApi(E.CHALLENGES(ref(slug)))).data ?? [];
+    return (await call(E.CHALLENGES(ref(slug)))).data ?? [];
 }
 
 /** The board comes flat (`data`, `mode`, `frozen`, ...), not wrapped in a `data` key */
 export async function getLeaderboard(slug: string): Promise<CtfLeaderboard> {
-    const body = await fetchApi(E.LEADERBOARD(ref(slug)));
+    const body = await call(E.LEADERBOARD(ref(slug)));
+    // The only server instant on the public reads: it keeps the countdown and the status on the server's clock
+    noteServerTime(body?.updatedAt);
     return {
         data: body.data ?? [],
         mode: body.mode === 'team' ? 'team' : 'solo',
@@ -59,13 +75,15 @@ export async function getLeaderboard(slug: string): Promise<CtfLeaderboard> {
 }
 
 export async function getResults(slug: string): Promise<CtfResults> {
-    return (await fetchApi(E.RESULTS(ref(slug)))).data;
+    const data = (await call(E.RESULTS(ref(slug)))).data;
+    noteServerTime(data?.generatedAt);
+    return data;
 }
 
 // ---- Member ----
 
 export async function getMe(slug: string): Promise<CtfMe> {
-    return (await fetchApi(E.ME(ref(slug)))).data;
+    return (await call(E.ME(ref(slug)))).data;
 }
 
 export async function register(slug: string): Promise<{ registered: boolean }> {
@@ -78,7 +96,7 @@ export async function unregister(slug: string): Promise<{ registered: boolean }>
 
 /** The team of the member, or null */
 export async function getTeam(slug: string): Promise<CtfTeam | null> {
-    return (await fetchApi(E.TEAM(ref(slug)))).data ?? null;
+    return (await call(E.TEAM(ref(slug)))).data ?? null;
 }
 
 export async function createTeam(slug: string, name: string): Promise<CtfTeam> {
@@ -159,7 +177,7 @@ export async function setChallenges(id: string, challenges: string[]): Promise<C
 
 /** Active and draft challenges of the existing admin list, for the picker (`all` also returns archived ones: they are left out) */
 export async function listPickerChallenges(params: { search?: string; page?: number; limit?: number } = {}): Promise<{ items: CtfPickerChallenge[]; hasMore: boolean }> {
-    const body = await fetchApi(`${API_ENDPOINTS.CHALLENGES.BASE}${query({
+    const body = await call(`${API_ENDPOINTS.CHALLENGES.BASE}${query({
         status: 'all', search: params.search && params.search.trim().length >= 2 ? params.search.trim() : undefined,
         page: params.page, limit: params.limit ?? 50, sortBy: 'title', sortOrder: 'asc',
     })}`);

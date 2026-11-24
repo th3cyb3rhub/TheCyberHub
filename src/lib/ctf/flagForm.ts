@@ -14,7 +14,9 @@ import { flagSchema } from './schemas';
  *                instant, counted from when the answer arrived, never a server instant)
  * - success:     the flag was right
  * - solved:      the challenge was already solved for the member or the team (409)
- * - blocked:     the competition or the team does not allow a send (ended, cancelled, not started, team needed)
+ * - blocked:     the competition or the team does not allow a send (ended, cancelled, not started, team needed).
+ *                `not-started` is not final: the page's clock can be a little ahead of the server's, so `recheck` lets the box open
+ *                again (the next send says again if it is still too early). The others stay until the page reloads.
  */
 export type BlockReason = 'ended' | 'cancelled' | 'not-started' | 'team-required' | 'team-too-small';
 
@@ -36,7 +38,8 @@ export type FlagAction =
     | { type: 'submit' }
     | { type: 'result'; result: CtfSubmitResult }
     | { type: 'failed'; error: unknown; now?: number }
-    | { type: 'unlocked' };
+    | { type: 'unlocked' }
+    | { type: 'recheck' };
 
 export const initialFlagState = (): FlagState => ({ phase: 'idle', notice: null });
 
@@ -91,6 +94,8 @@ export function flagReducer(state: FlagState, action: FlagAction): FlagState {
         }
         case 'unlocked':
             return state.phase === 'waiting' ? { phase: 'idle', notice: null } : state;
+        case 'recheck':
+            return state.phase === 'blocked' && state.reason === 'not-started' ? { phase: 'idle', notice: null } : state;
         default:
             return state;
     }

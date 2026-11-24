@@ -1,4 +1,5 @@
 import type { CtfStatus } from '@/types/ctf';
+import { serverNow } from './serverClock';
 
 interface Dated {
     status: CtfStatus;
@@ -10,12 +11,13 @@ interface Dated {
 const time = (value: string | null | undefined) => (value ? new Date(value).getTime() : NaN);
 
 /**
- * The status the clock gives right now, the same rule the API applies (`utils/ctfStatus.js`).
- * List and detail data can be a minute old, so a card that says "upcoming" may already be live.
- * `draft` and `cancelled` are decisions: time never changes them. Everything else follows the dates,
- * and the end is exclusive.
+ * The status the clock gives right now, by the rule the API applies to every read: `draft` and
+ * `cancelled` are decisions that time never changes; everything else follows the dates, and the end
+ * is exclusive. List and detail data can be a minute old, so a card that says "upcoming" may
+ * already be live. The default moment is the server's time as far as it is known (`serverNow`), not
+ * the raw browser clock.
  */
-export function effectiveCtfStatus(competition: Dated, now: Date = new Date()): CtfStatus {
+export function effectiveCtfStatus(competition: Dated, now: Date = serverNow()): CtfStatus {
     if (competition.status === 'draft' || competition.status === 'cancelled') return competition.status;
     const t = now.getTime();
     const start = time(competition.startDate);
@@ -59,7 +61,7 @@ export interface Clock {
 }
 
 /** What the header counts down to: the start while upcoming, the end while it runs */
-export function clockFor(competition: Dated, now: Date): Clock {
+export function clockFor(competition: Dated, now: Date = serverNow()): Clock {
     const status = effectiveCtfStatus(competition, now);
     if (status === 'upcoming') return { kind: 'starts', ms: Math.max(0, time(competition.startDate) - now.getTime()) };
     if (status === 'live' || status === 'frozen') return { kind: 'ends', ms: Math.max(0, time(competition.endDate) - now.getTime()) };

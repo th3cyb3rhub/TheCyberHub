@@ -174,7 +174,7 @@ export function ChallengesPanel({ competition, status, signedIn, me, staff, onTe
     if (query.isError) {
         const code = ctfErrorCode(query.error);
         if (code === 'CTF_NOT_STARTED') {
-            return <EmptyState icon={Lock} title="The challenges open when the competition starts" description="Come back at the start time." />;
+            return <div aria-live="polite"><EmptyState icon={Lock} title="The challenges open when the competition starts" description="The server says it has not started yet. This page asks again every few seconds and shows them as soon as they open." /></div>;
         }
         return <ErrorState error={query.error} onRetry={() => void query.refetch()} title="Could not load the challenges" />;
     }

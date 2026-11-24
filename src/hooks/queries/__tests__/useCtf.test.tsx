@@ -25,7 +25,7 @@ const revalidate = vi.hoisted(() => ({ refreshPublicCtf: vi.fn() }))
 vi.mock('@/lib/ctf/revalidate', () => revalidate)
 
 import {
-    boardPollMs, ctfKeys, useCreateCtf, useCreateCtfTeam, useCtfChallenges, useCtfCompetition, useCtfCompetitions, useCtfLeaderboard, useCtfLiveBoard,
+    NOT_STARTED_RETRY_MS, boardPollMs, ctfKeys, useCreateCtf, useCreateCtfTeam, useCtfChallenges, useCtfCompetition, useCtfCompetitions, useCtfLeaderboard, useCtfLiveBoard,
     useJoinCtfTeam, useKickCtfMember, useLeaveCtfTeam, useRegisterCtf, useRemoveCtfChallenge, useSubmitCtfFlag, useUpdateCtf, useDeleteCtf,
 } from '../useCtf'
 
@@ -71,6 +71,35 @@ describe('reads', () => {
         expect(result.current.data?.[0].solved).toBe(true)
         expect(qc.getQueryData(ctfKeys.challenges(SLUG, 'u1'))).toBeDefined()
         expect(qc.getQueryData(ctfKeys.challenges(SLUG, null))).toBeUndefined()
+    })
+
+    it('keeps asking for the challenges while the server says "not started", and shows them when they open', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true })
+        try {
+            api.getChallenges
+                .mockRejectedValueOnce(new ApiError('not yet', 403, 'CTF_NOT_STARTED'))
+                .mockResolvedValue([makeChallenge()])
+            const { result } = renderHook(() => useCtfChallenges(SLUG), { wrapper })
+            await waitFor(() => expect(result.current.isError).toBe(true))
+            expect(api.getChallenges).toHaveBeenCalledTimes(1)
+            await act(async () => { await vi.advanceTimersByTimeAsync(NOT_STARTED_RETRY_MS + 50) })
+            await waitFor(() => expect(result.current.data).toHaveLength(1))
+            expect(api.getChallenges).toHaveBeenCalledTimes(2)
+            // Once it loads, nothing keeps asking
+            await act(async () => { await vi.advanceTimersByTimeAsync(NOT_STARTED_RETRY_MS * 3) })
+            expect(api.getChallenges).toHaveBeenCalledTimes(2)
+        } finally { vi.useRealTimers() }
+    })
+
+    it('does not poll for any other failure', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true })
+        try {
+            api.getChallenges.mockRejectedValue(new ApiError('nope', 404, 'CTF_NOT_FOUND'))
+            const { result } = renderHook(() => useCtfChallenges(SLUG), { wrapper })
+            await waitFor(() => expect(result.current.isError).toBe(true))
+            await act(async () => { await vi.advanceTimersByTimeAsync(NOT_STARTED_RETRY_MS * 3) })
+            expect(api.getChallenges).toHaveBeenCalledTimes(1)
+        } finally { vi.useRealTimers() }
     })
 
     it('waits for the session, so a member never sees every challenge unsolved first', async () => {

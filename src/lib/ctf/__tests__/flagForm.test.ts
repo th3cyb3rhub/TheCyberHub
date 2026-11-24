@@ -71,4 +71,15 @@ describe('flag form state machine', () => {
         expect(flagReducer(idle, { type: 'result', result: right })).toBe(idle)
         expect(flagReducer(idle, { type: 'failed', error: fail(429, 'RATE_LIMIT_EXCEEDED') })).toBe(idle)
     })
+
+    it('opens the box again on a recheck after "not started", and only then', () => {
+        const submitting = flagReducer(initialFlagState(), { type: 'submit' })
+        const notStarted = flagReducer(submitting, { type: 'failed', error: new ApiError('x', 403, 'CTF_NOT_STARTED') })
+        expect(notStarted.phase).toBe('blocked')
+        expect(flagReducer(notStarted, { type: 'recheck' })).toEqual({ phase: 'idle', notice: null })
+        const ended = flagReducer(flagReducer(initialFlagState(), { type: 'submit' }), { type: 'failed', error: new ApiError('x', 403, 'CTF_ENDED') })
+        expect(flagReducer(ended, { type: 'recheck' })).toBe(ended)
+        const idle = initialFlagState()
+        expect(flagReducer(idle, { type: 'recheck' })).toBe(idle)
+    })
 })

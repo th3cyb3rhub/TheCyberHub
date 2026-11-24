@@ -6,7 +6,7 @@ import type { CtfSubmitResult } from '@/types/ctf'
 const submit = vi.hoisted(() => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useCtf', () => ({ useSubmitCtfFlag: () => submit }))
 
-import { CtfFlagForm } from '../CtfFlagForm'
+import { CtfFlagForm, NOT_STARTED_RECHECK_MS } from '../CtfFlagForm'
 
 type Callbacks = { onSuccess?: (r: CtfSubmitResult) => void; onError?: (e: unknown) => void; onSettled?: () => void }
 const last = () => submit.mutate.mock.calls[submit.mutate.mock.calls.length - 1] as [{ slug: string; challengeId: string; flag: string }, Callbacks]
@@ -110,6 +110,35 @@ describe('CtfFlagForm', () => {
         send('flag{a}')
         act(() => { last()[1].onError?.(new ApiError('x', 403, code)) })
         expect(screen.getByTestId('flag-blocked')).toHaveTextContent(words)
+    })
+
+    it('lets the box open again a few seconds after "not started": the page clock may be ahead of the server', () => {
+        vi.useFakeTimers()
+        renderForm()
+        send('flag{a}')
+        act(() => { last()[1].onError?.(new ApiError('x', 403, 'CTF_NOT_STARTED')) })
+        expect(screen.getByTestId('flag-blocked')).toHaveAttribute('data-reason', 'not-started')
+        act(() => { vi.advanceTimersByTime(NOT_STARTED_RECHECK_MS - 1) })
+        expect(screen.getByTestId('flag-blocked')).toBeInTheDocument()
+        act(() => { vi.advanceTimersByTime(1) })
+        expect(screen.queryByTestId('flag-blocked')).toBeNull()
+        expect(box()).toBeEnabled()
+    })
+
+    it('recovers from "not started" when the competition status moves, and keeps "ended" for good', () => {
+        const view = renderForm()
+        send('flag{a}')
+        act(() => { last()[1].onError?.(new ApiError('x', 403, 'CTF_NOT_STARTED')); last()[1].onSettled?.() })
+        // The page's clock now agrees with the server: upcoming, then live again at the start
+        view.rerender(<CtfFlagForm slug="winter-ctf" challenge={challenge} status="upcoming" signedIn teamIssue={null} onTeamTab={vi.fn()} />)
+        view.rerender(<CtfFlagForm slug="winter-ctf" challenge={challenge} status="live" signedIn teamIssue={null} onTeamTab={vi.fn()} />)
+        expect(screen.queryByTestId('flag-blocked')).toBeNull()
+        expect(box()).toBeEnabled()
+
+        send('flag{b}')
+        act(() => { last()[1].onError?.(new ApiError('x', 403, 'CTF_ENDED')) })
+        view.rerender(<CtfFlagForm slug="winter-ctf" challenge={challenge} status="frozen" signedIn teamIssue={null} onTeamTab={vi.fn()} />)
+        expect(screen.getByTestId('flag-blocked')).toHaveTextContent('has ended')
     })
 
     it('sends the player to the team tab when a team is needed or too small', () => {

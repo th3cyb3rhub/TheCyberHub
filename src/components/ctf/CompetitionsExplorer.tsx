@@ -10,7 +10,7 @@ import { useCtfCompetitions } from '@/hooks/queries/useCtf';
 import { LIST_FILTER_LABELS } from '@/lib/ctf/constants';
 import { isCtfWriter } from '@/lib/ctf/roles';
 import { effectiveCtfStatus } from '@/lib/ctf/status';
-import { useNow } from '@/lib/events/clock';
+import { useCtfNow } from '@/lib/ctf/clock';
 import { CTF_LIST_FILTERS, type CtfCompetitionCard, type CtfListFilter, type CtfPage } from '@/types/ctf';
 import { CompetitionCard } from './CompetitionCard';
 import { ErrorState, GridSkeleton } from './ListStates';
@@ -51,7 +51,7 @@ interface Props {
 export function CompetitionsExplorer({ filter, initialPage, initialUpdatedAt }: Props) {
     const { user } = useAuth();
     const query = useCtfCompetitions({ status: filter }, initialPage, initialUpdatedAt);
-    const now = useNow(30_000);
+    const now = useCtfNow(30_000);
 
     const items = useMemo(() => {
         const seen = new Set<string>();

@@ -10,13 +10,12 @@ import { card, muted, pageBg } from '@/components/events/styles';
 import { TabBar } from '@/components/events/TabBar';
 import { btnSecondary } from '@/components/events/styles';
 import { useAuth } from '@/context/AuthContext';
-import { refreshCompetition, useCtfCompetition, useCtfMe } from '@/hooks/queries/useCtf';
+import { refreshCompetition, useCtfClockSync, useCtfCompetition, useCtfMe } from '@/hooks/queries/useCtf';
 import { ApiError } from '@/lib/api';
 import { participantsText, safeHref } from '@/lib/ctf/display';
 import { isCtfReader } from '@/lib/ctf/roles';
-import { effectiveCtfStatus, serverMoment } from '@/lib/ctf/status';
-import { useNow } from '@/lib/events/clock';
-import type { CtfCompetition } from '@/types/ctf';
+import { useCtfStatus } from '@/lib/ctf/clock';
+import type { CtfCompetition, CtfStatus } from '@/types/ctf';
 import { Banners } from './Banners';
 import { CtfStatusBadge, Pill } from './Badges';
 import { CompetitionClock, CompetitionTimes } from './CompetitionTimes';
@@ -64,7 +63,7 @@ function Description({ text }: { text: string }) {
     );
 }
 
-function Header({ competition, status, signedIn, me }: { competition: CtfCompetition; status: ReturnType<typeof effectiveCtfStatus>; signedIn: boolean; me: ReturnType<typeof useCtfMe>['data'] }) {
+function Header({ competition, status, signedIn, me }: { competition: CtfCompetition; status: CtfStatus; signedIn: boolean; me: ReturnType<typeof useCtfMe>['data'] }) {
     const image = safeHref(competition.image);
     return (
         <section className={`${card} overflow-hidden`} aria-labelledby="comp-title">
@@ -118,7 +117,6 @@ export function CompetitionView({ slug, initialCompetition, initialUpdatedAt, in
     const signedIn = !!user;
     const staff = isCtfReader(user?.role);
     const me = useCtfMe(slug, signedIn && !!competition);
-    const now = useNow(5000);
 
     const [tab, setTab] = useState<TabId>(() => parseTab(initialTab, true));
     const teamsEnabled = competition?.teamsEnabled ?? false;
@@ -134,7 +132,10 @@ export function CompetitionView({ slug, initialCompetition, initialUpdatedAt, in
         } catch { /* the address stays as it was */ }
     }, []);
 
-    const status = competition ? effectiveCtfStatus(competition, now ?? serverMoment(competition)) : 'upcoming';
+    // Re-renders this page only when the status changes (start, freeze, end), not on every tick
+    const status = useCtfStatus(competition);
+    // One read of the board puts the countdown and the status on the server's clock
+    useCtfClockSync(slug, !!competition && (status === 'upcoming' || status === 'live' || status === 'frozen'));
 
     // The clock moved the competition on (it started, froze or ended): everything that depends on it is read again
     const previous = useRef(status);

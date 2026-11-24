@@ -2,7 +2,8 @@
 
 import { Clock, Globe2, Timer } from 'lucide-react';
 import { muted } from '@/components/events/styles';
-import { useNow, useViewerZone } from '@/lib/events/clock';
+import { useViewerZone } from '@/lib/events/clock';
+import { useCtfNow } from '@/lib/ctf/clock';
 import { formatDayYear, formatRange, sameClock } from '@/lib/events/time';
 import { clockFor, countdownWords, formatCountdown } from '@/lib/ctf/status';
 import type { CtfCompetitionCard } from '@/types/ctf';
@@ -44,7 +45,7 @@ export function CompetitionTimes({ competition }: { competition: Timed }) {
  * timer for a screen reader but is not announced every second; a sentence in words is.
  */
 export function CompetitionClock({ competition }: { competition: Timed }) {
-    const now = useNow(1000);
+    const now = useCtfNow(1000);
     if (!now) return <div className="min-h-[3.25rem]" aria-hidden="true" />;
     const clock = clockFor(competition, now);
     if (clock.kind === 'ended') {

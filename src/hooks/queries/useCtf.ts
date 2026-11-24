@@ -8,7 +8,7 @@ import { useDocumentVisible } from '@/hooks/useDocumentVisible';
 import * as api from '@/lib/api/ctf';
 import { ApiError } from '@/lib/api';
 import { CTF_LIMITS } from '@/lib/ctf/constants';
-import { isStaleState } from '@/lib/ctf/errors';
+import { ctfErrorCode, isStaleState } from '@/lib/ctf/errors';
 import { refreshPublicCtf } from '@/lib/ctf/revalidate';
 import { isPlayable } from '@/lib/ctf/status';
 import type {
@@ -120,6 +120,27 @@ export function useCtfChallenges(slug: string, enabled = true) {
         enabled: enabled && !!slug && !loading,
         staleTime: 15_000,
         retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
+        // The server says it has not started while the page thinks it has (a clock a little off):
+        // keep asking until the challenges load, so the list appears without a reload
+        refetchInterval: (query) => (ctfErrorCode(query.state.error) === 'CTF_NOT_STARTED' ? NOT_STARTED_RETRY_MS : false),
+    });
+}
+
+/** How often the challenges are asked again while the server answers CTF_NOT_STARTED */
+export const NOT_STARTED_RETRY_MS = 5000;
+
+/**
+ * One read of the board, only for its server time stamp (it shares the board's cache entry, so the
+ * scoreboard tab reuses it). A failed read is not retried: the clock just stays as it was.
+ */
+export function useCtfClockSync(slug: string, enabled = true) {
+    const { user, loading } = useAuth();
+    return useQuery<CtfLeaderboard>({
+        queryKey: ctfKeys.leaderboard(slug, user?.id ?? null),
+        queryFn: () => api.getLeaderboard(slug),
+        enabled: enabled && !!slug && !loading,
+        staleTime: 60_000,
+        retry: false,
     });
 }
 
