@@ -8,12 +8,12 @@ import { btnPrimary, btnSecondary, card, input, muted } from '@/components/event
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
-    useAdminCompanies, useAdminJobs, useAdminStats, useApproveCompany, useApproveJob, useBulkApprove, useDismissReports, useRejectCompany, useRejectJob,
+    useAdminCompanies, useAdminJobs, useAdminStats, useApproveCompany, useApproveJob, useBulkApprove, useCloseJob, useDismissReports, useRejectCompany, useRejectJob,
     type BulkOutcome,
 } from '@/hooks/queries/useJobs';
 import { ADMIN_STATUS_LABELS, COMPANY_STATUS_LABELS, JOB_LIMITS } from '@/lib/jobs/constants';
 import { countText } from '@/lib/jobs/display';
-import { isJobReviewer } from '@/lib/jobs/roles';
+import { isJobAdmin, isJobReviewer } from '@/lib/jobs/roles';
 import { JOB_STATUSES, type AdminCompany, type AdminJobStatusFilter, type CompanyStatus, type Job } from '@/types/job';
 import { ErrorState, ListSkeleton } from '../ListStates';
 import { AdminCompanyRow, AdminJobRow } from './AdminRows';
@@ -46,18 +46,20 @@ function Pager({ page, totalPages, onPage }: { page: number; totalPages: number;
     );
 }
 
-function Review() {
+function Review({ viewerId, canClose }: { viewerId: string | null; canClose: boolean }) {
     const [tab, setTab] = useState<Tab>('queue');
     const [page, setPage] = useState(1);
     const [status, setStatus] = useState<AdminJobStatusFilter>('all');
     const [companyStatus, setCompanyStatus] = useState<CompanyStatus | 'all'>('pending');
     const [search, setSearch] = useState('');
     const q = useDebounce(search.trim(), 350);
-    const [selected, setSelected] = useState<Record<string, string>>({});
+    // The job's title (for the summary) and the `updatedAt` its row showed (the decision is bound to it)
+    const [selected, setSelected] = useState<Record<string, { title: string; updatedAt?: string }>>({});
     const [bulkOpen, setBulkOpen] = useState(false);
     const [outcomes, setOutcomes] = useState<BulkOutcome[] | null>(null);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [rejecting, setRejecting] = useState<RejectTarget | null>(null);
+    const [closing, setClosing] = useState<Job | null>(null);
 
     const stats = useAdminStats();
     const jobsEnabled = tab !== 'companies';
@@ -72,6 +74,7 @@ function Review() {
     const reject = useRejectJob();
     const dismiss = useDismissReports();
     const bulk = useBulkApprove();
+    const closeJob = useCloseJob();
     const approveCompany = useApproveCompany();
     const rejectCompany = useRejectCompany();
 
@@ -98,17 +101,24 @@ function Review() {
 
     const run = (id: string, fn: (done: () => void) => void) => { setBusyId(id); fn(() => setBusyId(null)); };
     const selectedIds = Object.keys(selected);
-    const allOnPageSelected = rows.length > 0 && rows.every((j) => selected[j._id]);
+    const isOwn = (j: Job) => !!viewerId && (typeof j.postedBy === 'string' ? j.postedBy : j.postedBy?._id) === viewerId;
+    const selectableRows = rows.filter((j) => !isOwn(j));
+    const allOnPageSelected = selectableRows.length > 0 && selectableRows.every((j) => selected[j._id]);
     const selectable = tab === 'queue';
 
     const onRejectSubmit = async (reason: string) => {
         if (!rejecting) return;
-        if (rejecting.kind === 'job') await reject.mutateAsync({ id: rejecting.job._id, reason, title: rejecting.job.title });
-        else await rejectCompany.mutateAsync({ id: rejecting.company._id, reason, name: rejecting.company.name });
+        if (rejecting.kind === 'job') await reject.mutateAsync({ id: rejecting.job._id, reason, title: rejecting.job.title, updatedAt: rejecting.job.updatedAt });
+        else await rejectCompany.mutateAsync({ id: rejecting.company._id, reason, name: rejecting.company.name, updatedAt: rejecting.company.updatedAt });
+    };
+
+    const onCloseSubmit = async (reason: string) => {
+        if (!closing) return;
+        await closeJob.mutateAsync({ id: closing._id, reason: reason || undefined, title: closing.title });
     };
 
     const runBulk = () => {
-        const items = selectedIds.map((id) => ({ id, title: selected[id] }));
+        const items = selectedIds.map((id) => ({ id, title: selected[id].title, updatedAt: selected[id].updatedAt }));
         setBulkOpen(false);
         bulk.mutate({ items }, { onSuccess: (result) => { setOutcomes(result); setSelected({}); } });
     };
@@ -176,7 +186,7 @@ function Review() {
                                 type="checkbox"
                                 className="h-4 w-4 accent-orange-600"
                                 checked={allOnPageSelected}
-                                onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(rows.map((j) => [j._id, j.title])) : {})}
+                                onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(rows.filter((j) => !isOwn(j)).map((j) => [j._id, { title: j.title, updatedAt: j.updatedAt }])) : {})}
                             />
                             Select all on this page
                         </label>
@@ -216,7 +226,8 @@ function Review() {
                                         key={c._id}
                                         company={c}
                                         busy={busyId === c._id}
-                                        onApprove={(company) => run(company._id, (done) => approveCompany.mutate({ id: company._id, name: company.name }, { onSettled: done }))}
+                                        viewerId={viewerId}
+                                        onApprove={(company) => run(company._id, (done) => approveCompany.mutate({ id: company._id, name: company.name, updatedAt: company.updatedAt }, { onSettled: done }))}
                                         onReject={(company) => setRejecting({ kind: 'company', company })}
                                     />
                                 ))}
@@ -229,9 +240,11 @@ function Review() {
                                         job={job}
                                         selectable={selectable}
                                         selected={!!selected[job._id]}
-                                        onSelect={(j, on) => setSelected((old) => { const next = { ...old }; if (on) next[j._id] = j.title; else delete next[j._id]; return next; })}
+                                        onSelect={(j, on) => setSelected((old) => { const next = { ...old }; if (on) next[j._id] = { title: j.title, updatedAt: j.updatedAt }; else delete next[j._id]; return next; })}
+                                        viewerId={viewerId}
+                                        onClose={canClose ? (j) => setClosing(j) : undefined}
                                         busy={busyId === job._id || bulk.isPending}
-                                        onApprove={(j) => run(j._id, (done) => approve.mutate({ id: j._id, title: j.title }, { onSettled: done }))}
+                                        onApprove={(j) => run(j._id, (done) => approve.mutate({ id: j._id, title: j.title, updatedAt: j.updatedAt }, { onSettled: done }))}
                                         onReject={(j) => setRejecting({ kind: 'job', job: j })}
                                         onDismiss={tab === 'reported' ? (j) => run(j._id, (done) => dismiss.mutate({ id: j._id, title: j.title }, { onSettled: done })) : undefined}
                                     />
@@ -249,6 +262,18 @@ function Review() {
                 description={rejecting ? `${rejecting.kind === 'company' ? rejecting.company.name : rejecting.job.title}. ${rejecting.kind === 'company' ? 'Its public jobs go back to the queue and it cannot post until it is fixed.' : 'The job is taken down and the poster can fix it and send it again.'}` : ''}
                 confirmLabel="Reject"
                 onSubmit={onRejectSubmit}
+            />
+            <ReasonDialog
+                open={!!closing}
+                onClose={() => setClosing(null)}
+                title="Close this job"
+                description={closing ? `${closing.title}. The job is taken down and the poster is told. It stays locked: the poster can only send it back to review.` : ''}
+                confirmLabel="Close job"
+                tone="neutral"
+                required={false}
+                placeholder="Why is the job being closed? (optional)"
+                hint="If you give a reason, the poster reads it."
+                onSubmit={onCloseSubmit}
             />
             <ConfirmDialog
                 open={bulkOpen}
@@ -270,7 +295,7 @@ export function AdminJobsView() {
     if (!isJobReviewer(user.role)) return <NoAccess message="Only moderators and administrators can review jobs." href="/jobs" label="Back to jobs" />;
     return (
         <PageShell title="Jobs review" subtitle="Review what employers post. A decision tells the poster." wide backHref="/admin" backLabel="Back to the admin panel">
-            <Review />
+            <Review viewerId={user.id ?? null} canClose={isJobAdmin(user.role)} />
         </PageShell>
     );
 }

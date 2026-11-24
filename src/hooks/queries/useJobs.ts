@@ -6,7 +6,7 @@ import { useToast } from '@/context/ToastContext';
 import { ApiError } from '@/lib/api';
 import * as api from '@/lib/api/jobs';
 import { JOB_LIMITS } from '@/lib/jobs/constants';
-import { jobErrorMessage } from '@/lib/jobs/errors';
+import { isSelfReview, isStaleJobState, jobErrorMessage, staleCurrent } from '@/lib/jobs/errors';
 import { placeholderForViewer } from '@/lib/queryPlaceholder';
 import { refreshPublicJobs } from '@/lib/jobs/revalidate';
 import type {
@@ -378,14 +378,39 @@ function refreshAfterDecision(qc: QueryClient) {
     void refreshPublicJobs();
 }
 
+/**
+ * A decision that was refused because the row had changed (or someone else decided first): the answer
+ * carries the current copy, and the row on screen is replaced with it at once. Without one, the lists
+ * are read again (`refreshAfterDecision` does that after every decision).
+ */
+function showCurrent(qc: QueryClient, err: unknown) {
+    if (!isStaleJobState(err)) return;
+    const current = staleCurrent<{ _id?: string }>(err);
+    if (!current?._id) return;
+    const patch = <T extends { _id: string }>(page: JobsPage<T>): JobsPage<T> => ({
+        ...page, data: page.data.map((row) => (row._id === current._id ? { ...row, ...(current as object) } : row)),
+    });
+    qc.setQueriesData<JobsPage<Job>>({ queryKey: ['jobs', 'admin', 'list'] }, (old) => (old ? patch(old) : old));
+    qc.setQueriesData<JobsPage<AdminCompany>>({ queryKey: ['jobs', 'admin', 'companies'] }, (old) => (old ? patch(old) : old));
+}
+
+/** The toast for a refused decision: a refusal for owning the row, a changed row or anything else */
+function decisionFailed(qc: QueryClient, addToast: ReturnType<typeof useToast>['addToast'], err: unknown) {
+    showCurrent(qc, err);
+    addToast({ variant: isSelfReview(err) ? 'info' : 'error', message: jobErrorMessage(err) });
+}
+
+/** What a decision sends with the id: `updatedAt` is the one the row showed when the reviewer opened it */
+interface DecideInput { id: string; title?: string; note?: string; updatedAt?: string }
+
 export function useApproveJob() {
     const qc = useQueryClient();
     const { addToast } = useToast();
-    return useMutation<Job, unknown, { id: string; title?: string; note?: string }>({
-        mutationFn: ({ id, note }) => api.approveJob(id, note),
+    return useMutation<Job, unknown, DecideInput>({
+        mutationFn: ({ id, note, updatedAt }) => api.approveJob(id, { note, updatedAt }),
         retry: 0,
         onSuccess: (_job, v) => addToast({ variant: 'success', message: v.title ? `Approved: ${v.title}` : 'Job approved.' }),
-        onError: (err) => addToast({ variant: 'error', message: jobErrorMessage(err) }),
+        onError: (err) => decisionFailed(qc, addToast, err),
         onSettled: () => refreshAfterDecision(qc),
     });
 }
@@ -394,10 +419,29 @@ export function useApproveJob() {
 export function useRejectJob() {
     const qc = useQueryClient();
     const { addToast } = useToast();
-    return useMutation<Job, unknown, { id: string; reason: string; title?: string }>({
-        mutationFn: ({ id, reason }) => api.rejectJob(id, reason),
+    return useMutation<Job, unknown, { id: string; reason: string; title?: string; updatedAt?: string }>({
+        mutationFn: ({ id, reason, updatedAt }) => api.rejectJob(id, reason, { updatedAt }),
         retry: 0,
         onSuccess: (_job, v) => addToast({ variant: 'success', message: v.title ? `Rejected: ${v.title}` : 'Job rejected.' }),
+        // The dialog shows the error itself; a changed row is still replaced with its current copy
+        onError: (err) => showCurrent(qc, err),
+        onSettled: () => refreshAfterDecision(qc),
+    });
+}
+
+/**
+ * An administrator or owner takes a job down from the review screen. The optional reason goes into the
+ * notice to the poster, and the job is locked (the poster can only send it back to review). The dialog
+ * that asked for the reason shows the error itself.
+ */
+export function useCloseJob() {
+    const qc = useQueryClient();
+    const { addToast } = useToast();
+    return useMutation<Job, unknown, { id: string; reason?: string; title?: string }>({
+        mutationFn: ({ id, reason }) => api.closeJob(id, reason),
+        retry: 0,
+        onSuccess: (_job, v) => addToast({ variant: 'success', message: v.title ? `Closed: ${v.title}. The poster was told.` : 'Job closed. The poster was told.' }),
+        onError: (err) => showCurrent(qc, err),
         onSettled: () => refreshAfterDecision(qc),
     });
 }
@@ -423,15 +467,17 @@ export interface BulkOutcome { id: string; title: string; ok: boolean; message?:
  */
 export function useBulkApprove() {
     const qc = useQueryClient();
-    return useMutation<BulkOutcome[], unknown, { items: { id: string; title: string }[] }>({
+    return useMutation<BulkOutcome[], unknown, { items: { id: string; title: string; updatedAt?: string }[] }>({
         mutationFn: async ({ items }) => {
             const out: BulkOutcome[] = [];
             for (const item of items) {
                 try {
-                    await api.approveJob(item.id);
-                    out.push({ ...item, ok: true });
+                    // Each job is decided against the `updatedAt` its row showed
+                    await api.approveJob(item.id, { updatedAt: item.updatedAt });
+                    out.push({ id: item.id, title: item.title, ok: true });
                 } catch (err) {
-                    out.push({ ...item, ok: false, message: jobErrorMessage(err) });
+                    showCurrent(qc, err);
+                    out.push({ id: item.id, title: item.title, ok: false, message: jobErrorMessage(err) });
                 }
             }
             return out;
@@ -444,11 +490,11 @@ export function useBulkApprove() {
 export function useApproveCompany() {
     const qc = useQueryClient();
     const { addToast } = useToast();
-    return useMutation<Company, unknown, { id: string; name?: string }>({
-        mutationFn: ({ id }) => api.approveCompany(id),
+    return useMutation<Company, unknown, { id: string; name?: string; updatedAt?: string }>({
+        mutationFn: ({ id, updatedAt }) => api.approveCompany(id, { updatedAt }),
         retry: 0,
         onSuccess: (_c, v) => addToast({ variant: 'success', message: v.name ? `Verified: ${v.name}. Its jobs now publish without review.` : 'Company verified.' }),
-        onError: (err) => addToast({ variant: 'error', message: jobErrorMessage(err) }),
+        onError: (err) => decisionFailed(qc, addToast, err),
         onSettled: () => refreshAfterDecision(qc),
     });
 }
@@ -456,10 +502,11 @@ export function useApproveCompany() {
 export function useRejectCompany() {
     const qc = useQueryClient();
     const { addToast } = useToast();
-    return useMutation<Company, unknown, { id: string; reason: string; name?: string }>({
-        mutationFn: ({ id, reason }) => api.rejectCompany(id, reason),
+    return useMutation<Company, unknown, { id: string; reason: string; name?: string; updatedAt?: string }>({
+        mutationFn: ({ id, reason, updatedAt }) => api.rejectCompany(id, reason, { updatedAt }),
         retry: 0,
         onSuccess: (_c, v) => addToast({ variant: 'success', message: v.name ? `Rejected: ${v.name}. Its public jobs went back to the queue.` : 'Company rejected.' }),
+        onError: (err) => showCurrent(qc, err),
         onSettled: () => refreshAfterDecision(qc),
     });
 }

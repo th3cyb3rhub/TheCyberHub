@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useId, useState } from 'react';
-import { Building2, CheckCircle2, ChevronDown, ExternalLink, EyeOff, Flag, Mail, ShieldCheck, ThumbsDown, User } from 'lucide-react';
+import { Ban, Building2, CheckCircle2, ChevronDown, ExternalLink, EyeOff, Flag, Lock, Mail, ShieldCheck, ThumbsDown, User } from 'lucide-react';
 import { btnPrimary, btnSecondary, card, chip, focusRing, muted } from '@/components/events/styles';
 import { ViewerTime } from '@/components/internships/ViewerTime';
-import { categoryName, countText, employmentName, excerpt, experienceName, formatSalary, hostOf, locationText, safeHref } from '@/lib/jobs/display';
+import { categoryName, countText, employmentName, excerpt, experienceName, formatSalary, hostOf, LINK_REL, locationText, safeHref } from '@/lib/jobs/display';
 import type { AdminCompany, Job, JobPoster } from '@/types/job';
 import { JobMarkdown } from '../JobMarkdown';
 import { CompanyStatusChip, JobStatusChip } from '../StatusChips';
@@ -13,6 +13,11 @@ import { CompanyStatusChip, JobStatusChip } from '../StatusChips';
 const small = '!px-3 !py-1.5 !text-xs';
 
 const posterOf = (job: Job): JobPoster | null => (job.postedBy && typeof job.postedBy === 'object' ? job.postedBy : null);
+
+/** The id of whoever posted the job, whether the API sent the poster or only their id */
+const posterId = (job: Job): string | null => (typeof job.postedBy === 'string' ? job.postedBy : job.postedBy?._id ?? null);
+
+const OWN_NOTE = 'You posted this. Another reviewer has to decide.';
 
 function List({ title, items }: { title: string; items: string[] }) {
     if (!items?.length) return null;
@@ -34,6 +39,10 @@ interface JobRowProps {
     onReject: (job: Job) => void;
     /** Keep a reported job up and close its reports */
     onDismiss?: (job: Job) => void;
+    /** The signed-in reviewer: nobody decides on their own job */
+    viewerId?: string | null;
+    /** Administrators and owners may take any job down; the reason they give goes to the poster */
+    onClose?: (job: Job) => void;
 }
 
 /**
@@ -41,7 +50,7 @@ interface JobRowProps {
  * target are one disclosure away, so a reviewer reads the job before deciding. Everything is plain
  * text; the description goes through the sanitised markdown renderer.
  */
-export function AdminJobRow({ job, selectable, selected, onSelect, busy, onApprove, onReject, onDismiss }: JobRowProps) {
+export function AdminJobRow({ job, selectable, selected, onSelect, busy, onApprove, onReject, onDismiss, viewerId, onClose }: JobRowProps) {
     const id = useId();
     const [open, setOpen] = useState(false);
     const status = job.status ?? 'pending';
@@ -49,8 +58,11 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
     const salary = formatSalary(job.salary);
     const apply = safeHref(job.applyUrl);
     const reports = job.reportCount ?? 0;
-    const canApprove = status === 'pending' || status === 'rejected';
-    const canReject = status === 'pending' || status === 'approved';
+    // The API refuses a reviewer's decision on their own job (403 SELF_REVIEW), so the buttons are not offered
+    const own = !!viewerId && posterId(job) === viewerId;
+    const canApprove = !own && (status === 'pending' || status === 'rejected');
+    const canReject = !own && (status === 'pending' || status === 'approved');
+    const canClose = !!onClose && status !== 'closed' && status !== 'expired';
     const companyName = job.companyRef?.name || job.company;
     const companyStatus = job.companyRef?.status;
 
@@ -75,6 +87,7 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
                                 {job.heldForReports && <span className={`${chip} bg-red-100 text-red-950 dark:bg-red-500/15 dark:text-red-300`}><EyeOff className="h-3 w-3" aria-hidden="true" /> Held after reports</span>}
                                 {reports > 0 && <span className={`${chip} bg-red-100 text-red-950 dark:bg-red-500/15 dark:text-red-300`} data-testid="report-count"><Flag className="h-3 w-3" aria-hidden="true" /> {countText(reports, 'open report')}</span>}
                                 {job.isFeatured && <span className={`${chip} bg-orange-100 text-orange-950 dark:bg-orange-500/20 dark:text-orange-300`}>Featured</span>}
+                                {job.moderation?.locked && <span className={`${chip} bg-slate-200 text-slate-900 dark:bg-slate-500/20 dark:text-slate-200`} data-testid="job-locked" title="A decision against this job holds: the poster can only send it back to review"><Lock className="h-3 w-3" aria-hidden="true" /> Locked</span>}
                             </div>
                             <h3 className="break-words text-base font-semibold text-gray-900 dark:text-white">{job.title}</h3>
                             <p className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${muted}`}>
@@ -100,6 +113,12 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
                                     <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" /> Reject
                                 </button>
                             )}
+                            {canClose && (
+                                <button type="button" className={`${btnSecondary} ${small}`} disabled={busy} onClick={() => onClose?.(job)} data-testid="close-job">
+                                    <Ban className="h-3.5 w-3.5" aria-hidden="true" /> Close
+                                </button>
+                            )}
+                            {own && <p className={`text-xs ${muted}`} data-testid="own-note">{OWN_NOTE}</p>}
                         </div>
                     </div>
 
@@ -124,7 +143,7 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
                                 <div className="min-w-0">
                                     <dt className={`text-xs ${muted}`}>Apply</dt>
                                     <dd className="break-words text-gray-900 dark:text-gray-100">
-                                        {apply ? <a href={apply} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-800 underline dark:text-orange-300">{hostOf(apply)} <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
+                                        {apply ? <a href={apply} target="_blank" rel={LINK_REL} className="inline-flex items-center gap-1 text-orange-800 underline dark:text-orange-300">{hostOf(apply)} <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
                                             : job.applyEmail ? <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" aria-hidden="true" />{job.applyEmail}</span>
                                                 : <span>No link or email: applicants are sent to the poster&apos;s account email</span>}
                                     </dd>
@@ -157,19 +176,39 @@ export function AdminJobRow({ job, selectable, selected, onSelect, busy, onAppro
 
 interface CompanyRowProps {
     company: AdminCompany;
+    /** The signed-in reviewer: nobody decides on their own company */
+    viewerId?: string | null;
     busy: boolean;
     onApprove: (c: AdminCompany) => void;
     onReject: (c: AdminCompany) => void;
 }
 
 const ownerOf = (c: AdminCompany): JobPoster | null => (c.owner && typeof c.owner === 'object' ? c.owner : null);
+const ownerId = (c: AdminCompany): string | null => (typeof c.owner === 'string' ? c.owner : c.owner?._id ?? null);
+
+/**
+ * What the owner saved that the public does not see yet: the name, website or logo that differ from the
+ * last reviewed ones. Empty when nothing was reviewed yet (the public then sees what is saved) or nothing changed.
+ */
+export function savedChanges(company: AdminCompany): { field: string; saved: string; reviewed: string }[] {
+    const reviewed = company.reviewed;
+    if (!reviewed) return [];
+    const pairs: [string, string | null | undefined, string | null | undefined][] = [
+        ['Name', company.name, reviewed.name], ['Website', company.website, reviewed.website], ['Logo', company.logo, reviewed.logo],
+    ];
+    return pairs
+        .filter(([, saved, was]) => (saved || '') !== (was || ''))
+        .map(([field, saved, was]) => ({ field, saved: saved || 'none', reviewed: was || 'none' }));
+}
 
 /** One company waiting for, or already past, review */
-export function AdminCompanyRow({ company, busy, onApprove, onReject }: CompanyRowProps) {
+export function AdminCompanyRow({ company, viewerId, busy, onApprove, onReject }: CompanyRowProps) {
     const owner = ownerOf(company);
     const site = safeHref(company.website);
     const counts = company.jobs ?? {};
     const total = Object.values(counts).reduce((a, b) => a + (Number(b) || 0), 0);
+    const own = !!viewerId && ownerId(company) === viewerId;
+    const changes = savedChanges(company);
     return (
         <li className={`${card} p-4 sm:p-5`} data-testid="admin-company" data-status={company.status} data-id={company._id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -180,7 +219,7 @@ export function AdminCompanyRow({ company, busy, onApprove, onReject }: CompanyR
                         {company.industry && <span>{company.industry}</span>}
                         {company.size && <span>{company.size} people</span>}
                         {company.location && <span>{company.location}</span>}
-                        {site && <a href={site} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-800 underline dark:text-orange-300">{hostOf(site)} <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}
+                        {site && <a href={site} target="_blank" rel={LINK_REL} className="inline-flex items-center gap-1 text-orange-800 underline dark:text-orange-300">{hostOf(site)} <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}
                     </p>
                     {company.description && <p className="mt-2 line-clamp-3 break-words text-sm text-gray-700 dark:text-gray-300">{excerpt(company.description, 300)}</p>}
                     <p className={`mt-2 text-xs ${muted}`}>
@@ -188,15 +227,27 @@ export function AdminCompanyRow({ company, busy, onApprove, onReject }: CompanyR
                         {total > 0 ? `${countText(total, 'job')} in total.` : 'No jobs yet.'}
                         {company.createdAt ? <> Registered <ViewerTime iso={company.createdAt} />.</> : null}
                     </p>
+                    {company.reviewed && (
+                        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 dark:border-neutral-700 dark:bg-neutral-950/60 dark:text-gray-200" data-testid="company-reviewed">
+                            <p><span className="font-medium">The public page shows</span> (last approved): <span className="break-words">{company.reviewed.name}</span></p>
+                            {changes.length > 0 ? (
+                                <ul className="mt-1 list-disc space-y-0.5 pl-5" data-testid="company-changes">
+                                    {changes.map((c) => <li key={c.field} className="break-words"><span className="font-medium">{c.field}</span> saved as <q>{c.saved}</q>, approved as <q>{c.reviewed}</q></li>)}
+                                </ul>
+                            ) : <p className={`mt-1 text-xs ${muted}`}>The saved name, website and logo are the approved ones.</p>}
+                        </div>
+                    )}
+                    {!company.reviewed && company.status !== 'verified' && <p className={`mt-2 text-xs ${muted}`}>Nobody has approved this company yet, so the public sees what is saved. A change to its name, website or logo sends its public jobs back to the queue.</p>}
+                    {own && <p className={`mt-2 text-xs ${muted}`} data-testid="own-note">This is your company. Another reviewer has to decide.</p>}
                     {company.status === 'rejected' && company.moderation?.reason && <p className="mt-2 text-sm text-gray-800 dark:text-gray-200"><span className="font-medium">Reason given:</span> <span className="break-words">{company.moderation.reason}</span></p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Decide on ${company.name}`}>
-                    {company.status !== 'verified' && (
+                    {!own && company.status !== 'verified' && (
                         <button type="button" className={`${btnPrimary} ${small}`} disabled={busy} onClick={() => onApprove(company)} data-testid="approve-company">
                             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Verify
                         </button>
                     )}
-                    {company.status !== 'rejected' && (
+                    {!own && company.status !== 'rejected' && (
                         <button type="button" className={`${btnSecondary} ${small} !text-red-800 dark:!text-red-300`} disabled={busy} onClick={() => onReject(company)} data-testid="reject-company">
                             <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" /> Reject
                         </button>
