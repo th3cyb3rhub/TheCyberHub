@@ -172,13 +172,17 @@ export interface LearningSummary {
     recentlyCompleted: { path: LearningCard; completedAt: string; certificateId: string | null }[];
 }
 
+/**
+ * The public check returns only the recipient's username, the path title and the completion date.
+ * The slug and kind come only for a published path, so a retired path reveals nothing but its title.
+ */
 export interface Certificate {
     valid?: boolean;
     certificateId: string;
-    recipient: { username: string };
-    path: { id: string; slug: string; title: string; kind: PathKind };
+    recipient: { username: string | null };
+    path: { title: string; id?: string; slug?: string; kind?: PathKind };
     completedAt: string;
-    issuedAt: string;
+    issuedAt?: string;
     selfPaced: boolean;
 }
 

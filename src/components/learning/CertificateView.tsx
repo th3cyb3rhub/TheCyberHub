@@ -43,8 +43,8 @@ export function CertificateView({ id, initial }: { id: string; initial?: Certifi
                             <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-800 dark:text-orange-400 print:text-orange-800">TheCyberHub</p>
                             <h1 id="cert-title" className="mt-2 text-3xl font-bold text-gray-900 dark:text-white sm:text-4xl print:text-black">Certificate of completion</h1>
                             <p className={`mt-8 text-sm ${muted} print:text-gray-700`}>This certifies that</p>
-                            <p className="mt-2 break-words text-2xl font-semibold text-gray-900 dark:text-white print:text-black" data-testid="cert-recipient">@{cert.recipient.username}</p>
-                            <p className={`mt-6 text-sm ${muted} print:text-gray-700`}>completed the {cert.path.kind === 'roadmap' ? 'roadmap' : 'learning path'}</p>
+                            <p className="mt-2 break-words text-2xl font-semibold text-gray-900 dark:text-white print:text-black" data-testid="cert-recipient">{cert.recipient.username ? `@${cert.recipient.username}` : 'A TheCyberHub member'}</p>
+                            <p className={`mt-6 text-sm ${muted} print:text-gray-700`}>completed {cert.path.kind ? `the ${cert.path.kind === 'roadmap' ? 'roadmap' : 'learning path'}` : 'the self-paced course'}</p>
                             <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white print:text-black" data-testid="cert-title">{cert.path.title}</p>
                             <p className={`mt-6 text-sm ${muted} print:text-gray-700`}>on <time dateTime={cert.completedAt}>{formatDate(cert.completedAt)}</time></p>
 
@@ -52,7 +52,7 @@ export function CertificateView({ id, initial }: { id: string; initial?: Certifi
                                 <span className="inline-flex items-center gap-1.5 font-medium text-green-800 dark:text-green-400 print:text-green-800"><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Valid certificate</span>
                                 <span className={`${muted} print:text-gray-700`}>Certificate id <span className="font-mono text-gray-900 dark:text-gray-100 print:text-black" data-testid="cert-id">{cert.certificateId}</span></span>
                             </div>
-                            {cert.selfPaced && <p className={`mt-4 text-xs ${muted} print:text-gray-700`}>This records completion of a self-paced {cert.path.kind === 'roadmap' ? 'roadmap' : 'path'}. It is not an exam or an accreditation.</p>}
+                            {cert.selfPaced && <p className={`mt-4 text-xs ${muted} print:text-gray-700`}>This records completion of a self-paced {cert.path.kind === 'roadmap' ? 'roadmap' : cert.path.kind === 'path' ? 'path' : 'course'}. It is not an exam or an accreditation.</p>}
                         </article>
 
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden" data-print-hide>
@@ -69,7 +69,7 @@ export function CertificateView({ id, initial }: { id: string; initial?: Certifi
                                     }
                                 }}
                             ><Copy className="h-4 w-4" aria-hidden="true" /> Copy link</button>
-                            <Link href={pathHref(cert.path.kind, cert.path.slug)} className={btnSecondary}>View the {cert.path.kind === 'roadmap' ? 'roadmap' : 'path'}</Link>
+                            {cert.path.slug && <Link href={pathHref(cert.path.kind ?? 'roadmap', cert.path.slug)} className={btnSecondary}>View the {cert.path.kind === 'path' ? 'path' : 'roadmap'}</Link>}
                         </div>
                     </>
                 )}

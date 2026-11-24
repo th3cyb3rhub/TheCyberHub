@@ -11,6 +11,7 @@ const MESSAGES: Record<string, string> = {
     PATH_ALREADY_ENROLLED: 'You have already joined this one.',
     PATH_INVALID_STATE: 'This roadmap cannot do that in its current state. Reload to see where it stands.',
     PATH_CONFLICT: 'Someone else saved changes to this roadmap after you opened it.',
+    PATH_VERSION_REQUIRED: 'Reload this roadmap before saving. A published roadmap can only be saved from the version you last loaded.',
     PATH_KIND_LOCKED: 'The type cannot change once members have joined.',
     PATH_NOT_COMPLETED: 'Finish every required step to get your certificate.',
     PATH_NOT_PUBLISHABLE: 'This roadmap is not ready to publish yet. Fix the points listed below.',
