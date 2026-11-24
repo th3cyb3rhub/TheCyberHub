@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Code Review | TheCyberHub',
-    description: 'Submit and review code for security vulnerabilities. Get feedback from the TheCyberHub community on your code security.',
+    title: 'Code Review',
+    description: 'Read vulnerable code and mark the lines that are wrong. The server grades your marks, explains the findings and pays points for your first pass.',
     openGraph: {
-        title: 'Code Review | TheCyberHub',
-        description: 'Submit and review code for security vulnerabilities with the TheCyberHub community.',
+        title: 'Secure Code Review Exercises | TheCyberHub',
+        description: 'Find the vulnerable lines in real-looking code. Graded on the server, with hints and a solution after your first attempt.',
         type: 'website',
     },
 }
