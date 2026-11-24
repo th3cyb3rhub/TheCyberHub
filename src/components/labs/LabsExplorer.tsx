@@ -186,7 +186,7 @@ export function LabsExplorer({ initialPage, initialFacets, initialUpdatedAt }: E
                         {labs.map((lab) => <LabCard key={lab._id} lab={lab} />)}
                     </div>
                     {query.isError && (
-                        <p role="alert" className="mt-4 text-center text-sm text-red-800 dark:text-red-300">Could not load more labs. <button type="button" className="underline" onClick={() => void query.refetch()}>Try again</button></p>
+                        <p role="alert" className="mt-4 text-center text-sm text-red-800 dark:text-red-300">Could not load more labs. <button type="button" className="underline" onClick={() => void fetchNextPage()}>Try again</button></p>
                     )}
                     {hasNextPage && (
                         <div className="mt-8 text-center">

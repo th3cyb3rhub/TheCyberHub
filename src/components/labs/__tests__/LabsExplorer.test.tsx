@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { makeCard } from '@/lib/labs/__tests__/fixtures'
 
@@ -194,6 +194,18 @@ describe('LabsExplorer list', () => {
         expect(screen.getByRole('alert')).toHaveTextContent('boom')
         fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
         expect(refetch).toHaveBeenCalled()
+    })
+})
+
+describe('LabsExplorer load more failing', () => {
+    it('asks for the next page again, not for the whole list', () => {
+        const fetchNextPage = vi.fn()
+        const refetch = vi.fn()
+        list.current = result(cards(), { isError: true, error: new Error('boom'), hasNextPage: true, fetchNextPage, refetch }, 20)
+        render(<LabsExplorer initialPage={null} initialFacets={null} />)
+        fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Try again' }))
+        expect(fetchNextPage).toHaveBeenCalledTimes(1)
+        expect(refetch).not.toHaveBeenCalled()
     })
 })
 
