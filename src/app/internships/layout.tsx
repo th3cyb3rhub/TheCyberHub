@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Internships | TheCyberHub',
+    title: 'Internships',
     description: 'Find cybersecurity internships and gain hands-on experience. Apply to internship programs offered through the TheCyberHub community.',
     openGraph: {
         title: 'Cybersecurity Internships | TheCyberHub',
