@@ -1,27 +1,22 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DialogShell } from '@/components/events/DialogShell';
 import { btnDanger, btnSecondary, input, label as labelClass, muted } from '@/components/events/styles';
 import { useWithdrawApplication } from '@/hooks/queries/useInternships';
 import { LIMITS } from '@/lib/internships/application';
 
-/**
- * Move focus to an element once the screen has settled. After a withdrawal the button that opened
- * the dialog is gone, so focus would fall back to the page; the status heading is where the news is.
- */
-export function focusAfterRender(elementId: string) {
-    if (typeof window === 'undefined') return;
-    window.requestAnimationFrame(() => document.getElementById(elementId)?.focus());
-}
-
 /** Confirm a withdrawal, with an optional reason that stays in the timeline */
-export function WithdrawDialog({ open, onClose, onWithdrawn, applicationId, cohortId, cohortTitle, accepted = false }: {
+export function WithdrawDialog({ open, onClose, statusHeadingId, applicationId, cohortId, cohortTitle, accepted = false }: {
     open: boolean;
     onClose: () => void;
-    /** Called after the API accepted the withdrawal and the dialog closed */
-    onWithdrawn?: () => void;
+    /**
+     * The id of the heading that carries the application's status. Once the withdrawal went through,
+     * the button that opened this dialog is gone, so focus goes to that heading (which has tabIndex -1)
+     * instead of falling back to the page. Without it, or when the heading is not there, focus returns to the opener.
+     */
+    statusHeadingId?: string;
     applicationId: string;
     cohortId?: string;
     cohortTitle?: string;
@@ -31,15 +26,17 @@ export function WithdrawDialog({ open, onClose, onWithdrawn, applicationId, coho
     const [reason, setReason] = useState('');
     const withdraw = useWithdrawApplication();
     const id = useId();
+    const withdrawn = useRef(false);
 
-    useEffect(() => { if (open) setReason(''); }, [open]);
+    useEffect(() => { if (open) { setReason(''); withdrawn.current = false; } }, [open]);
 
-    const submit = () => withdraw.mutate({ id: applicationId, cohortId, reason }, { onSuccess: () => { onClose(); onWithdrawn?.(); } });
+    const submit = () => withdraw.mutate({ id: applicationId, cohortId, reason }, { onSuccess: () => { withdrawn.current = true; onClose(); } });
 
     return (
         <DialogShell
             open={open}
             onOpenChange={(o) => { if (!o && !withdraw.isPending) onClose(); }}
+            restoreFocusTo={() => (withdrawn.current && statusHeadingId ? document.getElementById(statusHeadingId) : null)}
             title="Withdraw your application?"
             description={cohortTitle ? `You are withdrawing from ${cohortTitle}.` : undefined}
             footer={(

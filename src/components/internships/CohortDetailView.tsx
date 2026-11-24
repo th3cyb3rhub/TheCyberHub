@@ -19,7 +19,7 @@ import { ErrorState } from './ListStates';
 import { ShowcaseList } from './PastCohorts';
 import { ApplicationStatusBadge, CohortStatusBadge } from './StatusBadges';
 import { ViewerTime } from './ViewerTime';
-import { focusAfterRender, WithdrawDialog } from './WithdrawDialog';
+import { WithdrawDialog } from './WithdrawDialog';
 
 const DAY = 86_400_000;
 
@@ -279,7 +279,7 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
                 <WithdrawDialog
                     open
                     onClose={() => setWithdrawing(null)}
-                    onWithdrawn={() => focusAfterRender('your-application')}
+                    statusHeadingId="your-application"
                     applicationId={withdrawing._id}
                     cohortId={cohort._id}
                     cohortTitle={cohort.title}

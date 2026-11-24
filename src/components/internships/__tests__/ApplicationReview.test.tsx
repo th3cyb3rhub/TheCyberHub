@@ -117,4 +117,16 @@ describe('ApplicationDrawer', () => {
         fireEvent.click(screen.getByTestId('review-confirm-button'))
         expect(screen.getByTestId('review-error')).toHaveTextContent(message)
     })
+
+    it('keeps the reason readable when somebody else decided first and the refreshed panel turns final', () => {
+        change.mutate.mockImplementation((_v, opts) => opts.onError(new ApiError('x', 409, 'INTERNSHIP_INVALID_TRANSITION', undefined, { from: 'accepted', to: 'rejected', allowed: [] })))
+        const row = makeRow()
+        const { rerender } = render(<ApplicationDrawer row={row} cohortId={COHORT_ID} onClose={vi.fn()} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+        fireEvent.click(screen.getByTestId('review-confirm-button'))
+        app.current = loaded(makeStaffApplication({ status: 'accepted' }))
+        rerender(<ApplicationDrawer row={{ ...row, status: 'accepted' }} cohortId={COHORT_ID} onClose={vi.fn()} />)
+        expect(screen.getByTestId('review-final')).toBeInTheDocument()
+        expect(screen.getByTestId('review-error')).toHaveTextContent(/already accepted/)
+    })
 })

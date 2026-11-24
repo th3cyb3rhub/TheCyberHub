@@ -12,10 +12,15 @@ interface DialogShellProps {
     children: React.ReactNode;
     footer?: React.ReactNode;
     wide?: boolean;
+    /**
+     * Where focus goes when the dialog closes, instead of the element that had it before. Return
+     * null (or nothing) to use that element. For a dialog whose action removes its own opener.
+     */
+    restoreFocusTo?: () => HTMLElement | null;
 }
 
 /** A dialog for content (the day of a calendar, an address to copy). Radix handles focus, Escape and the backdrop. */
-export function DialogShell({ open, onOpenChange, title, description, children, footer, wide = false }: DialogShellProps) {
+export function DialogShell({ open, onOpenChange, title, description, children, footer, wide = false, restoreFocusTo }: DialogShellProps) {
     // These dialogs are opened by state, not by a Radix trigger, so remember what had focus and give it back on close
     const opener = useRef<HTMLElement | null>(null);
     const wasOpen = useRef(false);
@@ -30,7 +35,7 @@ export function DialogShell({ open, onOpenChange, title, description, children, 
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
                 <Dialog.Content
                     onCloseAutoFocus={(e) => {
-                        const target = opener.current;
+                        const target = restoreFocusTo?.() ?? opener.current;
                         if (target?.isConnected) { e.preventDefault(); target.focus(); }
                     }}
                     className={`fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 ${wide ? 'max-w-xl' : 'max-w-md'}`}>

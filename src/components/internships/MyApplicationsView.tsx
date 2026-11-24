@@ -16,7 +16,7 @@ import { SubmittedDetails } from './SubmittedDetails';
 import { ErrorState, ListSkeleton } from './ListStates';
 import { ApplicationStatusBadge, CohortStatusBadge } from './StatusBadges';
 import { ViewerTime } from './ViewerTime';
-import { focusAfterRender, WithdrawDialog } from './WithdrawDialog';
+import { WithdrawDialog } from './WithdrawDialog';
 
 const cohortOf = (a: MyApplication): ApplicationCohort | null => (a.cohort && typeof a.cohort === 'object' ? a.cohort : null);
 
@@ -127,7 +127,7 @@ export function MyApplicationsView() {
                 <WithdrawDialog
                     open
                     onClose={() => setWithdrawing(null)}
-                    onWithdrawn={() => focusAfterRender(`application-${withdrawing._id}`)}
+                    statusHeadingId={`application-${withdrawing._id}`}
                     applicationId={withdrawing._id}
                     cohortId={withdrawingCohort?._id}
                     cohortTitle={withdrawingCohort?.title}

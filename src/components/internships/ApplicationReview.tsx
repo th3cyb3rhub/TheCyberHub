@@ -36,10 +36,15 @@ function ReviewPanel({ applicationId, cohortId, status, own }: { applicationId: 
     useEffect(() => { setPending(null); setNote(''); }, [status]);
 
     if (actions.length === 0) {
+        // The reason the last move failed stays readable when the refreshed status turns the panel final
+        // (somebody else decided first): the screen changing under the reviewer must not hide why
         return (
-            <p className={`rounded-xl bg-gray-100 px-4 py-3 text-sm dark:bg-neutral-800 ${muted}`} data-testid="review-final">
-                {status === 'withdrawn' ? 'The applicant withdrew this application, so it cannot be reviewed.' : `This application is ${APPLICATION_STATUS_LABELS[status].toLowerCase()}. A decision cannot be changed.`}
-            </p>
+            <div className="space-y-3">
+                {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" data-testid="review-error">{error}</p>}
+                <p className={`rounded-xl bg-gray-100 px-4 py-3 text-sm dark:bg-neutral-800 ${muted}`} data-testid="review-final">
+                    {status === 'withdrawn' ? 'The applicant withdrew this application, so it cannot be reviewed.' : `This application is ${APPLICATION_STATUS_LABELS[status].toLowerCase()}. A decision cannot be changed.`}
+                </p>
+            </div>
         );
     }
 

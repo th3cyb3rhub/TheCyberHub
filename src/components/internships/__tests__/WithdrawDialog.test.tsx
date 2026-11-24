@@ -1,10 +1,11 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const withdraw = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useInternships', () => ({ useWithdrawApplication: () => withdraw }))
 
-import { focusAfterRender, WithdrawDialog } from '../WithdrawDialog'
+import { WithdrawDialog } from '../WithdrawDialog'
 
 beforeEach(() => { vi.clearAllMocks(); withdraw.isPending = false })
 
@@ -33,29 +34,48 @@ describe('WithdrawDialog', () => {
         expect(withdraw.mutate).not.toHaveBeenCalled()
         expect(onClose).toHaveBeenCalled()
     })
+})
 
-    it('tells the screen after a successful withdrawal, and not after a refusal', () => {
-        const onWithdrawn = vi.fn()
-        withdraw.mutate.mockImplementationOnce(() => undefined) // the API refused: no onSuccess
-        render(<WithdrawDialog open onClose={vi.fn()} onWithdrawn={onWithdrawn} applicationId="app1" />)
+/** A page like the real ones: a button opens the dialog, and a withdrawal removes that button */
+function Page({ headingId = 'your-application' }: { headingId?: string }) {
+    const [open, setOpen] = useState(false)
+    const [gone, setGone] = useState(false)
+    return (
+        <div>
+            <h2 id="your-application" tabIndex={-1}>Your application</h2>
+            {!gone && <button onClick={() => setOpen(true)}>Open withdraw</button>}
+            {open && <WithdrawDialog open onClose={() => { setOpen(false); setGone(true) }} statusHeadingId={headingId} applicationId="app1" />}
+        </div>
+    )
+}
+
+describe('WithdrawDialog focus', () => {
+    it('moves focus to the status heading after a withdrawal removed the button that opened it', async () => {
+        withdraw.mutate.mockImplementation((_v, opts) => opts?.onSuccess?.())
+        render(<Page />)
+        fireEvent.click(screen.getByRole('button', { name: 'Open withdraw' }))
         fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
-        expect(onWithdrawn).not.toHaveBeenCalled()
-        withdraw.mutate.mockImplementationOnce((_v, opts) => opts?.onSuccess?.())
-        fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }))
-        expect(onWithdrawn).toHaveBeenCalledTimes(1)
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Your application' })))
+    })
+
+    it('gives focus back to the opener when the person keeps the application', async () => {
+        render(<PageKeep />)
+        const opener = screen.getByRole('button', { name: 'Open withdraw' })
+        opener.focus()
+        fireEvent.click(opener)
+        fireEvent.click(screen.getByRole('button', { name: 'Keep my application' }))
+        await waitFor(() => expect(document.activeElement).toBe(opener))
+        expect(withdraw.mutate).not.toHaveBeenCalled()
     })
 })
 
-describe('focusAfterRender', () => {
-    it('moves focus to the heading once the screen has settled', async () => {
-        render(<h2 id="your-application" tabIndex={-1}>Your application</h2>)
-        focusAfterRender('your-application')
-        await new Promise((r) => requestAnimationFrame(() => r(null)))
-        await new Promise((r) => requestAnimationFrame(() => r(null)))
-        expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Your application' }))
-    })
-
-    it('does nothing for an element that is not there', () => {
-        expect(() => focusAfterRender('nope')).not.toThrow()
-    })
-})
+function PageKeep() {
+    const [open, setOpen] = useState(false)
+    return (
+        <div>
+            <h2 id="your-application" tabIndex={-1}>Your application</h2>
+            <button onClick={() => setOpen(true)}>Open withdraw</button>
+            {open && <WithdrawDialog open onClose={() => setOpen(false)} statusHeadingId="your-application" applicationId="app1" />}
+        </div>
+    )
+}
