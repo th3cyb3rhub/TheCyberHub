@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { makeEvent, viewer } from '@/lib/events/__tests__/fixtures'
 
 const replace = vi.fn()
@@ -11,13 +12,14 @@ const queue = vi.hoisted(() => ({ current: {} as Record<string, unknown>, status
 const approve = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const reject = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const idle = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+const del = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useEvents', () => ({
     useReviewQueue: (status: string) => { queue.status = status; return queue.current },
     useEventPage: () => ({ data: { pagination: { total: 2 } } }),
     useApproveEvent: () => approve,
     useRejectEvent: () => reject,
     useCancelEvent: () => idle,
-    useDeleteEvent: () => idle,
+    useDeleteEvent: () => del,
     useToggleFeatured: () => idle,
 }))
 
@@ -155,6 +157,19 @@ describe('series occurrences', () => {
         render(<AdminEventsView />)
         fireEvent.click(screen.getByRole('button', { name: 'Cancel this occurrence' }))
         expect(screen.getByRole('dialog')).toHaveTextContent('Only this date is cancelled and the series goes on.')
+    })
+
+    it('moves to cancelling this date when the API refuses to delete a series occurrence', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        // A stale row without seriesId still shows Delete; the 409 then points to the cancel path
+        queue.current = page([makeEvent({ _id: 'n1', slug: 'late', title: 'Late', status: 'upcoming', viewer: undefined })])
+        del.mutate.mockImplementation((_v, o) => o.onError(new ApiError('x', 409, 'EVENT_IN_SERIES')))
+        render(<AdminEventsView />)
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Late' }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+        const dialog = screen.getByRole('dialog')
+        expect(dialog).toHaveTextContent('Cancel this occurrence instead, or end the series.')
+        expect(within(dialog).getByRole('button', { name: 'Cancel this occurrence' })).toBeInTheDocument()
     })
 
     it('links to the series screen for staff', () => {

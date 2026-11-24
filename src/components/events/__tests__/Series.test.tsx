@@ -178,6 +178,33 @@ describe('series management', () => {
         expect(mut.patch.mutate).toHaveBeenCalledWith({ id: series().id, payload: { scope: 'this', eventId: 'o2', startDate: '2026-12-11T18:00:00.000Z' } }, expect.any(Object))
     })
 
+    it('warns a moderator that a public date goes back to review, and an administrator sees no warning', () => {
+        auth.user = { id: 'm1', role: 'moderator' }
+        query.current = ok(manageable())
+        const { unmount } = render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        expect(screen.getByTestId('edit-review-warning')).toHaveTextContent(/title, the category or the organizer.*back to review/)
+        expect(screen.getByTestId('review-note')).toHaveTextContent(/cannot approve your own/)
+        unmount()
+        auth.user = { id: 'a1', role: 'admin' }
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        expect(screen.queryByTestId('edit-review-warning')).not.toBeInTheDocument()
+    })
+
+    it('says so when the change sent one date back to review', () => {
+        auth.user = { id: 'm1', role: 'moderator' }
+        query.current = ok(manageable())
+        mut.patch.mutate.mockImplementation((_v, o) => o.onSuccess({ scope: 'this', eventId: 'o2', changed: ['title', 'status'], series: series() }))
+        render(<SeriesView id="x" />)
+        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        const dialog = screen.getByRole('dialog', { name: 'Edit the series' })
+        fireEvent.click(within(dialog).getByRole('radio', { name: /Only one date/ }))
+        fireEvent.change(within(dialog).getByLabelText(/^Title/), { target: { value: 'A new title here' } })
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+        expect(screen.getByTestId('series-saved')).toHaveTextContent(/went back to review/)
+    })
+
     it('shows what the API says when a save fails', () => {
         auth.user = { id: 'a1', role: 'admin' }
         query.current = ok(manageable())

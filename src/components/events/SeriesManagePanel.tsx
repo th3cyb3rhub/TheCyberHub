@@ -31,7 +31,7 @@ function Field({ id, label, error, hint, children }: { id: string; label: string
 }
 
 /** Change one occurrence or this and every later one. Only what changed is sent. */
-function EditDialog({ series, open, onOpenChange }: { series: Series; open: boolean; onOpenChange: (o: boolean) => void }) {
+function EditDialog({ series, open, onOpenChange, onSaved }: { series: Series; open: boolean; onOpenChange: (o: boolean) => void; onSaved: (message: string) => void }) {
     const { user } = useAuth();
     const admin = isAdminRole(user?.role);
     const patch = usePatchSeries();
@@ -41,7 +41,6 @@ function EditDialog({ series, open, onOpenChange }: { series: Series; open: bool
     const [eventId, setEventId] = useState<string>(series.nextOccurrences[0]?.id ?? '');
     const [errors, setErrors] = useState<SeriesFormErrors>({});
     const [formError, setFormError] = useState<string | null>(null);
-    const [done, setDone] = useState<string | null>(null);
     const occurrence = series.nextOccurrences.find((o) => o.id === eventId) ?? null;
 
     const set = <K extends keyof SeriesEditValues>(key: K, value: SeriesEditValues[K]) => {
@@ -52,7 +51,6 @@ function EditDialog({ series, open, onOpenChange }: { series: Series; open: bool
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
-        setDone(null);
         const checked = validateSeriesEdit(values, scope, { admin, occurrence });
         if (!checked.ok) {
             setErrors(checked.errors);
@@ -71,9 +69,11 @@ function EditDialog({ series, open, onOpenChange }: { series: Series; open: bool
         }
         patch.mutate({ id: series.id, payload }, {
             onSuccess: (result) => {
-                setDone(result.scope === 'future'
+                const backToReview = result.scope === 'this' && result.changed.includes('status');
+                onSaved((result.scope === 'future'
                     ? `Saved. ${result.updated} upcoming ${result.updated === 1 ? 'date was' : 'dates were'} updated${result.created ? `, ${result.created} new ${result.created === 1 ? 'date was' : 'dates were'} created` : ''}${result.cancelled ? `, ${result.cancelled} cancelled` : ''}.`
-                    : 'Saved. This date was changed and later changes to the series leave it alone.');
+                    : 'Saved. This date was changed and later changes to the series leave it alone.')
+                    + (backToReview ? ' It went back to review, so it is hidden from the public until another reviewer approves it.' : ''));
                 onOpenChange(false);
             },
             onError: (err) => {
@@ -99,9 +99,13 @@ function EditDialog({ series, open, onOpenChange }: { series: Series; open: bool
 
     return (
         <>
-            {done && <p role="status" className="mt-3 text-sm text-green-800 dark:text-green-300" data-testid="series-saved">{done}</p>}
             <DialogShell open={open} onOpenChange={(o) => !patch.isPending && onOpenChange(o)} title="Edit the series" description="Choose how far the change reaches, then change what you need." wide>
                 <form onSubmit={submit} noValidate className="space-y-4">
+                    {!admin && (
+                        <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="edit-review-warning">
+                            Changing the title, the category or the organizer of a date that is already public sends that date back to review. It stays hidden until another reviewer approves it.
+                        </p>
+                    )}
                     <fieldset className="space-y-2">
                         <legend className={labelClass}>What should change</legend>
                         <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 p-3 text-sm dark:border-neutral-800">
@@ -183,6 +187,7 @@ export function SeriesManagePanel({ series }: { series: Series }) {
     const resume = useResumeSeries();
     const end = useEndSeries();
     const [editing, setEditing] = useState(false);
+    const [saved, setSaved] = useState<string | null>(null);
     const [confirm, setConfirm] = useState<'pause' | 'resume' | 'end' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const ended = series.status === 'ended';
@@ -206,8 +211,8 @@ export function SeriesManagePanel({ series }: { series: Series }) {
             )}
             {!admin && (
                 <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="review-note">
-                    Occurrences wait for review. An administrator or another moderator approves each date before the public sees it
-                    {counts && counts.pending > 0 ? <>; {counts.pending} {counts.pending === 1 ? 'is' : 'are'} waiting now. <Link href="/admin/events" className="font-medium underline">Open the review queue</Link>.</> : '.'}
+                    Occurrences wait for review. An administrator or another moderator approves each date before the public sees it, and you cannot approve your own.
+                    {counts && counts.pending > 0 && <> {counts.pending} {counts.pending === 1 ? 'is' : 'are'} waiting now. <Link href="/admin/events" className="font-medium underline">Open the review queue</Link>.</>}
                 </p>
             )}
             <p className={`mb-4 text-xs ${muted}`}>
@@ -217,7 +222,7 @@ export function SeriesManagePanel({ series }: { series: Series }) {
                 <p className={`text-sm ${muted}`}>This series has ended and cannot be changed.</p>
             ) : (
                 <div className="flex flex-wrap gap-2">
-                    <button type="button" className={btnSecondary} onClick={() => setEditing(true)}><Pencil className="h-4 w-4" aria-hidden="true" /> Edit</button>
+                    <button type="button" className={btnSecondary} onClick={() => { setSaved(null); setEditing(true); }}><Pencil className="h-4 w-4" aria-hidden="true" /> Edit</button>
                     {series.status === 'active' ? (
                         <button type="button" className={btnSecondary} onClick={() => { setError(null); setConfirm('pause'); }}><Pause className="h-4 w-4" aria-hidden="true" /> Pause</button>
                     ) : (
@@ -227,7 +232,8 @@ export function SeriesManagePanel({ series }: { series: Series }) {
                 </div>
             )}
 
-            {editing && <EditDialog series={series} open={editing} onOpenChange={setEditing} />}
+            {saved && <p role="status" className="mb-4 text-sm text-green-800 dark:text-green-300" data-testid="series-saved">{saved}</p>}
+            {editing && <EditDialog series={series} open={editing} onOpenChange={setEditing} onSaved={setSaved} />}
 
             <EventDialog
                 open={confirm === 'pause'}

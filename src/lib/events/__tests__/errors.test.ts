@@ -8,7 +8,7 @@ const CODES = [
     'EVENT_ALREADY_ATTENDED', 'EVENT_EMAIL_NOT_VERIFIED', 'EVENT_PENDING_LIMIT', 'EVENT_DAILY_LIMIT', 'EVENT_DUPLICATE',
     'EVENT_NOT_PENDING', 'EVENT_NOT_CANCELLABLE', 'EVENT_CANCELLED', 'EVENT_FIELD_LOCKED', 'EVENT_FEEDBACK_CLOSED',
     'EVENT_FEEDBACK_EXISTS', 'EVENT_FEEDBACK_FORBIDDEN',
-    'SERIES_NOT_FOUND', 'SERIES_ENDED', 'SERIES_LIMIT', 'SERIES_OCCURRENCE_EXISTS', 'EVENT_NOT_EDITABLE',
+    'SERIES_NOT_FOUND', 'SERIES_ENDED', 'SERIES_LIMIT', 'SERIES_OCCURRENCE_EXISTS', 'EVENT_NOT_EDITABLE', 'EVENT_IN_SERIES',
 ]
 
 describe('eventErrorMessage', () => {
@@ -67,5 +67,10 @@ describe('wave 2 errors', () => {
         expect(calendarFeedErrorMessage(new ApiError('x', 503))).toBe('Calendar feed is not available right now. Please try again later.')
         expect(calendarFeedErrorMessage(new ApiError('x', 401))).toMatch(/Sign in/)
         expect(calendarFeedErrorMessage(new ApiError('x', 429))).toMatch(/too quickly/)
+    })
+    it('maps the feed token codes before the status', () => {
+        expect(calendarFeedErrorMessage(new ApiError('x', 409, 'CALENDAR_TOKEN_CONFLICT'))).toBe('Someone else rotated this just now, try again.')
+        expect(calendarFeedErrorMessage(new ApiError('x', 503, 'FEED_URL_NOT_CONFIGURED'))).toBe('Calendar feed is not available right now. Please try again later.')
+        expect(calendarFeedErrorMessage(new ApiError('x', 409))).toBe('x')
     })
 })

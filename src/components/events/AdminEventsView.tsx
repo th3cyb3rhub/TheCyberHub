@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import {
     useApproveEvent, useCancelEvent, useDeleteEvent, useEventPage, useRejectEvent, useReviewQueue, useToggleFeatured,
 } from '@/hooks/queries/useEvents';
-import { eventErrorMessage } from '@/lib/events/errors';
+import { eventErrorCode, eventErrorMessage } from '@/lib/events/errors';
 import { CATEGORY_LABELS } from '@/lib/events/form';
 import { isAdminRole } from '@/lib/events/roles';
 import { effectiveStatus, formatStart } from '@/lib/events/time';
@@ -106,6 +106,7 @@ export function AdminEventsView() {
     const [q, setQ] = useState('');
     const [action, setAction] = useState<Action>(null);
     const [dialogError, setDialogError] = useState<string | null>(null);
+    const [seriesHint, setSeriesHint] = useState(false);
 
     useEffect(() => {
         const id = window.setTimeout(() => setQ(draft.trim()), 300);
@@ -129,8 +130,17 @@ export function AdminEventsView() {
     if (!ready || !user) return <FullPageSpinner />;
     if (!allowed) return <NoAccess message="Only moderators and administrators can review events." />;
 
-    const close = () => { setAction(null); setDialogError(null); };
+    const close = () => { setAction(null); setDialogError(null); setSeriesHint(false); };
     const fail = (err: unknown) => setDialogError(eventErrorMessage(err));
+    // A date of a series cannot be deleted: say so and move to the cancel dialog for the same date
+    const failDelete = (err: unknown) => {
+        if (eventErrorCode(err) === 'EVENT_IN_SERIES' && action) {
+            setSeriesHint(true);
+            setAction({ kind: 'cancel', event: action.event });
+        }
+        fail(err);
+    };
+    const inSeries = !!action?.event.seriesId || seriesHint;
 
     return (
         <PageShell
@@ -167,7 +177,7 @@ export function AdminEventsView() {
                     />
                 ) : (
                     <>
-                        <ul className="space-y-3">{events.map((e) => <Row key={e._id} event={e} admin={admin} onAction={(a) => { setDialogError(null); setAction(a); }} />)}</ul>
+                        <ul className="space-y-3">{events.map((e) => <Row key={e._id} event={e} admin={admin} onAction={(a) => { setDialogError(null); setSeriesHint(false); setAction(a); }} />)}</ul>
                         {queue.hasNextPage && (
                             <div className="mt-6 text-center">
                                 <button type="button" className={btnSecondary} disabled={queue.isFetchingNextPage} onClick={() => void queue.fetchNextPage()}>
@@ -195,8 +205,8 @@ export function AdminEventsView() {
                 open={action?.kind === 'cancel'}
                 onOpenChange={(o) => !o && close()}
                 title={`Cancel "${action?.event.title ?? ''}"?`}
-                description={action?.event.seriesId ? 'Only this date is cancelled and the series goes on. Everyone who registered or is waiting is notified. This cannot be undone.' : 'Everyone who registered or is waiting is notified. This cannot be undone.'}
-                confirmLabel={action?.event.seriesId ? 'Cancel this occurrence' : 'Cancel the event'}
+                description={inSeries ? 'Only this date is cancelled and the series goes on. Everyone who registered or is waiting is notified. This cannot be undone.' : 'Everyone who registered or is waiting is notified. This cannot be undone.'}
+                confirmLabel={inSeries ? 'Cancel this occurrence' : 'Cancel the event'}
                 destructive
                 reason={{ label: 'Reason, shown on the event page', min: 3, max: 500 }}
                 pending={cancel.isPending}
@@ -212,7 +222,7 @@ export function AdminEventsView() {
                 destructive
                 pending={remove.isPending}
                 error={dialogError}
-                onConfirm={() => action && remove.mutate({ id: action.event._id }, { onSuccess: close, onError: fail })}
+                onConfirm={() => action && remove.mutate({ id: action.event._id }, { onSuccess: close, onError: failDelete })}
             />
         </PageShell>
     );

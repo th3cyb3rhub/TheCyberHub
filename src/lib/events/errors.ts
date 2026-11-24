@@ -34,6 +34,7 @@ const MESSAGES: Record<string, string> = {
     SERIES_ENDED: 'This series has ended, so it cannot be changed.',
     SERIES_LIMIT: 'You already have 20 running series. End one before you create another.',
     SERIES_OCCURRENCE_EXISTS: 'Another occurrence of this series already starts at that time.',
+    EVENT_IN_SERIES: 'This date belongs to a recurring series. Cancel this occurrence instead, or end the series.',
     EVENT_NOT_EDITABLE: 'That occurrence is over or cancelled, so it cannot be edited.',
 };
 
@@ -81,6 +82,9 @@ export function exportErrorMessage(err: unknown): string {
 
 /** Calendar feed calls: the same words for any failure, without hints about the address */
 export function calendarFeedErrorMessage(err: unknown): string {
+    // By code first: a 409 here is a rotation race, not a generic conflict
+    if (err instanceof ApiError && err.code === 'CALENDAR_TOKEN_CONFLICT') return 'Someone else rotated this just now, try again.';
+    if (err instanceof ApiError && err.code === 'FEED_URL_NOT_CONFIGURED') return 'Calendar feed is not available right now. Please try again later.';
     if (err instanceof ApiError && err.status === 401) return 'Sign in again to manage your calendar feed.';
     if (err instanceof ApiError && err.status === 503) return 'Calendar feed is not available right now. Please try again later.';
     return eventErrorMessage(err, 'Could not update your calendar feed. Please try again.');

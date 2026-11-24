@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { EVENT_CATEGORIES, EVENT_FORMATS, SERIES_RULES, type CalendarItem, type EventCategory, type EventFormat, type Series, type SeriesRecurrence, type SeriesRule } from '@/types/event';
-import { addMonths, MONTH_NAMES, parseDay, WEEKDAY_NAMES } from './calendar';
+import { addDays, MONTH_NAMES, parseDay, WEEKDAY_NAMES } from './calendar';
 import { EVENT_LIMITS, isHttpsUrl, parseTags } from './form';
 import { browserTimeZone, isValidTimeZone, localToInstant, toLocalParts } from './time';
 
@@ -16,8 +16,8 @@ export const SERIES_LIMITS = {
     durationMinutes: { min: 15, max: 1440 },
     defaultDurationMinutes: 120,
     generateAheadDays: { min: 7, max: 365, default: 60 },
-    startsOnBackMonths: 12,
-    startsOnAheadMonths: 24,
+    startsOnBackDays: 366,
+    startsOnAheadDays: 731,
     reason: { min: 3, max: 500 },
     /** A staff member can run this many series at once */
     runningPerPerson: 20,
@@ -142,7 +142,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 /** The first and last day `startsOn` may be, counted from today in the series' zone */
 export function startsOnBounds(zone: string, now: Date = new Date()): { min: string; max: string } {
     const today = toLocalParts(now, isValidTimeZone(zone) ? zone : 'UTC').date;
-    return { min: addMonths(today, -SERIES_LIMITS.startsOnBackMonths), max: addMonths(today, SERIES_LIMITS.startsOnAheadMonths) };
+    return { min: addDays(today, -SERIES_LIMITS.startsOnBackDays), max: addDays(today, SERIES_LIMITS.startsOnAheadDays) };
 }
 
 export interface SeriesSchemaOptions { admin?: boolean; now?: Date }
@@ -191,8 +191,8 @@ export function createSeriesFormSchema({ admin = false, now = new Date() }: Seri
     }).superRefine((v, ctx) => {
         if (v.startsOn && parseDay(v.startsOn)) {
             const { min, max } = startsOnBounds(v.timezone, now);
-            if (v.startsOn < min) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date can be at most a year in the past (${min} or later)` });
-            else if (v.startsOn > max) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date can be at most two years ahead (${max} or earlier)` });
+            if (v.startsOn < min) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date cannot be more than 366 days in the past (${min} or later)` });
+            else if (v.startsOn > max) ctx.addIssue({ code: 'custom', path: ['startsOn'], message: `The first date cannot be more than 731 days ahead (${max} or earlier)` });
             else if (isValidTimeZone(v.timezone) && TIME_RE.test(v.startTime) && !localToInstant(v.startsOn, v.startTime, v.timezone)) {
                 // The first date is the one a clock change can skip; later dates are moved after the gap by the API
                 ctx.addIssue({ code: 'custom', path: ['startTime'], message: `That time does not exist on the first date in ${v.timezone} (the clock skips it). Pick another time` });

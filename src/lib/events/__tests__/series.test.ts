@@ -71,12 +71,12 @@ describe('create form validation', () => {
         expect(errorsOf(valid({ tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(',') })).tags).toMatch(/at most 10/)
     })
 
-    it('limits the first date to one year back and two years ahead', () => {
-        expect(startsOnBounds('Europe/London', NOW)).toEqual({ min: '2025-11-24', max: '2028-11-24' })
-        expect(errorsOf(valid({ startsOn: '2025-11-24' })).startsOn).toBeUndefined()
-        expect(errorsOf(valid({ startsOn: '2025-11-23' })).startsOn).toMatch(/year in the past/)
+    it('limits the first date to 366 days back and 731 days ahead', () => {
+        expect(startsOnBounds('Europe/London', NOW)).toEqual({ min: '2025-11-23', max: '2028-11-24' })
+        expect(errorsOf(valid({ startsOn: '2025-11-23' })).startsOn).toBeUndefined()
+        expect(errorsOf(valid({ startsOn: '2025-11-22' })).startsOn).toMatch(/366 days in the past/)
         expect(errorsOf(valid({ startsOn: '2028-11-24' })).startsOn).toBeUndefined()
-        expect(errorsOf(valid({ startsOn: '2028-11-25' })).startsOn).toMatch(/two years ahead/)
+        expect(errorsOf(valid({ startsOn: '2028-11-25' })).startsOn).toMatch(/731 days ahead/)
         expect(errorsOf(valid({ startsOn: '2026-02-30' })).startsOn).toBeDefined()
         expect(errorsOf(valid({ startsOn: '' })).startsOn).toMatch(/first date/)
     })

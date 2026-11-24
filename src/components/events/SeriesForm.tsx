@@ -136,7 +136,7 @@ export function SeriesForm({ admin }: { admin: boolean }) {
         <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-8">
             {!admin && (
                 <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="review-note">
-                    Occurrences wait for review. An administrator or another moderator approves each date before the public sees it.
+                    Occurrences wait for review. An administrator or another moderator approves each date before the public sees it, and you cannot approve your own.
                 </p>
             )}
 
@@ -192,7 +192,7 @@ export function SeriesForm({ admin }: { admin: boolean }) {
                             {({ id }) => <select id={id} value={values.weekOfMonth} onChange={(e) => set('weekOfMonth', e.target.value)} className={input}>{WEEK_OF_MONTH_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}
                         </Field>
                     )}
-                    {text('startsOn', 'First date', { type: 'date', required: true, min: bounds.min, max: bounds.max, hint: 'A day in the time zone below. At most a year back and two years ahead.' })}
+                    {text('startsOn', 'First date', { type: 'date', required: true, min: bounds.min, max: bounds.max, hint: 'A day in the time zone below. From 366 days back to 731 days ahead.' })}
                     {text('startTime', 'Start time', { type: 'time', required: true, hint: 'The clock time stays the same through daylight saving changes.' })}
                     <Field name="timezone" label="Time zone" error={errors.timezone} required>
                         {({ id, describedBy, invalid }) => (
