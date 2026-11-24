@@ -219,6 +219,21 @@ test.describe('Apply', () => {
             });
         }
 
+        test('shows an answer to a question that no longer exists in the banner and reloads the program', async ({ page }) => {
+            const state = await open(page, MEMBER, `/internships/${OPEN_ID}/apply`);
+            state.failOnce['POST apply'] = { status: 400, code: 'VALIDATION_ERROR', message: 'Validation failed', details: [{ field: `answers.${'9'.repeat(24)}`, message: 'Pick a track is required' }] };
+            await page.getByLabel(/^Why do you want to join/).fill('I want to learn web security from your mentors.');
+            await page.getByLabel(/^Your favourite tool/).fill('Burp');
+            await page.getByLabel(/^Preferred track/).selectOption('Defensive');
+            const reads = () => state.calls.filter((c) => c.method === 'GET' && c.path === `/${OPEN_ID}`).length;
+            await expect.poll(reads).toBeGreaterThanOrEqual(1);
+            const before = reads();
+            await page.getByRole('button', { name: 'Send application' }).click();
+            await expect(page.getByTestId('apply-error-lines')).toContainText('Pick a track is required');
+            await expect.poll(reads).toBeGreaterThan(before);
+            await expect(page.getByLabel(/^Your favourite tool/)).toHaveValue('Burp');
+        });
+
         test('says "try again in a moment" on a rate limit and keeps the typed answers', async ({ page }) => {
             const state = await open(page, MEMBER, `/internships/${OPEN_ID}/apply`);
             state.failOnce['POST apply'] = { status: 429, code: 'RATE_LIMITED', message: 'slow down' };

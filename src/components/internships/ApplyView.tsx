@@ -15,6 +15,7 @@ import { formErrors, internshipErrorCode, internshipErrorMessage } from '@/lib/i
 import type { CustomField } from '@/types/internship';
 import { Field } from './FormField';
 import { ErrorState } from './ListStates';
+import { useUnsavedGuard } from './UnsavedGuard';
 import { ViewerTime } from './ViewerTime';
 
 const LINK_FIELDS = [
@@ -64,10 +65,15 @@ export function ApplyView({ id }: { id: string }) {
     const [values, setValues] = useState<ApplicationValues>(emptyApplication);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [banner, setBanner] = useState<string | null>(null);
+    const [banner, setBanner] = useState<{ message: string; lines: string[] } | null>(null);
     const [done, setDone] = useState(false);
     const formRef = useRef<HTMLFormElement>(null);
     const summaryId = useId();
+
+    // Anything typed is worth a question before the page is left; an application that was sent is not
+    const typed = values.coverLetter.trim() !== '' || (['githubUrl', 'linkedinUrl', 'portfolioUrl', 'resumeUrl'] as const).some((k) => (values[k] ?? '').trim() !== '')
+        || Object.values(answers).some((a) => a.trim() !== '');
+    const leaveDialog = useUnsavedGuard(typed && !done);
 
     const cohort = query.data;
     const view = useMemo(() => (cohort ? applyView(cohort) : null), [cohort]);
@@ -147,17 +153,29 @@ export function ApplyView({ id }: { id: string }) {
         apply.mutate({ id, payload: buildApplyPayload(values, cohort.customFields, answers) }, {
             onSuccess: () => setDone(true),
             onError: (err) => {
-                const fields = formErrors(err);
+                const all = formErrors(err);
                 const code = internshipErrorCode(err);
-                if (Object.keys(fields).length > 0) {
+                // An answer to a question this form does not have: the program's questions changed
+                // while the form was open. Its message has no field, so the banner carries it.
+                const known = new Set(cohort.customFields.map((f) => `answers.${f._id}`));
+                const orphans = Object.entries(all).filter(([key]) => key.startsWith('answers.') && !known.has(key));
+                const fields = Object.fromEntries(Object.entries(all).filter(([key]) => !orphans.some(([o]) => o === key)));
+                if (orphans.length > 0) {
                     failed.current += 1;
                     setErrors(fields);
-                    setBanner('Some answers need your attention. They are marked below.');
+                    setBanner({
+                        message: 'The questions of this program changed while you were filling in the form. They are loaded again: check your answers and send once more.',
+                        lines: orphans.map(([, message]) => message),
+                    });
+                } else if (Object.keys(fields).length > 0) {
+                    failed.current += 1;
+                    setErrors(fields);
+                    setBanner({ message: 'Some answers need your attention. They are marked below.', lines: [] });
                 } else {
-                    setBanner(internshipErrorMessage(err));
+                    setBanner({ message: internshipErrorMessage(err), lines: [] });
                 }
-                // The cohort changed under the form: show what is true now
-                if (code === 'INTERNSHIP_CLOSED' || code === 'INTERNSHIP_ALREADY_APPLIED' || code === 'INTERNSHIP_FULL') void query.refetch();
+                // The program changed under the form: show what is true now, so a retry can work
+                if (orphans.length > 0 || code === 'INTERNSHIP_CLOSED' || code === 'INTERNSHIP_ALREADY_APPLIED' || code === 'INTERNSHIP_FULL') void query.refetch();
             },
         });
     };
@@ -173,7 +191,8 @@ export function ApplyView({ id }: { id: string }) {
 
             {banner && (
                 <div role="alert" id={summaryId} className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" data-testid="apply-error">
-                    {banner}
+                    <p>{banner.message}</p>
+                    {banner.lines.length > 0 && <ul className="mt-2 list-disc space-y-0.5 pl-5" data-testid="apply-error-lines">{banner.lines.map((line) => <li key={line}>{line}</li>)}</ul>}
                     {(internshipErrorCode(apply.error) === 'INTERNSHIP_ALREADY_APPLIED') && <> <Link href="/internships/applications" className="font-medium underline">See my applications</Link></>}
                 </div>
             )}
@@ -215,6 +234,7 @@ export function ApplyView({ id }: { id: string }) {
                     </button>
                 </div>
             </form>
+            {leaveDialog}
         </div>,
     );
 }

@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { makeCohort, makeMine, QUESTION_AREA, QUESTION_FILE, QUESTION_PICK, QUESTION_TEXT, viewer } from '@/lib/internships/__tests__/fixtures'
 
+const push = vi.hoisted(() => vi.fn())
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/components/events/PageShell', () => ({ useRequireLogin: () => ({ user: { id: 'u1', role: 'user' }, ready: true }), FullPageSpinner: () => <div role="status">loading</div> }))
 const q = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 const apply = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, error: null as unknown }))
@@ -97,6 +99,37 @@ describe('ApplyView form', () => {
         expect(screen.getByTestId('apply-error')).toHaveTextContent('Some answers need your attention')
     })
 
+    it('puts the message of an answer to a question this form does not have in the banner, and reloads the program', () => {
+        const refetch = vi.fn()
+        q.current = ok(makeCohort(), refetch)
+        apply.mutate.mockImplementation((_v, opts) => opts.onError(new ApiError('Validation failed', 400, 'VALIDATION_ERROR', [
+            { field: `answers.${'9'.repeat(24)}`, message: 'Pick a track is required' },
+            { field: `answers.${QUESTION_FILE}`, message: 'Sample report must be a valid http or https link' },
+        ])))
+        render(<ApplyView id="c1" />)
+        fillValid()
+        send()
+        const banner = screen.getByTestId('apply-error')
+        expect(banner).toHaveTextContent('questions of this program changed')
+        expect(screen.getByTestId('apply-error-lines')).toHaveTextContent('Pick a track is required')
+        // the one that has a field is marked on it and not repeated in the banner
+        expect(screen.getByLabelText(/^Sample report/)).toHaveAttribute('aria-invalid', 'true')
+        expect(screen.getByTestId('apply-error-lines')).not.toHaveTextContent('Sample report')
+        expect(refetch).toHaveBeenCalled()
+        // what was typed is still there for the retry
+        expect(screen.getByLabelText(/^Your favourite tool/)).toHaveValue('Burp')
+    })
+
+    it('does not reload the program for an ordinary field error', () => {
+        const refetch = vi.fn()
+        q.current = ok(makeCohort(), refetch)
+        apply.mutate.mockImplementation((_v, opts) => opts.onError(new ApiError('Validation failed', 400, 'VALIDATION_ERROR', [{ field: 'coverLetter', message: 'Too short' }])))
+        render(<ApplyView id="c1" />)
+        fillValid()
+        send()
+        expect(refetch).not.toHaveBeenCalled()
+    })
+
     it('shows the success state once the application is sent', () => {
         apply.mutate.mockImplementation((_v, opts) => opts.onSuccess(makeMine({ status: 'pending' })))
         render(<ApplyView id="c1" />)
@@ -128,6 +161,31 @@ describe('ApplyView form', () => {
         send()
         expect(screen.getByTestId('apply-error')).toHaveTextContent('Too many requests. Try again in a moment.')
         expect(screen.getByLabelText(/^Your favourite tool/)).toHaveValue('Burp')
+    })
+})
+
+describe('ApplyView leaving', () => {
+    const beforeUnload = () => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented }
+
+    it('asks before the page is left once the letter has content', () => {
+        render(<ApplyView id="c1" />)
+        expect(beforeUnload()).toBe(false)
+        fill(/^Why do you want to join/, 'I would like to learn')
+        expect(beforeUnload()).toBe(true)
+        fireEvent.click(screen.getByRole('link', { name: /Back to/ }))
+        const dialog = screen.getByRole('dialog', { name: 'Leave without saving?' })
+        expect(push).not.toHaveBeenCalled()
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Leave' }))
+        expect(push).toHaveBeenCalledWith('/internships/c1')
+    })
+
+    it('does not ask once the application was sent', () => {
+        apply.mutate.mockImplementation((_v, opts) => opts.onSuccess(makeMine({ status: 'pending' })))
+        render(<ApplyView id="c1" />)
+        fillValid()
+        expect(beforeUnload()).toBe(true)
+        send()
+        expect(beforeUnload()).toBe(false)
     })
 })
 
