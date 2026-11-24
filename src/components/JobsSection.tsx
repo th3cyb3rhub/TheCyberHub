@@ -8,6 +8,7 @@ import {
     Building2, Sparkles
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
+import { PostJobLink } from '@/components/jobs/PostJobLink';
 
 interface Job {
     _id: string;
@@ -144,10 +145,10 @@ const JobsSection = () => {
                         View All Jobs
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
-                    <Link href="/employer/post" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all hover:shadow-lg hover:shadow-orange-500/20">
+                    <PostJobLink className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all hover:shadow-lg hover:shadow-orange-500/20">
                         Post a Job
                         <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    </PostJobLink>
                 </div>
             </div>
         </section>

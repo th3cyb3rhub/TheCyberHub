@@ -122,6 +122,11 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         } catch {
             // Ignore JSON parsing errors
         }
+        // A 429 also carries the wait in the `Retry-After` header (seconds); the body's own value wins
+        const headerWait = Number(response.headers?.get?.('Retry-After'));
+        if (Number.isFinite(headerWait) && headerWait > 0 && typeof errorMeta?.retryAfter !== 'number') {
+            errorMeta = { ...(errorMeta ?? {}), retryAfter: headerWait };
+        }
         const failure = new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
         if (errorTime) failure.serverTime = errorTime;
         throw failure;

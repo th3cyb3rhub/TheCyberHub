@@ -10,8 +10,9 @@ const StructuredData: React.FC<StructuredDataProps> = ({ data }) => {
         <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
-                // A `<` is escaped so text from users can never close the script element
-                __html: JSON.stringify(data).replace(/</g, '\\u003c')
+                // A `<` is escaped so text from users can never close the script element; the two line
+                // separators are valid JSON but end a line in older script parsers, so they are escaped too
+                __html: JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
             }}
         />
     );
