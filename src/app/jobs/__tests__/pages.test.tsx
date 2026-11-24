@@ -24,6 +24,7 @@ vi.mock('@/components/jobs/JobActions', () => ({
 vi.mock('@/components/jobs/JobViewerBanner', () => ({ JobViewerBanner: () => <div data-testid="banner" /> }))
 vi.mock('@/components/jobs/JobClientView', () => ({ JobClientView: ({ slug }: { slug: string }) => <div data-testid="client-view">{slug}</div> }))
 vi.mock('@/components/jobs/JobsExplorer', () => ({ JobsExplorer: ({ initialPage }: { initialPage: { data: unknown[] } | null }) => <div data-testid="explorer">{initialPage ? initialPage.data.length : 'none'}</div> }))
+vi.mock('@/components/jobs/PostJobLink', () => ({ PostJobLink: ({ href, children }: { href?: string; children: React.ReactNode }) => <a href={href}>{children}</a> }))
 vi.mock('@/components/jobs/RefreshButton', () => ({ RefreshButton: () => <button type="button">Try again</button> }))
 
 import CompanyPage, { generateMetadata as companyMetadata } from '@/app/company/[slug]/page'

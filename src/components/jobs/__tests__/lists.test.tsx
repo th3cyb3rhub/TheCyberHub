@@ -9,8 +9,8 @@ import { renderWithClient } from './utils'
 const auth = vi.hoisted(() => ({ current: { user: null as { id: string; role: string } | null, loading: false, refreshUser: vi.fn() } }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth.current }))
 vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ addToast: vi.fn() }) }))
-const nav = vi.hoisted(() => ({ replace: vi.fn() }))
-vi.mock('next/navigation', () => ({ usePathname: () => '/jobs', useRouter: () => ({ push: vi.fn(), replace: nav.replace }) }))
+const nav = vi.hoisted(() => ({ replace: vi.fn(), search: new URLSearchParams() }))
+vi.mock('next/navigation', () => ({ usePathname: () => '/jobs', useRouter: () => ({ push: vi.fn(), replace: nav.replace }), useSearchParams: () => nav.search }))
 const api = vi.hoisted(() => ({ listJobs: vi.fn(), listSavedJobs: vi.fn(), saveJob: vi.fn(), unsaveJob: vi.fn() }))
 vi.mock('@/lib/api/jobs', () => api)
 vi.mock('@/lib/jobs/revalidate', () => ({ refreshPublicJobs: vi.fn() }))
@@ -18,6 +18,7 @@ vi.mock('@/components/internships/ViewerTime', () => ({ ViewerTime: ({ iso }: { 
 
 import { JobDetailContent } from '../JobDetailContent'
 import { JobsExplorer } from '../JobsExplorer'
+import { PostJobLink } from '../PostJobLink'
 import { SavedJobsView } from '../SavedJobsView'
 
 const page = (data: JobCard[], extra: Partial<JobsPage<JobCard>> = {}): JobsPage<JobCard> =>
@@ -26,6 +27,7 @@ const page = (data: JobCard[], extra: Partial<JobsPage<JobCard>> = {}): JobsPage
 beforeEach(() => {
     vi.clearAllMocks()
     auth.current = { user: null, loading: false, refreshUser: vi.fn() }
+    nav.search = new URLSearchParams()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -53,6 +55,90 @@ describe('JobsExplorer', () => {
         replaceState.mockRestore()
     })
 
+    it('writes the address with a fresh state, never the state it found, so the router follows and Back shows this list', async () => {
+        api.listJobs.mockResolvedValue(page([card({ _id: 'soc1', title: 'SOC Analyst', slug: 'soc-1' })]))
+        window.history.replaceState({ __NA: true, tree: 'of-the-first-render' }, '')
+        const replaceState = vi.spyOn(window.history, 'replaceState')
+        renderWithClient(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        await userEvent.selectOptions(screen.getByLabelText('Category'), 'soc')
+        await waitFor(() => expect(replaceState).toHaveBeenCalled())
+        for (const call of replaceState.mock.calls) expect(call[0]).toBeNull()
+        replaceState.mockRestore()
+        window.history.replaceState(null, '')
+    })
+
+    it('starts from the address, not from the page the server rendered earlier (coming back with Back)', async () => {
+        // The server tree was rendered for the plain list; the address holds the filter the member set before opening a job
+        nav.search = new URLSearchParams('category=grc&search=audit')
+        api.listJobs.mockResolvedValue(page([card({ _id: 'grc1', title: 'GRC Lead', slug: 'grc-1' })]))
+        renderWithClient(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        expect(screen.getByLabelText('Category')).toHaveValue('grc')
+        expect(screen.getByRole('searchbox')).toHaveValue('audit')
+        await waitFor(() => expect(api.listJobs).toHaveBeenCalledWith(expect.objectContaining({ category: 'grc', search: 'audit' })))
+        expect(await screen.findByText('GRC Lead')).toBeInTheDocument()
+        expect(screen.queryByText('Senior Pentester')).not.toBeInTheDocument()
+    })
+
+    it('uses the server page only while the address still has the filters it was rendered for', async () => {
+        nav.search = new URLSearchParams('category=soc')
+        renderWithClient(<JobsExplorer initialFilters={{ category: 'soc' }} initialPage={{ ...page([card({ title: 'Rendered on the server' })]), fetchedAt: Date.now() }} />)
+        expect(screen.getByText('Rendered on the server')).toBeInTheDocument()
+        await new Promise((r) => setTimeout(r, 20))
+        expect(api.listJobs).not.toHaveBeenCalled()
+    })
+
+    it('follows an address change it did not make, and ignores the ones it made itself', async () => {
+        api.listJobs.mockImplementation(async (f: { category?: string }) => page([card({ _id: f.category ?? 'none', title: `List for ${f.category ?? 'nothing'}`, slug: `s-${f.category ?? 'none'}` })]))
+        const { rerender } = renderWithClient(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        await userEvent.selectOptions(screen.getByLabelText('Category'), 'soc')
+        // Next reports the address the list just wrote: the list keeps going, nothing restarts
+        nav.search = new URLSearchParams('category=soc')
+        rerender(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        expect(await screen.findByText('List for soc')).toBeInTheDocument()
+        expect(screen.getByLabelText('Category')).toHaveValue('soc')
+        // Back or a link brings another address
+        nav.search = new URLSearchParams('category=grc')
+        rerender(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        await waitFor(() => expect(screen.getByLabelText('Category')).toHaveValue('grc'))
+        expect(await screen.findByText('List for grc')).toBeInTheDocument()
+        nav.search = new URLSearchParams()
+        rerender(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        await waitFor(() => expect(screen.getByLabelText('Category')).toHaveValue(''))
+    })
+
+    it('does not offer a moderator a way to post a job, but offers an employer one', () => {
+        auth.current = { user: { id: 'm1', role: 'moderator' }, loading: false, refreshUser: vi.fn() }
+        const { unmount } = renderWithClient(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        expect(screen.queryByRole('link', { name: /Post a job/ })).not.toBeInTheDocument()
+        unmount()
+        auth.current = { user: { id: 'e1', role: 'employer' }, loading: false, refreshUser: vi.fn() }
+        renderWithClient(<JobsExplorer initialFilters={{}} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
+        expect(screen.getByRole('link', { name: /Post a job/ })).toHaveAttribute('href', '/employer/post')
+    })
+
+    it('disables the save buttons while the rows are only the previous filter\'s rows', async () => {
+        auth.current = { user: { id: 'u1', role: 'user' }, loading: false, refreshUser: vi.fn() }
+        api.listJobs.mockResolvedValueOnce(page([card()], { viewer: { savedIds: [] } }))
+        renderWithClient(<JobsExplorer initialFilters={{}} initialPage={null} />)
+        expect(await screen.findByTestId('save-job')).toBeEnabled()
+        let release: (p: JobsPage<JobCard>) => void = () => undefined
+        api.listJobs.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+        await userEvent.selectOptions(screen.getByLabelText('Category'), 'soc')
+        await waitFor(() => expect(screen.getByTestId('save-job')).toBeDisabled())
+        release(page([card()], { viewer: { savedIds: [] } }))
+        await waitFor(() => expect(screen.getByTestId('save-job')).toBeEnabled())
+    })
+
+    it('says so when a sort that the API holds in memory stops at its last page, instead of a load more that would fail', async () => {
+        api.listJobs.mockResolvedValue({ ...page([card()]), pagination: { page: 50, limit: 20, total: 5000, totalPages: 250, pages: 250, hasMore: true } })
+        nav.search = new URLSearchParams('sort=viewCount')
+        renderWithClient(<JobsExplorer initialFilters={{}} initialPage={null} />)
+        expect(await screen.findByTestId('sort-cap')).toHaveTextContent(/Narrow the filters or sort by newest/)
+        expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Sort by newest' }))
+        await waitFor(() => expect(api.listJobs).toHaveBeenLastCalledWith(expect.not.objectContaining({ sortBy: 'viewCount' })))
+    })
+
     it('marks the jobs a member saved and offers the saved list', async () => {
         auth.current = { user: { id: 'u1', role: 'user' }, loading: false, refreshUser: vi.fn() }
         api.listJobs.mockResolvedValue(page([card(), card({ _id: 'j2', slug: 'b-2', title: 'Other' })], { viewer: { savedIds: ['j2'] } }))
@@ -76,9 +162,23 @@ describe('JobsExplorer', () => {
     })
 
     it('starts from the filters of the address', () => {
+        nav.search = new URLSearchParams('category=grc&search=audit')
         renderWithClient(<JobsExplorer initialFilters={{ category: 'grc', search: 'audit' }} initialPage={{ ...page([card()]), fetchedAt: Date.now() }} />)
         expect(screen.getByLabelText('Category')).toHaveValue('grc')
         expect(screen.getByRole('searchbox')).toHaveValue('audit')
+    })
+})
+
+describe('PostJobLink', () => {
+    it.each([['moderator', false], ['employer', true], ['admin', true], ['user', true]])('for a %s: shown is %s', (role, shown) => {
+        auth.current = { user: { id: 'x', role }, loading: false, refreshUser: vi.fn() }
+        renderWithClient(<PostJobLink href="/employer">Hiring? Post a job</PostJobLink>)
+        expect(screen.queryByRole('link', { name: 'Hiring? Post a job' }) !== null).toBe(shown)
+    })
+
+    it('is shown to a visitor', () => {
+        renderWithClient(<PostJobLink href="/employer">Hiring? Post a job</PostJobLink>)
+        expect(screen.getByRole('link', { name: 'Hiring? Post a job' })).toHaveAttribute('href', '/employer')
     })
 })
 

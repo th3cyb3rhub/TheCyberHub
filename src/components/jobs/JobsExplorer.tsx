@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Bookmark, Briefcase, ChevronDown, Loader2, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { btnPrimary, btnSecondary, focusRing, input, muted } from '@/components/events/styles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/context/AuthContext';
-import { useJobs } from '@/hooks/queries/useJobs';
+import { hitSortCap, useJobs } from '@/hooks/queries/useJobs';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CATEGORY_OPTIONS, EMPLOYMENT_OPTIONS, EXPERIENCE_OPTIONS, JOB_LIMITS, LOCATION_OPTIONS, SORT_OPTIONS } from '@/lib/jobs/constants';
-import { jobFiltersToSearch, jobsApiQuery } from '@/lib/jobs/query';
+import { isReviewerOnly } from '@/lib/jobs/roles';
+import { jobFiltersToSearch, jobsApiQuery, parseJobFilters } from '@/lib/jobs/query';
 import {
     EMPLOYMENT_TYPES, EXPERIENCE_LEVELS, JOB_CATEGORIES, JOB_SORTS, LOCATION_TYPES, type JobCard as Card, type JobListFilters, type JobsPage, type JobSort,
 } from '@/types/job';
@@ -37,18 +39,44 @@ function FilterSelect({ id, label, value, onChange, options, all }: {
 }
 
 interface Props {
-    /** What the address said when the page was rendered; the list below it starts from here */
+    /** What the address said when the page was rendered on the server */
     initialFilters: JobListFilters;
     /** The first page rendered on the server for those filters, when the API answered */
     initialPage: (JobsPage<Card> & { fetchedAt?: number }) | null;
 }
 
+const queryOf = (filters: JobListFilters) => jobFiltersToSearch(filters).toString();
+
 /**
  * The job list with its filters. The address is the state: it changes as the filters do (without a
  * navigation, so the server is not asked again for every key typed), and a link with filters in it
  * opens the same list. A signed-in member also sees which jobs they saved, with a save button.
+ *
+ * The list starts from the address the browser has now (`useSearchParams`), not from what the server
+ * rendered: coming back from a job with Back shows the page the server rendered earlier, but the
+ * address already holds the filters the member had set, and the list must follow the address.
  */
 export function JobsExplorer({ initialFilters, initialPage }: Props) {
+    const params = useSearchParams();
+    const fromAddress = useMemo(() => (params ? parseJobFilters(params) : initialFilters), [params, initialFilters]);
+    const key = queryOf(fromAddress);
+    const [start, setStart] = useState({ epoch: 0, filters: fromAddress });
+    // What this list wrote into the address, so only a change it did not make (Back, Forward, a link) restarts it
+    const lastWritten = useRef(key);
+    const inFlight = useRef(new Set<string>());
+    useEffect(() => {
+        if (key === lastWritten.current) { inFlight.current.clear(); return; }
+        if (inFlight.current.delete(key)) return;
+        lastWritten.current = key;
+        setStart((s) => ({ epoch: s.epoch + 1, filters: fromAddress }));
+    }, [key, fromAddress]);
+    const wrote = useCallback((qs: string) => { lastWritten.current = qs; inFlight.current.add(qs); }, []);
+    return <Explorer key={start.epoch} start={start.filters} serverFilters={initialFilters} initialPage={initialPage} onWrite={wrote} />;
+}
+
+function Explorer({ start: initialFilters, serverFilters, initialPage, onWrite }: {
+    start: JobListFilters; serverFilters: JobListFilters; initialPage: Props['initialPage']; onWrite: (qs: string) => void;
+}) {
     const { user } = useAuth();
     const id = useId();
     const [search, setSearch] = useState(initialFilters.search ?? '');
@@ -81,16 +109,19 @@ export function JobsExplorer({ initialFilters, initialPage }: Props) {
     }, [dSearch, category, level, where, type, dMin, dMax, featured, sort]);
 
     // The server page is for the filters of the address it rendered; any other set asks the API
-    const seed = jobsApiQuery(filters) === jobsApiQuery(initialFilters) ? initialPage : null;
+    const seed = jobsApiQuery(filters) === jobsApiQuery(serverFilters) ? initialPage : null;
     const query = useJobs(filters, seed, initialPage?.fetchedAt);
 
     // The address follows the filters, without a navigation
     const first = useRef(true);
     useEffect(() => {
         if (first.current) { first.current = false; return; }
-        const qs = jobFiltersToSearch(filters).toString();
-        try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`); } catch { /* the address stays as it was */ }
-    }, [filters]);
+        const qs = queryOf(filters);
+        onWrite(qs);
+        // `null` state: Next adds its own bookkeeping to it and tells `useSearchParams` and the router about the new
+        // address. Passing the current state back would skip that, and Back would then show the wrong list.
+        try { window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`); } catch { /* the address stays as it was */ }
+    }, [filters, onWrite]);
 
     const items = useMemo(() => {
         const seen = new Set<string>();
@@ -100,6 +131,8 @@ export function JobsExplorer({ initialFilters, initialPage }: Props) {
     const total = query.data?.pages[0]?.pagination.total ?? null;
     const active = [category, level, where, type, salaryMin, salaryMax].filter(Boolean).length + (featured ? 1 : 0) + (sort !== 'createdAt' ? 1 : 0);
     const dirty = active > 0 || search !== '';
+
+    const capped = hitSortCap(filters, query.data?.pages);
 
     const clear = () => {
         setSearch(''); setCategory(''); setLevel(''); setWhere(''); setType(''); setSort('createdAt'); setSalaryMin(''); setSalaryMax(''); setFeatured(false);
@@ -148,7 +181,7 @@ export function JobsExplorer({ initialFilters, initialPage }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                     {dirty && <button type="button" onClick={clear} className={`${btnSecondary} !px-3 !py-2`}><X className="h-4 w-4" aria-hidden="true" /> Clear filters</button>}
                     {user && <Link href="/jobs/saved" className={`${btnSecondary} !px-3 !py-2`}><Bookmark className="h-4 w-4" aria-hidden="true" /> Saved jobs</Link>}
-                    <Link href="/employer/post" className={`${btnPrimary} !px-3 !py-2`}><Plus className="h-4 w-4" aria-hidden="true" /> Post a job</Link>
+                    {!isReviewerOnly(user?.role) && <Link href="/employer/post" className={`${btnPrimary} !px-3 !py-2`}><Plus className="h-4 w-4" aria-hidden="true" /> Post a job</Link>}
                 </div>
             </div>
 
@@ -164,12 +197,18 @@ export function JobsExplorer({ initialFilters, initialPage }: Props) {
                     <ul className={`space-y-4 ${query.isPlaceholderData ? 'opacity-60' : ''}`} aria-label="Jobs" data-testid="jobs-list">
                         {items.map((job) => (
                             <li key={job._id}>
-                                <JobCard job={job} saveSlot={user ? <SaveJobButton id={job._id} title={job.title} saved={saved.has(job._id)} variant="icon" /> : undefined} />
+                                <JobCard job={job} saveSlot={user ? <SaveJobButton id={job._id} title={job.title} saved={saved.has(job._id)} pending={query.isPlaceholderData} variant="icon" /> : undefined} />
                             </li>
                         ))}
                     </ul>
                     {query.isError && (
                         <p role="alert" className="mt-4 text-center text-sm text-red-800 dark:text-red-300">Could not load more jobs. <button type="button" className={`underline ${focusRing}`} onClick={() => void query.fetchNextPage()}>Try again</button></p>
+                    )}
+                    {capped && (
+                        <p className={`mt-8 text-center text-sm ${muted}`} data-testid="sort-cap">
+                            Showing the first {items.length} jobs for this sort. Narrow the filters or sort by newest to see the rest.
+                            <button type="button" className={`ml-1 underline ${focusRing}`} onClick={() => setSort('createdAt')}>Sort by newest</button>
+                        </p>
                     )}
                     {query.hasNextPage && (
                         <div className="mt-8 text-center">

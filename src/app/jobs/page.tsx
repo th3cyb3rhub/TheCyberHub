@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Briefcase, ShieldCheck } from 'lucide-react';
 import { muted, pageBg } from '@/components/events/styles';
 import { JobsExplorer } from '@/components/jobs/JobsExplorer';
+import { PostJobLink } from '@/components/jobs/PostJobLink';
 import { JOB_LIMITS } from '@/lib/jobs/constants';
 import { jobsListMetadata } from '@/lib/jobs/metadata';
 import { hasJobFilters, parseJobFilters } from '@/lib/jobs/query';
@@ -31,7 +31,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                     </p>
                     <p className={`mt-2 flex items-center gap-1.5 text-sm ${muted}`}>
                         <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Every posting is reviewed before it appears.
-                        <Link href="/employer" className="ml-1 text-orange-800 underline dark:text-orange-400">Hiring? Post a job</Link>
+                        <PostJobLink href="/employer" className="ml-1 text-orange-800 underline dark:text-orange-400">Hiring? Post a job</PostJobLink>
                     </p>
                 </header>
                 {/* Keyed by the address filters, so a link with other filters starts a fresh list */}
