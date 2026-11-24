@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Ban, Loader2, Save, Trash2, Upload } from 'lucide-react';
@@ -96,13 +96,17 @@ export function CompetitionForm({ competition }: { competition?: CtfCompetition 
         setErrors((old) => clearPrizeErrors(old, typed));
     };
 
-    const focusFirst = () => window.setTimeout(() => (formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]') ?? bannerRef.current)?.focus(), 0);
     const fail = (found: Record<string, string>, message: string) => {
         setErrors(found);
         setBanner({ message, lines: unattachedErrors(found) });
         setAttempt((n) => n + 1);
-        focusFirst();
     };
+
+    // After the errors are on screen: the first marked field, or the banner when no field carries one
+    useEffect(() => {
+        if (attempt === 0) return;
+        (formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]') ?? bannerRef.current)?.focus();
+    }, [attempt]);
 
     const onError = (err: unknown) => {
         const fields = formErrors(err);
