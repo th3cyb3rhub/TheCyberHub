@@ -2,59 +2,23 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ExternalLink, FileText, GraduationCap, Loader2, Undo2 } from 'lucide-react';
+import { FileText, GraduationCap, Loader2, Undo2 } from 'lucide-react';
 import { FullPageSpinner, PageShell, useRequireLogin } from '@/components/events/PageShell';
 import { btnSecondary, cardPad, chip, focusRing, muted } from '@/components/events/styles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useMyApplications } from '@/hooks/queries/useInternships';
-import { hostOf, safeHref, TYPE_LABELS } from '@/lib/internships/display';
+import { TYPE_LABELS } from '@/lib/internships/display';
 import { canWithdraw } from '@/lib/internships/review';
 import { APPLICATION_STATUSES, type ApplicationStatus, type ApplicationCohort, type MyApplication } from '@/types/internship';
 import { APPLICATION_STATUS_LABELS } from '@/lib/internships/display';
 import { ApplicationProgress, ApplicationTimeline } from './ApplicationTimeline';
-import { EXTERNAL_REL } from './PastCohorts';
+import { SubmittedDetails } from './SubmittedDetails';
 import { ErrorState, ListSkeleton } from './ListStates';
 import { ApplicationStatusBadge, CohortStatusBadge } from './StatusBadges';
 import { ViewerTime } from './ViewerTime';
 import { WithdrawDialog } from './WithdrawDialog';
 
 const cohortOf = (a: MyApplication): ApplicationCohort | null => (a.cohort && typeof a.cohort === 'object' ? a.cohort : null);
-
-export function SubmittedDetails({ application }: { application: Pick<MyApplication, 'coverLetter' | 'answers' | 'githubUrl' | 'linkedinUrl' | 'portfolioUrl' | 'resumeUrl'> }) {
-    const links: { name: string; href: string }[] = [];
-    for (const [name, url] of [['GitHub', application.githubUrl], ['LinkedIn', application.linkedinUrl], ['Portfolio', application.portfolioUrl], ['Resume', application.resumeUrl]] as const) {
-        const href = safeHref(url);
-        if (href) links.push({ name, href });
-    }
-    return (
-        <div className="space-y-4 text-sm">
-            <div>
-                <h4 className="mb-1 font-medium text-gray-900 dark:text-white">Cover letter</h4>
-                <p className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">{application.coverLetter}</p>
-            </div>
-            {links.length > 0 && (
-                <div>
-                    <h4 className="mb-1 font-medium text-gray-900 dark:text-white">Links</h4>
-                    <ul className="flex flex-wrap gap-x-4 gap-y-1">
-                        {links.map(({ name, href }) => (
-                            <li key={name}><a href={href} target="_blank" rel={EXTERNAL_REL} className={`inline-flex items-center gap-1 rounded text-orange-800 underline dark:text-orange-300 ${focusRing}`}>{name} <ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only">({hostOf(href)}, opens in a new tab)</span></a></li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-            {application.answers.length > 0 && (
-                <dl className="space-y-3">
-                    {application.answers.map((a) => (
-                        <div key={a.field}>
-                            <dt className="font-medium text-gray-900 dark:text-white">{a.label}</dt>
-                            <dd className="whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">{a.value}</dd>
-                        </div>
-                    ))}
-                </dl>
-            )}
-        </div>
-    );
-}
 
 function ApplicationCard({ application, onWithdraw }: { application: MyApplication; onWithdraw: (a: MyApplication) => void }) {
     const cohort = cohortOf(application);

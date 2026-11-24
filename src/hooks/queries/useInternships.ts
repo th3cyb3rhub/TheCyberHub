@@ -6,7 +6,7 @@ import { useToast } from '@/context/ToastContext';
 import * as api from '@/lib/api/internships';
 import { internshipErrorMessage } from '@/lib/internships/errors';
 import type {
-    ApplicationStatus, ApplyPayload, CohortCard, CohortDetail, CohortFilters, CohortPayload, MyApplication, Page,
+    ApplicationStatus, ApplyPayload, CohortCard, CohortDetail, CohortFilters, CohortPayload, CohortStatus, MyApplication, Page,
     StaffApplication,
 } from '@/types/internship';
 
@@ -99,11 +99,11 @@ export function useMyApplications(params: { status?: ApplicationStatus } = {}, e
 }
 
 /** Staff: every cohort (drafts and switched-off ones too) with its counters */
-export function useAdminInternships(params: { page?: number } = {}, enabled = true) {
+export function useAdminInternships(params: { page?: number; status?: CohortStatus | '' } = {}, enabled = true) {
     const { user } = useAuth();
     return useQuery({
         queryKey: internshipKeys.adminList(params, user?.id ?? null),
-        queryFn: () => api.listAdminCohorts({ page: params.page, limit: ADMIN_PAGE_SIZE }),
+        queryFn: () => api.listAdminCohorts({ page: params.page, status: params.status, limit: ADMIN_PAGE_SIZE }),
         enabled: enabled && !!user,
         placeholderData: keepPreviousData,
         staleTime: 15_000,

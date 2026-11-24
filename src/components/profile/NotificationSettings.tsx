@@ -26,6 +26,7 @@ const ROWS: Row[] = [
     { label: 'Weekly challenge', hint: 'The new weekly challenge is live', inApp: 'weeklyChallenges', email: 'weeklyChallenges' },
     { label: 'Events', hint: 'Reminders for events you joined', inApp: 'events', email: 'events' },
     { label: 'Contributions', hint: 'Your submissions are approved or rejected', inApp: 'contributions', email: 'contributions' },
+    { label: 'Internships', hint: 'Your application is reviewed, accepted or rejected', inApp: 'internships', email: 'internships' },
     { label: 'Job matches', hint: 'Jobs that fit your skills', inApp: 'jobMatches', email: 'jobMatches' },
     { label: 'Security alerts', hint: 'Sign-ins and changes to your account', inApp: 'securityAlerts', email: 'securityAlerts' },
     { label: 'Newsletter', hint: 'Occasional news from the team', email: 'newsletter' },

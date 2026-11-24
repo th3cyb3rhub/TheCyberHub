@@ -3,7 +3,7 @@ export const NOTIFICATION_TYPES = [
     'reply', 'mention', 'answer-accepted', 'badge', 'event-reminder', 'follow',
     'contribution-approved', 'contribution-rejected', 'weekly-challenge',
     'path-completed', 'system', 'job-match', 'writeup-vote',
-    'like', 'reshare', 'comment', 'moderation', 'challenge-solved',
+    'like', 'reshare', 'comment', 'moderation', 'challenge-solved', 'internship-update',
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_TYPES)[number];
@@ -57,6 +57,7 @@ export interface EmailPreferences {
     weeklyChallenges: boolean;
     newsletter: boolean;
     jobMatches: boolean;
+    internships: boolean;
     securityAlerts: boolean;
 }
 
@@ -73,6 +74,7 @@ export interface InAppPreferences {
     contributions: boolean;
     weeklyChallenges: boolean;
     jobMatches: boolean;
+    internships: boolean;
     securityAlerts: boolean;
 }
 

@@ -55,7 +55,7 @@ export async function withdrawApplication(id: string, reason?: string): Promise<
 
 /** Every cohort, drafts and switched-off ones too, with the counters */
 export function listAdminCohorts(filters: CohortFilters = {}): Promise<Page<CohortCard>> {
-    return fetchApi(`${E.BASE}${query({ all: true, type: filters.type, page: filters.page, limit: filters.limit })}`);
+    return fetchApi(`${E.BASE}${query({ all: true, type: filters.type, status: filters.status, page: filters.page, limit: filters.limit })}`);
 }
 
 export async function createCohort(body: CohortPayload): Promise<CohortDetail> {

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Award, Bell, Briefcase, Calendar, CheckCircle2, FileCheck2, FileX2, Flag, Heart,
+    Award, Bell, Briefcase, GraduationCap, Calendar, CheckCircle2, FileCheck2, FileX2, Flag, Heart,
     MessageSquare, Repeat2, ShieldAlert, ThumbsUp, Trophy, UserPlus, AtSign, Route, Reply,
 } from 'lucide-react';
 
@@ -22,6 +22,7 @@ export const NOTIFICATION_META: Record<string, Meta> = {
     'contribution-approved': { label: 'Contributions', icon: FileCheck2, color: 'text-green-400' },
     'contribution-rejected': { label: 'Contributions', icon: FileX2, color: 'text-red-400' },
     'path-completed': { label: 'Learning paths', icon: Route, color: 'text-yellow-400' },
+    'internship-update': { label: 'Internships', icon: GraduationCap, color: 'text-cyan-400' },
     'job-match': { label: 'Job matches', icon: Briefcase, color: 'text-yellow-400' },
     'writeup-vote': { label: 'Writeup votes', icon: ThumbsUp, color: 'text-orange-400' },
     moderation: { label: 'Moderation', icon: ShieldAlert, color: 'text-red-400' },
@@ -43,7 +44,7 @@ export const NOTIFICATION_GROUPS: { id: string; label: string; types: string[] }
     { id: 'social', label: 'Social', types: ['like', 'reshare', 'follow', 'writeup-vote'] },
     { id: 'achievements', label: 'Achievements', types: ['badge', 'challenge-solved', 'weekly-challenge', 'path-completed'] },
     { id: 'events', label: 'Events', types: ['event-reminder'] },
-    { id: 'account', label: 'Account', types: ['system', 'moderation', 'contribution-approved', 'contribution-rejected', 'job-match'] },
+    { id: 'account', label: 'Account', types: ['system', 'moderation', 'contribution-approved', 'contribution-rejected', 'job-match', 'internship-update'] },
 ];
 
 /** Only app-relative links are followed; a notification must never send a member off-site */

@@ -12,8 +12,8 @@ vi.mock('@/components/notifications/PushSettings', () => ({ default: () => null 
 import NotificationSettings from '../NotificationSettings'
 
 const prefs = () => ({
-    email: { replies: true, mentions: true, badges: true, events: true, follows: false, contributions: true, weeklyChallenges: true, newsletter: true, jobMatches: true, securityAlerts: true },
-    inApp: { replies: true, mentions: true, badges: true, events: true, follows: true, likes: true, comments: true, reshares: true, challenges: true, contributions: true, weeklyChallenges: true, jobMatches: true, securityAlerts: true },
+    email: { replies: true, mentions: true, badges: true, events: true, follows: false, contributions: true, weeklyChallenges: true, newsletter: true, jobMatches: true, internships: true, securityAlerts: true },
+    inApp: { replies: true, mentions: true, badges: true, events: true, follows: true, likes: true, comments: true, reshares: true, challenges: true, contributions: true, weeklyChallenges: true, jobMatches: true, internships: true, securityAlerts: true },
     quietHours: { enabled: true, start: '22:00', end: '08:00', timezone: 'Europe/London' },
     emailDigest: { enabled: true, frequency: 'weekly' },
 })
