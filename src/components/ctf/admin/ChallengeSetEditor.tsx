@@ -123,8 +123,8 @@ function Picker({ inSet, busy, onAdd, full }: { inSet: Set<string>; busy: boolea
                                                 <span>{pointsText(c.basePoints)}</span>
                                             </p>
                                         </div>
-                                        <button type="button" className={`${btnSecondary} !px-3 !py-1.5 text-xs`} disabled={added || busy || full} onClick={() => onAdd(c)}>
-                                            {added ? 'In the set' : <><Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add<span className="sr-only"> {c.title}</span></>}
+                                        <button type="button" className={`${btnSecondary} !px-3 !py-1.5 text-xs`} disabled={added || busy || full} onClick={() => onAdd(c)} aria-label={added ? `${c.title} is in the set` : `Add ${c.title}`}>
+                                            {added ? 'In the set' : <><Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add</>}
                                         </button>
                                     </li>
                                 );

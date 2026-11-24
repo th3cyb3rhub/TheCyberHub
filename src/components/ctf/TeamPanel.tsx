@@ -96,8 +96,8 @@ function MemberRow({ member, captain, you, canKick, onKick }: { member: CtfTeamM
                 </span>
             </span>
             {canKick && (
-                <button type="button" onClick={onKick} className={`${btnSecondary} !px-3 !py-1.5 text-xs`}>
-                    <UserMinus className="h-3.5 w-3.5" aria-hidden="true" /> Remove<span className="sr-only"> {member.username}</span>
+                <button type="button" onClick={onKick} className={`${btnSecondary} !px-3 !py-1.5 text-xs`} aria-label={`Remove ${member.username}`}>
+                    <UserMinus className="h-3.5 w-3.5" aria-hidden="true" /> Remove
                 </button>
             )}
         </li>

@@ -10,7 +10,7 @@ import { flagSchema } from './schemas';
  *
  * - idle:        the box is open; `notice` says what the last send came to
  * - submitting:  one request is in flight; a second send is ignored
- * - waiting:     the limit of 10 sends a minute was hit; the box is off until `until` (a browser clock
+ * - waiting:     a send limit was hit (10 a minute per challenge, 30 in all); the box is off until `until` (a browser clock
  *                instant, counted from when the answer arrived, never a server instant)
  * - success:     the flag was right
  * - solved:      the challenge was already solved for the member or the team (409)

@@ -58,12 +58,12 @@ function Row({ competition, canWrite }: { competition: CtfCompetitionCard; canWr
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/ctf/competitions/${encodeURIComponent(competition.slug)}`} className={`${btnSecondary} !px-3 !py-2`}>
-                        <ExternalLink className="h-4 w-4" aria-hidden="true" /> View<span className="sr-only"> {competition.title}</span>
+                    <Link href={`/ctf/competitions/${encodeURIComponent(competition.slug)}`} className={`${btnSecondary} !px-3 !py-2`} aria-label={`View ${competition.title}`}>
+                        <ExternalLink className="h-4 w-4" aria-hidden="true" /> View
                     </Link>
                     {canWrite && (
-                        <Link href={`/admin/ctf/${encodeURIComponent(competition.slug)}/edit`} className={`${btnSecondary} !px-3 !py-2`}>
-                            <Pencil className="h-4 w-4" aria-hidden="true" /> Edit<span className="sr-only"> {competition.title}</span>
+                        <Link href={`/admin/ctf/${encodeURIComponent(competition.slug)}/edit`} className={`${btnSecondary} !px-3 !py-2`} aria-label={`Edit ${competition.title}`}>
+                            <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
                         </Link>
                     )}
                 </div>
