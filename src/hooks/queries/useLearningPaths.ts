@@ -5,7 +5,7 @@ import * as api from '@/lib/api/learning';
 import { learningErrorMessage } from '@/lib/learning/errors';
 import { applyServerProgress, applyTick, rewardMessages } from '@/lib/learning/progress';
 import type {
-    AdminPathFilters, CatalogueFilters, EditorPath, LearningCard, LearningDetail, LearningPage, LearningProgress,
+    AdminPathFilters, CatalogueFilters, Certificate, EditorPath, LearningCard, LearningDetail, LearningPage, LearningProgress,
     PathInput, ProgressChange,
 } from '@/types/learning';
 
@@ -90,11 +90,12 @@ export function useLearningProgressList({ enabled = true }: { enabled?: boolean 
     });
 }
 
-export function useCertificate(id: string) {
+export function useCertificate(id: string, initialData?: Certificate | null) {
     return useQuery({
         queryKey: learningKeys.certificate(id),
         queryFn: () => api.verifyCertificate(id),
         enabled: !!id,
+        initialData: initialData ?? undefined,
         staleTime: 5 * 60_000,
         retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 2,
     });

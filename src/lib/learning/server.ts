@@ -131,3 +131,15 @@ export async function fetchSitemapRows(path: string, { max = 5000, budgetMs = 15
     }
     return out.slice(0, max);
 }
+
+/** The first page of the public catalogue for one kind, for the ItemList of a catalogue page */
+export async function fetchPublicList(kind: 'roadmap' | 'path'): Promise<LearningCard[]> {
+    try {
+        const res = await fetch(`${API_URL}/api/learning-paths?kind=${kind}&limit=50`, { next: { revalidate: 60, tags: ['learning-paths'] }, signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return [];
+        const body = await res.json();
+        return Array.isArray(body?.data) ? body.data : [];
+    } catch {
+        return [];
+    }
+}
