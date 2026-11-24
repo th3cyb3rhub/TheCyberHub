@@ -10,7 +10,7 @@ import { ApiError } from '@/lib/api';
 import { CTF_LIMITS } from '@/lib/ctf/constants';
 import { ctfErrorCode, isStaleState } from '@/lib/ctf/errors';
 import { refreshPublicCtf } from '@/lib/ctf/revalidate';
-import { isPlayable } from '@/lib/ctf/status';
+import { effectiveCtfStatus, isPlayable } from '@/lib/ctf/status';
 import type {
     CtfChallenge, CtfCompetition, CtfCompetitionCard, CtfDeleteResult, CtfLeaderboard, CtfListFilters, CtfMe, CtfPage, CtfPayload, CtfResults, CtfStatus,
     CtfSubmitResult, CtfTeam,
@@ -392,10 +392,16 @@ export function useKickCtfMember() {
     });
 }
 
-/** Show the solve on the cached challenge list at once; the refetch confirms it */
+/**
+ * Show the solve on the cached challenge list at once; the refetch confirms it. The count other
+ * players see follows the freeze, so while the competition is frozen (or not known to be running)
+ * the player's own tick is set but the count is left for the refetch to settle.
+ */
 function markSolved(qc: QueryClient, slug: string, userId: string | null, challengeId: string) {
+    const known = qc.getQueryData<CtfCompetition>(ctfKeys.detail(slug, userId)) ?? qc.getQueryData<CtfCompetition>(ctfKeys.detail(slug, null));
+    const counts = !!known && effectiveCtfStatus(known) === 'live';
     qc.setQueryData<CtfChallenge[]>(ctfKeys.challenges(slug, userId), (old) => (
-        old ? old.map((c) => (c._id === challengeId ? { ...c, solved: true, solveCount: c.solveCount + 1 } : c)) : old
+        old ? old.map((c) => (c._id === challengeId ? { ...c, solved: true, solveCount: counts ? c.solveCount + 1 : c.solveCount } : c)) : old
     ));
 }
 

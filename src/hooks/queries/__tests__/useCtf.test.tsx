@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { ctfErrorMessage } from '@/lib/ctf/errors'
 import { makeChallenge, makeCompetition, makeTeam, SLUG } from '@/lib/ctf/__tests__/fixtures'
@@ -234,6 +234,35 @@ describe('submitting a flag', () => {
         const list = qc.getQueryData<{ _id: string; solved: boolean; solveCount: number }[]>(ctfKeys.challenges(SLUG, 'u1'))
         expect(list?.find((c) => c._id === 'ch1')?.solved).toBe(true)
         expect(list?.find((c) => c._id === 'ch2')?.solved).toBe(false)
+    })
+
+    describe('the solve count shown at once', () => {
+        const solve = async () => {
+            api.submitFlag.mockResolvedValueOnce(right)
+            qc.setQueryData(ctfKeys.challenges(SLUG, 'u1'), [makeChallenge({ _id: 'ch1', solveCount: 4 })])
+            const { result } = renderHook(() => useSubmitCtfFlag(), { wrapper })
+            await act(async () => { await result.current.mutateAsync({ slug: SLUG, challengeId: 'ch1', flag: 'flag{x}' }) })
+            return qc.getQueryData<{ solved: boolean; solveCount: number }[]>(ctfKeys.challenges(SLUG, 'u1'))?.[0]
+        }
+        const competition = () => makeCompetition({ status: 'live', startDate: '2026-12-05T10:00:00.000Z', endDate: '2026-12-07T10:00:00.000Z', frozenAt: '2026-12-07T08:00:00.000Z' })
+
+        afterEach(() => { vi.useRealTimers() })
+
+        it('counts the solve while the competition is live', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-12-06T12:00:00.000Z'))
+            qc.setQueryData(ctfKeys.detail(SLUG, 'u1'), competition())
+            expect(await solve()).toMatchObject({ solved: true, solveCount: 5 })
+        })
+
+        it('ticks the challenge but leaves the count alone during a freeze: the public count follows the freeze', async () => {
+            vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-12-07T09:00:00.000Z'))
+            qc.setQueryData(ctfKeys.detail(SLUG, 'u1'), competition())
+            expect(await solve()).toMatchObject({ solved: true, solveCount: 4 })
+        })
+
+        it('leaves the count alone when it is not known that the competition is live', async () => {
+            expect(await solve()).toMatchObject({ solved: true, solveCount: 4 })
+        })
     })
 
     it('invalidates nothing after a wrong flag', async () => {

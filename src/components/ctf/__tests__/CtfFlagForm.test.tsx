@@ -69,7 +69,8 @@ describe('CtfFlagForm', () => {
             })
         })
         const ok = screen.getByTestId('flag-success')
-        expect(ok).toHaveAttribute('role', 'status')
+        // The verdict sits in the one live region the form keeps mounted
+        expect(ok.closest('[role="status"]')).toBe(screen.getByTestId('flag-status'))
         expect(ok).toHaveTextContent('+90 points')
         expect(ok).toHaveTextContent('your team')
         expect(ok).toHaveTextContent('First blood')
@@ -110,6 +111,69 @@ describe('CtfFlagForm', () => {
         send('flag{a}')
         act(() => { last()[1].onError?.(new ApiError('x', 403, code)) })
         expect(screen.getByTestId('flag-blocked')).toHaveTextContent(words)
+    })
+
+    it('keeps one live region mounted through every state, so each verdict is announced', () => {
+        const view = renderForm()
+        const region = screen.getByTestId('flag-status')
+        expect(region).toHaveAttribute('role', 'status')
+        expect(region).toHaveAttribute('aria-live', 'polite')
+        expect(screen.getAllByRole('status')).toHaveLength(1)
+        send('flag{a}')
+        expect(screen.getByTestId('flag-status')).toBe(region)
+        expect(region).toHaveTextContent('Checking your flag.')
+        act(() => { last()[1].onSuccess?.({ correct: false, message: 'no', attemptsRecent: 1, attemptLimit: 10, windowSeconds: 60 }); last()[1].onSettled?.() })
+        expect(screen.getByTestId('flag-status')).toBe(region)
+        expect(region).toHaveTextContent('That is not the flag')
+        send('flag{b}')
+        act(() => {
+            last()[1].onSuccess?.({ correct: true, message: 'ok', pointsEarned: 5, firstBlood: false, scope: 'user', teamId: null, accountPointsAwarded: false, newBadges: [] })
+            last()[1].onSettled?.()
+        })
+        expect(screen.getByTestId('flag-status')).toBe(region)
+        expect(region).toHaveTextContent('+5 points')
+        expect(screen.getAllByRole('status')).toHaveLength(1)
+        // Even a competition that ends under the player's hands is said in the same region
+        view.rerender(<CtfFlagForm slug="winter-ctf" challenge={{ ...challenge, solved: false }} status="ended" signedIn teamIssue={null} onTeamTab={vi.fn()} />)
+        expect(screen.getByTestId('flag-status')).toBe(region)
+    })
+
+    it('announces a competition that ended while the form was open', () => {
+        const view = renderForm()
+        const region = screen.getByTestId('flag-status')
+        view.rerender(<CtfFlagForm slug="winter-ctf" challenge={challenge} status="ended" signedIn teamIssue={null} onTeamTab={vi.fn()} />)
+        expect(screen.getByTestId('flag-status')).toBe(region)
+        expect(region).toHaveTextContent('The competition has ended: flags are closed.')
+    })
+
+    it('moves focus to the result when a right flag makes the box go away', () => {
+        renderForm()
+        send('flag{yes}')
+        expect(document.activeElement).not.toBe(screen.getByTestId('flag-status'))
+        act(() => {
+            last()[1].onSuccess?.({ correct: true, message: 'ok', pointsEarned: 5, firstBlood: false, scope: 'user', teamId: null, accountPointsAwarded: false, newBadges: [] })
+            last()[1].onSettled?.()
+        })
+        expect(screen.queryByLabelText(/Flag/)).toBeNull()
+        expect(document.activeElement).toBe(screen.getByTestId('flag-status'))
+    })
+
+    it('moves focus to the result when the challenge turns out solved, and back to the box after a wrong flag', () => {
+        renderForm()
+        send('flag{a}')
+        act(() => { last()[1].onSuccess?.({ correct: false, message: 'no', attemptsRecent: 1, attemptLimit: 10, windowSeconds: 60 }); last()[1].onSettled?.() })
+        expect(document.activeElement).toBe(box())
+        send('flag{b}')
+        act(() => { last()[1].onError?.(new ApiError('x', 409, 'CTF_ALREADY_SOLVED')); last()[1].onSettled?.() })
+        expect(document.activeElement).toBe(screen.getByTestId('flag-status'))
+    })
+
+    it('puts focus on the result, not the disabled box, when a wait starts', () => {
+        renderForm()
+        send('flag{a}')
+        act(() => { last()[1].onError?.(new ApiError('slow', 429, 'RATE_LIMIT_EXCEEDED', undefined, { retryAfter: 30 })); last()[1].onSettled?.() })
+        expect(box()).toBeDisabled()
+        expect(document.activeElement).toBe(screen.getByTestId('flag-status'))
     })
 
     it('lets the box open again a few seconds after "not started": the page clock may be ahead of the server', () => {
