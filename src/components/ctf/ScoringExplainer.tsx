@@ -42,7 +42,7 @@ export function ScoringExplainer({ mode, teamsEnabled, awardsPoints }: { mode: C
             <p className={`mt-3 flex items-start gap-2 text-sm ${muted}`}>
                 <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 {awardsPoints
-                    ? 'Points you earn here are also added to your account and count on the global leaderboard.'
+                    ? 'Points you earn here can also be added to your account and count on the global leaderboard. A challenge that was already paid to your account through another source is not paid twice.'
                     : 'Points you earn here count on this competition’s board only, not on the global leaderboard.'}
             </p>
         </div>

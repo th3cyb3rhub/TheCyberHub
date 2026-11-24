@@ -170,6 +170,15 @@ describe('live board', () => {
         vi.useRealTimers()
     })
 
+    it('stays on the timer when the room refuses the join (rate limited)', async () => {
+        const socket = fakeSocket()
+        socket.emit.mockImplementation((name: string, _p: unknown, ack?: (a: { ok: boolean; error?: string }) => void) => { if (name === 'ctf:join') ack?.({ ok: false, error: 'rate_limited' }) })
+        socketCtx.current = { socket, connected: true }
+        const { result } = renderHook(() => useCtfLiveBoard(SLUG, { enabled: true }), { wrapper })
+        await act(async () => { await Promise.resolve() })
+        expect(result.current).toBe(false)
+    })
+
     it('does nothing for a visitor without a socket', () => {
         const { result } = renderHook(() => useCtfLiveBoard(SLUG, { enabled: true }), { wrapper })
         expect(result.current).toBe(false)

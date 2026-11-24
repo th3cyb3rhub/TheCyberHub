@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Crown, Hourglass, Medal, Trophy, UserCheck } from 'lucide-react';
+import { ArrowLeft, Crown, Hourglass, Medal, Snowflake, Trophy, UserCheck } from 'lucide-react';
 import { btnPrimary, btnSecondary, card, cardPad, focusRing, muted, pageBg } from '@/components/events/styles';
 import { ViewerTime } from '@/components/internships/ViewerTime';
 import { useCtfCompetition, useCtfResults } from '@/hooks/queries/useCtf';
@@ -62,6 +62,13 @@ export function ResultsBody({ results }: { results: CtfResults }) {
                 <h1 className="break-words text-3xl font-bold text-gray-900 dark:text-white">{c.title}: final results</h1>
                 <p className={`mt-2 text-sm ${muted}`}>{formatRange(c, c.timezone, { withYear: true })}</p>
             </header>
+
+            {results.frozen && (
+                <p role="status" className="mb-6 flex items-start gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-950 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100" data-testid="results-frozen">
+                    <Snowflake className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span><strong>Frozen standings.</strong> These are the standings as they stood when the board was frozen. Flags sent since still count and may change the final result.</span>
+                </p>
+            )}
 
             <dl className="mb-8 grid grid-cols-3 gap-3" data-testid="totals">
                 {[

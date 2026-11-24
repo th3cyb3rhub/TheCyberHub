@@ -225,6 +225,8 @@ export interface CtfResults {
         status: CtfStatus;
     };
     mode: 'solo' | 'team';
+    /** The standings are the public, frozen ones */
+    frozen?: boolean;
     podium: CtfBoardEntry[];
     standings: CtfBoardEntry[];
     challenges: CtfResultChallenge[];

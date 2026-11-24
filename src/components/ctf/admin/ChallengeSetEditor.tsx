@@ -95,10 +95,10 @@ function Picker({ inSet, busy, onAdd, full }: { inSet: Set<string>; busy: boolea
             <label htmlFor="picker-search" className="mb-1.5 block text-sm font-medium text-gray-800 dark:text-gray-200">Add challenges</label>
             <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                <input id="picker-search" type="search" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search active challenges by title" autoComplete="off" className={`${input} pl-9`} aria-describedby="picker-hint" />
+                <input id="picker-search" type="search" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search challenges by title" autoComplete="off" className={`${input} pl-9`} aria-describedby="picker-hint" />
             </div>
             <p id="picker-hint" className={`mt-1 text-xs ${muted}`}>
-                {short ? 'Type at least two characters to search.' : 'Only active challenges can be added. A challenge in a competition is hidden from the public challenge list until the competition ends.'}
+                {short ? 'Type at least two characters to search.' : 'Active and draft challenges can be added; archived ones cannot. A challenge in a competition is hidden from the public challenge list until the competition ends.'}
             </p>
             <div className="mt-3" aria-live="polite">
                 {query.isLoading ? (
@@ -106,7 +106,7 @@ function Picker({ inSet, busy, onAdd, full }: { inSet: Set<string>; busy: boolea
                 ) : query.isError ? (
                     <p role="alert" className="text-sm text-red-800 dark:text-red-300">{ctfErrorMessage(query.error, 'Could not load challenges.')} <button type="button" className="underline" onClick={() => void query.refetch()}>Try again</button></p>
                 ) : items.length === 0 ? (
-                    <p className={`text-sm ${muted}`}>{search.trim().length >= 2 ? 'No active challenge matches that search.' : 'There are no active challenges to add.'}</p>
+                    <p className={`text-sm ${muted}`}>{search.trim().length >= 2 ? 'No challenge matches that search.' : 'There are no challenges to add.'}</p>
                 ) : (
                     <>
                         <p className="sr-only">{items.length} {items.length === 1 ? 'challenge' : 'challenges'} found</p>
@@ -121,6 +121,7 @@ function Picker({ inSet, busy, onAdd, full }: { inSet: Set<string>; busy: boolea
                                                 <span>{categoryLabel(c.category)}</span>
                                                 {c.difficulty && <CtfDifficultyBadge difficulty={c.difficulty} />}
                                                 <span>{pointsText(c.basePoints)}</span>
+                                                {c.status === 'draft' && <span className="font-medium text-amber-900 dark:text-amber-300">Draft challenge</span>}
                                             </p>
                                         </div>
                                         <button type="button" className={`${btnSecondary} !px-3 !py-1.5 text-xs`} disabled={added || busy || full} onClick={() => onAdd(c)} aria-label={added ? `${c.title} is in the set` : `Add ${c.title}`}>

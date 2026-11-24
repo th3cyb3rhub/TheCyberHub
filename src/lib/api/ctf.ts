@@ -157,17 +157,17 @@ export async function setChallenges(id: string, challenges: string[]): Promise<C
     return (await send(E.SET(id), 'PUT', { challenges })).data;
 }
 
-/** Active challenges of the existing admin list, for the picker */
+/** Active and draft challenges of the existing admin list, for the picker (`all` also returns archived ones: they are left out) */
 export async function listPickerChallenges(params: { search?: string; page?: number; limit?: number } = {}): Promise<{ items: CtfPickerChallenge[]; hasMore: boolean }> {
     const body = await fetchApi(`${API_ENDPOINTS.CHALLENGES.BASE}${query({
-        status: 'active', search: params.search && params.search.trim().length >= 2 ? params.search.trim() : undefined,
+        status: 'all', search: params.search && params.search.trim().length >= 2 ? params.search.trim() : undefined,
         page: params.page, limit: params.limit ?? 50, sortBy: 'title', sortOrder: 'asc',
     })}`);
     const rows: unknown[] = Array.isArray(body?.data) ? body.data : Array.isArray(body?.items) ? body.items : [];
     const items: CtfPickerChallenge[] = [];
     for (const row of rows) {
         const r = row as Partial<CtfPickerChallenge>;
-        if (r && typeof r._id === 'string' && typeof r.title === 'string') {
+        if (r && typeof r._id === 'string' && typeof r.title === 'string' && r.status !== 'archived') {
             items.push({ _id: r._id, title: r.title, category: String(r.category ?? ''), difficulty: String(r.difficulty ?? ''), basePoints: Number(r.basePoints) || 0, status: String(r.status ?? 'active') });
         }
     }

@@ -21,7 +21,7 @@ import { ErrorState, ListSkeleton } from './ListStates';
 export function ScoreboardPanel({ competition, status, signedIn }: { competition: CtfCompetition; status: CtfStatus; signedIn: boolean }) {
     const { user } = useAuth();
     const started = isPlayable(status) || status === 'ended';
-    const pushed = useCtfLiveBoard(competition.slug, { enabled: isPlayable(status), dynamic: competition.scoringMode === 'dynamic' });
+    const pushed = useCtfLiveBoard(competition.slug, { enabled: status === 'live', dynamic: competition.scoringMode === 'dynamic' });
     const board = useCtfLeaderboard(competition.slug, { enabled: started, status, pushed });
     const meQuery = useCtfMe(competition.slug, signedIn && started);
     const me = meQuery.data;

@@ -7,10 +7,10 @@ const auth = vi.hoisted(() => ({ user: null as { id: string; username: string } 
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: auth.user, loading: false }) }))
 const board = vi.hoisted(() => ({ data: undefined as CtfLeaderboard | undefined, isLoading: false, isError: false, error: null as unknown, isFetching: false, refetch: vi.fn() }))
 const me = vi.hoisted(() => ({ data: undefined as unknown }))
-const pushed = vi.hoisted(() => ({ value: false }))
+const pushed = vi.hoisted(() => ({ value: false, calls: [] as { enabled: boolean }[] }))
 vi.mock('@/hooks/queries/useCtf', () => ({
     useCtfLeaderboard: () => board,
-    useCtfLiveBoard: () => pushed.value,
+    useCtfLiveBoard: (_slug: string, options: { enabled: boolean }) => { pushed.calls.push(options); return pushed.value },
     useCtfMe: () => me,
 }))
 
@@ -24,7 +24,7 @@ beforeEach(() => {
     auth.user = null
     board.data = soloBoard(); board.isLoading = false; board.isError = false; board.error = null; board.isFetching = false
     me.data = undefined
-    pushed.value = false
+    pushed.value = false; pushed.calls = []
 })
 
 describe('ScoreboardPanel', () => {
@@ -107,6 +107,15 @@ describe('ScoreboardPanel', () => {
         renderPanel({ status: 'ended' })
         expect(screen.getByTestId('live-note')).toHaveTextContent('Final standings.')
         expect(screen.queryByRole('button', { name: /Refresh/ })).toBeNull()
+    })
+
+    it('does not rely on the socket while the board is frozen, and does while it is live', () => {
+        const live = renderPanel({ status: 'live' })
+        expect(pushed.calls.at(-1)?.enabled).toBe(true)
+        live.unmount()
+        renderPanel({ status: 'frozen' })
+        expect(pushed.calls.at(-1)?.enabled).toBe(false)
+        expect(screen.getByTestId('live-note')).toHaveTextContent(/refreshes about every 20 seconds/)
     })
 
     it('refreshes by hand', () => {

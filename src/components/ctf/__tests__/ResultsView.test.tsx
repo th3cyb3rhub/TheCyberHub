@@ -31,6 +31,16 @@ describe('ResultsView', () => {
         expect(podium).toHaveTextContent(/30/)
     })
 
+    it('says when the standings are the frozen ones', () => {
+        results.data = makeResults({ frozen: true })
+        const { unmount } = renderView()
+        expect(screen.getByTestId('results-frozen')).toHaveTextContent('Frozen standings')
+        unmount()
+        results.data = makeResults({ frozen: false })
+        renderView()
+        expect(screen.queryByTestId('results-frozen')).toBeNull()
+    })
+
     it('names a first blood and says when nobody solved a challenge', () => {
         results.data = makeResults()
         renderView()

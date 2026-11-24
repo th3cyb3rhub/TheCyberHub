@@ -172,9 +172,9 @@ export function PublishingSection({ values, set, err, editing }: SectionProps & 
                         </select>
                     )}
                 </Field>
-                <Toggle id="isPublic" label="Listed publicly"
-                    hint="Off makes it unlisted: it is left out of the public list, but anyone who has the link can open it, play it and see its boards. A draft is hidden from everyone except staff."
-                    checked={values.isPublic} onChange={(v) => set('isPublic', v)} error={err('isPublic')} />
+                <Toggle id="isPublic" label="Unlisted (link only)"
+                    hint="On: it is left out of the public list, but anyone who has the link can open it, play it and see its boards. A draft is hidden from everyone except staff."
+                    checked={!values.isPublic} onChange={(v) => set('isPublic', !v)} error={err('isPublic')} />
                 <Toggle id="isFeatured" label="Featured" hint="Highlighted at the top of the list." checked={values.isFeatured} onChange={(v) => set('isFeatured', v)} error={err('isFeatured')} />
             </div>
         </Section>

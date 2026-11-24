@@ -211,7 +211,8 @@ const PUSH_THROTTLE_MS = 2000;
 /**
  * Joins the competition's room on the socket the app already holds for notifications and makes the
  * board (and, in a dynamic competition, the points on the challenges) read again when a solve is
- * stored. The event carries no data. A visitor has no socket (the handshake needs a token), so the
+ * stored. The event carries no data. The room gets nothing during a freeze (only staff do), so a
+ * frozen competition is never joined: the board stays on its timer. A visitor has no socket (the handshake needs a token), so the
  * board polls for them. Returns whether pushes are arriving, so polling can slow down.
  */
 export function useCtfLiveBoard(slug: string, options: { enabled: boolean; dynamic?: boolean }): boolean {
@@ -242,7 +243,8 @@ export function useCtfLiveBoard(slug: string, options: { enabled: boolean; dynam
         };
 
         socket.on('scoreboard:update', onUpdate);
-        socket.emit('ctf:join', { slug }, (ack?: { ok?: boolean }) => { if (!cancelled) setJoined(!!ack?.ok); });
+        // `{ ok: false, error: 'rate_limited' }` leaves the board on its timer, like a visitor's
+        socket.emit('ctf:join', { slug }, (ack?: { ok?: boolean; error?: string }) => { if (!cancelled) setJoined(!!ack?.ok); });
         return () => {
             cancelled = true;
             if (timer) clearTimeout(timer);

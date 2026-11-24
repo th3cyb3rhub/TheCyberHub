@@ -82,6 +82,8 @@ export const ctfResultsSchema = z.object({
         status: z.enum(CTF_STATUSES),
     }),
     mode: z.enum(['solo', 'team']),
+    /** The standings are the ones of the freeze, not the final ones */
+    frozen: z.boolean().default(false),
     podium: z.array(boardEntry).default([]),
     standings: z.array(boardEntry).default([]),
     challenges: z.array(z.object({

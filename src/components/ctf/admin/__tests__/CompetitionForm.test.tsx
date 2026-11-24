@@ -18,6 +18,7 @@ const order = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, reset: vi.f
 const PICKER = [
     { _id: 'p1', title: 'Cookie Monster', category: 'web-security', difficulty: 'easy', basePoints: 100, status: 'active' },
     { _id: 'p2', title: 'Padding Oracle', category: 'cryptography', difficulty: 'hard', basePoints: 300, status: 'active' },
+    { _id: 'p3', title: 'Unfinished Draft', category: 'forensics', difficulty: 'easy', basePoints: 50, status: 'draft' },
 ]
 vi.mock('@/hooks/queries/useCtf', () => ({
     useCreateCtf: () => create, useUpdateCtf: () => update, useCancelCtf: () => cancel, useDeleteCtf: () => remove,
@@ -169,6 +170,23 @@ describe('CompetitionForm (create)', () => {
         expect(call(create)[0].challenges).toEqual(['p1', 'p2'])
         fireEvent.click(screen.getByRole('button', { name: 'Remove Padding Oracle' }))
         expect(screen.getAllByTestId('set-row')).toHaveLength(1)
+    })
+
+    it('marks a draft challenge in the picker and lets it be added', () => {
+        render(<CompetitionForm />)
+        expect(screen.getByTestId('picker')).toHaveTextContent('Draft challenge')
+        fireEvent.click(screen.getByRole('button', { name: 'Add Unfinished Draft' }))
+        expect(screen.getAllByTestId('set-row').map((r) => r.getAttribute('data-id'))).toEqual(['p3'])
+    })
+
+    it('labels the visibility switch Unlisted (link only) and sends isPublic the right way round', () => {
+        render(<CompetitionForm />)
+        const box = screen.getByLabelText(/Unlisted \(link only\)/)
+        expect(box).not.toBeChecked()
+        fireEvent.click(box)
+        fillBasics()
+        submit()
+        expect(call(create)[0]).toMatchObject({ isPublic: false })
     })
 
     it('goes to the list after a save and shows the server message for field errors', () => {
