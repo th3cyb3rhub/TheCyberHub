@@ -13,6 +13,9 @@ describe('learningErrorMessage', () => {
         expect(learningErrorMessage(err('RESOURCE_SELF_REVIEW', 403))).toMatch(/another moderator/i);
         expect(learningErrorMessage(err('PATH_NOT_PUBLISHABLE', 422))).toMatch(/not ready to publish/);
     });
+    it('explains an unknown step as a change by someone else', () => {
+        expect(learningErrorMessage(err('PATH_NODE_UNKNOWN', 400))).toMatch(/someone else removed it.*Load the latest version/)
+    })
     it('names the unfinished prerequisites', () => {
         expect(learningErrorMessage(err('PATH_PREREQUISITES_NOT_MET', 403, { missing: [{ title: 'Linux basics' }, { title: 'Networking' }] }))).toBe('Finish Linux basics, Networking before starting this one.');
         expect(learningErrorMessage(err('PATH_PREREQUISITES_NOT_MET', 403))).toMatch(/prerequisite/);

@@ -229,6 +229,8 @@ export function PathEditor({ pathRef }: { pathRef?: string }) {
     const status: PathStatus | null = meta?.status ?? null;
     const busy = create.isPending || update.isPending || transition.isPending;
     const published = status === 'published';
+    // The API's rule: admins edit anything, a moderator edits their own work until it is published
+    const canEdit = !editing || !meta || admin || (!!user && meta.createdBy?.id === user.id && (status === 'draft' || status === 'in_review'));
     const saveLabel = !editing ? 'Save draft' : 'Save changes';
     const nodeCount = values.modules.length;
 
@@ -250,7 +252,10 @@ export function PathEditor({ pathRef }: { pathRef?: string }) {
             {meta?.reviewNote && status === 'draft' && <p role="note" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">Changes requested: {meta.reviewNote}</p>}
             {published && <p role="note" className="mb-6 rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">This roadmap is live. Saving changes it for everyone at once, and members keep their progress on steps you keep.</p>}
 
-            <form onSubmit={(e) => { e.preventDefault(); save(); }} noValidate className="space-y-8" aria-label="Roadmap editor">
+            {!canEdit && <p role="note" className="mb-6 rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100" data-testid="read-only">You can read this roadmap but not change it. Moderators edit their own drafts until they are published; an administrator edits the rest.</p>}
+
+            <form onSubmit={(e) => { e.preventDefault(); if (canEdit) save(); }} noValidate className="space-y-8" aria-label="Roadmap editor">
+                <fieldset disabled={!canEdit} className="m-0 min-w-0 space-y-8 border-0 p-0">
                 <section className={`${cardPad} space-y-5`} aria-labelledby={`${uid}-details`}>
                     <h2 id={`${uid}-details`} className="text-lg font-semibold text-gray-900 dark:text-white">Details</h2>
                     <Field id={`${uid}-title`} label="Title" error={errors.title}>
@@ -332,13 +337,15 @@ export function PathEditor({ pathRef }: { pathRef?: string }) {
                     )}
                 </section>
 
+                </fieldset>
+
                 <div className="sticky bottom-16 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white/95 p-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95 md:bottom-0" data-testid="editor-actions">
-                    <button type="submit" disabled={busy || (editing && !dirty)} className={btnPrimary}>
+                    {canEdit && <button type="submit" disabled={busy || (editing && !dirty)} className={btnPrimary}>
                         {create.isPending || update.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />} {saveLabel}
-                    </button>
+                    </button>}
                     {editing && meta && (
                         <>
-                            {status === 'draft' && meta && <button type="button" className={btnSecondary} disabled={busy || dirty} onClick={() => run('submit', 'Sent for review.')}><Send className="h-4 w-4" aria-hidden="true" /> Submit for review</button>}
+                            {canEdit && status === 'draft' && meta && <button type="button" className={btnSecondary} disabled={busy || dirty} onClick={() => run('submit', 'Sent for review.')}><Send className="h-4 w-4" aria-hidden="true" /> Submit for review</button>}
                             {admin && (status === 'draft' || status === 'in_review') && <button type="button" className={btnSecondary} disabled={busy || dirty} onClick={() => run('publish', 'Published.')}><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Publish</button>}
                             {admin && status === 'in_review' && <button type="button" className={btnSecondary} disabled={busy || dirty} onClick={() => { setNote(''); setNoteError(null); setConfirm('changes'); }}><MessageSquareWarning className="h-4 w-4" aria-hidden="true" /> Request changes</button>}
                             {admin && published && <button type="button" className={btnSecondary} disabled={busy || dirty} onClick={() => setConfirm('unpublish')}><EyeOff className="h-4 w-4" aria-hidden="true" /> Unpublish</button>}
@@ -361,13 +368,14 @@ export function PathEditor({ pathRef }: { pathRef?: string }) {
                 open={conflict}
                 onOpenChange={setConflict}
                 title="Someone else edited this roadmap"
-                description="A newer version was saved after you opened it. Load it to see what changed, or keep editing and save over it later."
+                description="A newer version was saved after you opened it. Load it to see what the other editor changed, or save your version over theirs."
                 confirmLabel="Load the latest version"
                 onConfirm={() => void reloadLatest()}
                 asForm={false}
             >
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> Loading the latest version drops your unsaved changes.</div>
-                <button type="button" className={`${btnSecondary} mt-4 w-full`} onClick={() => void overwrite()}>Save my version over theirs</button>
+                <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">Saving your version over theirs discards every change the other editor made.</p>
+                <button type="button" className={`${btnSecondary} mt-2 w-full`} onClick={() => void overwrite()}>Save my version over theirs</button>
             </Modal>
 
             <Modal open={confirm === 'delete'} onOpenChange={(o) => !o && setConfirm(null)} title="Delete this roadmap?" description="A roadmap nobody joined is deleted. If members joined it is archived instead, so they keep their progress and certificates." confirmLabel="Delete" destructive pending={remove.isPending} error={remove.error ? learningErrorMessage(remove.error) : null}

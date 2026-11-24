@@ -17,7 +17,7 @@ const MESSAGES: Record<string, string> = {
     PATH_NOT_PUBLISHABLE: 'This roadmap is not ready to publish yet. Fix the points listed below.',
     PATH_ITEM_INVALID: 'Some links in your steps point at something that does not exist. Check the highlighted items.',
     PATH_KEY_CONFLICT: 'Two steps share a key, or a step requires one that does not exist.',
-    PATH_NODE_UNKNOWN: 'A step does not belong to this roadmap. Reload it and try again.',
+    PATH_NODE_UNKNOWN: 'A step in your form is no longer part of this roadmap, probably because someone else removed it. Load the latest version and make your changes again.',
     PATH_FORBIDDEN: 'You are not allowed to edit this roadmap.',
     CERTIFICATE_NOT_FOUND: 'This certificate could not be verified. Check the id and try again.',
     RESOURCE_NOT_FOUND: 'This resource could not be found. It may have been removed or is not public yet.',

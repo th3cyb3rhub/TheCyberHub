@@ -30,7 +30,7 @@ import { PathEditor } from '../PathEditor'
 const path = (over: Partial<EditorPath> = {}): EditorPath => ({
     id: 'p1', slug: 'web-hacking', title: 'Web hacking', kind: 'roadmap', shortDescription: 'From HTTP to exploits', description: 'A roadmap for web hackers.',
     category: 'offensive', difficulty: 'beginner', estimatedDuration: '6 weeks', skills: ['http'], moduleCount: 1, requiredCount: 1, enrollmentCount: 0, completionCount: 0,
-    isFeatured: false, publishedAt: null, status: 'draft', prerequisites: [], seo: {}, reviewedAt: null, stages: [], updatedAt: '2026-11-01T10:00:00Z',
+    isFeatured: false, publishedAt: null, status: 'draft', createdBy: { id: 'm1', username: 'mod' }, prerequisites: [], seo: {}, reviewedAt: null, stages: [], updatedAt: '2026-11-01T10:00:00Z',
     modules: [{ id: 'n1', key: 'basics', title: 'HTTP basics', description: '', stage: 'Basics', duration: '', optional: false, requires: [], items: [] }], ...over,
 } as EditorPath)
 const title = () => screen.getAllByLabelText('Title')[0] as HTMLInputElement
@@ -103,6 +103,36 @@ describe('permissions follow the role and the status', () => {
     })
 })
 
+describe('who may edit', () => {
+    it('makes the form read-only for a moderator who does not own the path', () => {
+        useAuth.mockReturnValue({ user: { id: 'm2', role: 'moderator' }, loading: false })
+        render(<PathEditor pathRef="p1" />)
+        expect(screen.getByTestId('read-only')).toBeInTheDocument()
+        expect(title()).toBeDisabled()
+        expect(screen.queryByRole('button', { name: /Save changes/ })).toBeNull()
+        expect(screen.queryByRole('button', { name: /Submit for review/ })).toBeNull()
+    })
+    it('makes it read-only for a moderator once the path is published', () => {
+        useAuth.mockReturnValue({ user: { id: 'm1', role: 'moderator' }, loading: false })
+        editor.current = loaded(path({ status: 'published' }))
+        render(<PathEditor pathRef="p1" />)
+        expect(screen.getByTestId('read-only')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /Save changes/ })).toBeNull()
+    })
+    it('lets an owner moderator edit a draft and an admin edit anything', () => {
+        useAuth.mockReturnValue({ user: { id: 'm1', role: 'moderator' }, loading: false })
+        const { unmount } = render(<PathEditor pathRef="p1" />)
+        expect(screen.queryByTestId('read-only')).toBeNull()
+        expect(title()).toBeEnabled()
+        unmount()
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        editor.current = loaded(path({ status: 'published' }))
+        render(<PathEditor pathRef="p1" />)
+        expect(screen.queryByTestId('read-only')).toBeNull()
+        expect(screen.getByRole('button', { name: /Save changes/ })).toBeInTheDocument()
+    })
+})
+
 describe('saving', () => {
     it('sends the loaded timestamp so a newer save is not overwritten', () => {
         render(<PathEditor pathRef="p1" />)
@@ -140,6 +170,7 @@ describe('an edit conflict', () => {
         fireEvent.click(screen.getByRole('button', { name: /Save changes/ }))
         const dialog = await screen.findByRole('dialog')
         expect(within(dialog).getByText('Someone else edited this roadmap')).toBeInTheDocument()
+        expect(within(dialog).getByText(/discards every change the other editor made/)).toBeInTheDocument()
 
         getEditorPath.mockResolvedValue(path({ title: 'Their title', updatedAt: '2026-11-05T10:00:00Z' }))
         fireEvent.click(within(dialog).getByRole('button', { name: 'Load the latest version' }))

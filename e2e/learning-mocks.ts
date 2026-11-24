@@ -123,9 +123,10 @@ export function detailFor(state: LearningState, signedIn: boolean, canEdit = fal
     };
 }
 
-const editorPath = (state: LearningState) => ({
+/** The author is the signed-in member for a moderator, so the editor lets them change it */
+const editorPath = (state: LearningState, authorId = 'u-ada') => ({
     ...card({ viewer: undefined }), status: state.pathStatus, description: 'A hands-on route through web hacking.', seo: { metaDescription: 'Learn web hacking step by step.' }, prerequisites: [],
-    reviewedAt: null, stages: STAGES, updatedAt: state.updatedAt, createdBy: { id: 'u-ada', username: 'ada' },
+    reviewedAt: null, stages: STAGES, updatedAt: state.updatedAt, createdBy: { id: authorId, username: authorId === 'u-ada' ? 'ada' : testUser.username },
     modules: MODULES.map((m) => ({ ...m, items: m.items.map((i) => { const { kind, ref, title, optional } = i as Record<string, unknown>; return { kind, ref, title, optional }; }) })),
 });
 
@@ -139,7 +140,7 @@ export interface MockOptions { role?: 'user' | 'moderator' | 'admin' | null; sta
 /** Install after (or instead of) signInAs: call with `role: null` for a visitor. */
 export async function mockLearningApi(page: Page, { role = 'user', state = freshState() }: MockOptions = {}) {
     const signedIn = role !== null;
-    if (signedIn) await signInAs(page, { ...testUser, role });
+    if (signedIn) await signInAs(page, { ...testUser, id: testUser._id, role });
     else await page.route('**/api/auth/me', (route) => (route.request().method() === 'OPTIONS' ? preflight(route) : reply(route, { success: false, message: 'Unauthorized' }, 401)));
     const canEdit = role === 'moderator' || role === 'admin';
 
@@ -179,7 +180,7 @@ export async function mockLearningApi(page: Page, { role = 'user', state = fresh
             const mine = [{ ...card({ viewer: undefined }), status: state.pathStatus, createdBy: { id: 'u-ada', username: 'ada' }, updatedAt: state.updatedAt }, { ...CARDS[1], viewer: undefined, status: 'published', createdBy: { id: 'u-ada', username: 'ada' }, updatedAt: iso(-5) }];
             return reply(route, { success: true, data: mine, counts: { draft: state.pathStatus === 'draft' ? 1 : 0, in_review: 0, published: 1 + (state.pathStatus === 'published' ? 1 : 0), archived: 0 }, pagination: page1(mine.length, 20) });
         }
-        if (/^\/api\/learning-paths\/admin\/[^/]+$/.test(path) && method === 'GET') return reply(route, { success: true, data: editorPath(state) });
+        if (/^\/api\/learning-paths\/admin\/[^/]+$/.test(path) && method === 'GET') return reply(route, { success: true, data: editorPath(state, role === 'moderator' ? testUser._id : undefined) });
         if (/^\/api\/learning-paths\/[^/]+$/.test(path) && method === 'PUT') {
             if (state.conflictOnSave) {
                 state.conflictOnSave = false;
@@ -187,12 +188,12 @@ export async function mockLearningApi(page: Page, { role = 'user', state = fresh
                 return failure(route, 409, 'PATH_CONFLICT', 'Conflict', { meta: { updatedAt: state.updatedAt } });
             }
             state.updatedAt = new Date().toISOString();
-            return reply(route, { success: true, data: { ...editorPath(state), ...(body as object) } });
+            return reply(route, { success: true, data: { ...editorPath(state, role === 'moderator' ? testUser._id : undefined), ...(body as object) } });
         }
         const transition = /^\/api\/learning-paths\/[^/]+\/(submit|publish|unpublish|archive|restore)$/.exec(path);
         if (transition && method === 'POST') {
             state.pathStatus = ({ submit: 'in_review', publish: 'published', unpublish: 'draft', archive: 'archived', restore: 'draft' } as const)[transition[1] as 'submit'];
-            return reply(route, { success: true, data: editorPath(state) });
+            return reply(route, { success: true, data: editorPath(state, role === 'moderator' ? testUser._id : undefined) });
         }
         const tick = /^\/api\/learning-paths\/[^/]+\/modules\/([^/]+)\/(complete|uncomplete)$/.exec(path);
         if (tick && method === 'POST') {
