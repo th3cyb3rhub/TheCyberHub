@@ -23,6 +23,8 @@ vi.mock('@/hooks/queries/useEvents', () => ({
     useSetReminder: () => mut,
 }))
 
+vi.mock('../CalendarFeedPanel', () => ({ CalendarFeedPanel: () => <div data-testid="feed-panel-stub" /> }))
+
 import { MyEventsView } from '../MyEventsView'
 
 const page = (data: unknown[]) => ({ isLoading: false, isError: false, data: { pages: [{ data, pagination: { page: 1, limit: 12, total: data.length, hasMore: false } }] }, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn() })

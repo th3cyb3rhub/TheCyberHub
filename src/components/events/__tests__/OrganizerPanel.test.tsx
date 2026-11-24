@@ -6,6 +6,12 @@ import { makeEvent, viewer } from '@/lib/events/__tests__/fixtures'
 const attendees = vi.hoisted(() => ({ byStatus: {} as Record<string, unknown>, asked: [] as unknown[] }))
 const mark = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const cancel = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+const exporter = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false, isError: false, error: null as unknown }))
+const undo = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+vi.mock('@/hooks/queries/useEventCalendar', () => ({
+    useExportAttendees: () => exporter,
+    useUndoAttendance: () => undo,
+}))
 vi.mock('@/hooks/queries/useEvents', () => ({
     useEventAttendees: (_id: string, params: { status: string }) => { attendees.asked.push(params); return attendees.byStatus[params.status] },
     useMarkAttendance: () => mark,
@@ -132,5 +138,73 @@ describe('OrganizerPanel', () => {
         render(<OrganizerPanel event={makeEvent({ status: 'pending', viewer: viewer({ canManage: true }) })} now={BEFORE} />)
         expect(screen.getByText(/once the event is approved/)).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: /Cancel event/ })).toBeNull()
+    })
+
+    describe('export and undo', () => {
+        it('exports the list with the id and slug and shows the progress', () => {
+            render(<OrganizerPanel event={event} now={BEFORE} />)
+            fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+            expect(exporter.mutate).toHaveBeenCalledWith({ id: event._id, slug: event.slug }, expect.any(Object))
+        })
+
+        it('is disabled while exporting and shows a loading label', () => {
+            exporter.isPending = true
+            render(<OrganizerPanel event={event} now={BEFORE} />)
+            expect(screen.getByRole('button', { name: 'Exporting' })).toBeDisabled()
+            exporter.isPending = false
+        })
+
+        it('shows why an export failed', () => {
+            exporter.isError = true
+            exporter.error = new ApiError('x', 403, 'AUTHZ_FORBIDDEN')
+            render(<OrganizerPanel event={event} now={BEFORE} />)
+            expect(screen.getByTestId('export-error')).toHaveTextContent(/Only the organizer of this event and administrators/)
+            exporter.isError = false
+            exporter.error = null
+        })
+
+        it('notes when the file was cut at the row limit', () => {
+            exporter.mutate.mockImplementation((_v, o) => o.onSuccess({ filename: 'x.csv', rows: 5000, truncated: true }))
+            render(<OrganizerPanel event={event} now={BEFORE} />)
+            fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+            expect(screen.getByTestId('export-truncated')).toHaveTextContent(/first 5000 rows/)
+            exporter.mutate.mockReset()
+        })
+
+        it('does not offer the export before the event is public', () => {
+            render(<OrganizerPanel event={makeEvent({ status: 'pending', viewer: viewer({ canManage: true }) })} now={BEFORE} />)
+            expect(screen.queryByRole('button', { name: /Export CSV/ })).not.toBeInTheDocument()
+        })
+
+        it('asks before it undoes one attendance, then sends that one member', () => {
+            render(<OrganizerPanel event={event} now={DURING} />)
+            fireEvent.click(screen.getByRole('tab', { name: 'Attended' }))
+            fireEvent.click(screen.getByRole('button', { name: /Undo attendance for Bob/ }))
+            const dialog = screen.getByRole('dialog', { name: 'Undo attendance for Bob?' })
+            expect(dialog).toHaveTextContent(/points they earned for this event are taken back/)
+            expect(undo.mutate).not.toHaveBeenCalled()
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Undo attendance' }))
+            expect(undo.mutate).toHaveBeenCalledWith({ id: event._id, userIds: ['u2'] }, expect.any(Object))
+        })
+
+        it('does not undo when the dialog is closed with Go back, and shows an API error inside it', () => {
+            render(<OrganizerPanel event={event} now={DURING} />)
+            fireEvent.click(screen.getByRole('tab', { name: 'Attended' }))
+            fireEvent.click(screen.getByRole('button', { name: /Undo attendance for Bob/ }))
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Go back' }))
+            expect(undo.mutate).not.toHaveBeenCalled()
+            undo.mutate.mockImplementation((_v, o) => o.onError(new ApiError('x', 403, 'AUTHZ_FORBIDDEN')))
+            fireEvent.click(screen.getByRole('button', { name: /Undo attendance for Bob/ }))
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Undo attendance' }))
+            expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('You are not allowed to do that.')
+            undo.mutate.mockReset()
+        })
+
+        it('has no undo button for the registered or waiting groups', () => {
+            render(<OrganizerPanel event={event} now={DURING} />)
+            expect(screen.queryByRole('button', { name: /Undo/ })).not.toBeInTheDocument()
+            fireEvent.click(screen.getByRole('tab', { name: 'Waiting list' }))
+            expect(screen.queryByRole('button', { name: /Undo/ })).not.toBeInTheDocument()
+        })
     })
 })

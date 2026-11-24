@@ -12,6 +12,8 @@ import { useNow } from '@/lib/events/clock';
 import { effectiveStatus } from '@/lib/events/time';
 import { REMINDER_OFFSETS, type EventPage, type EventSummary, type ReminderOffset } from '@/types/event';
 import type { InfiniteData } from '@tanstack/react-query';
+import { AddToCalendarMenu } from './AddToCalendarMenu';
+import { CalendarFeedPanel } from './CalendarFeedPanel';
 import { EventCard } from './EventCard';
 import { EventDialog } from './EventDialog';
 import { ErrorState, GridSkeleton } from './ListStates';
@@ -38,6 +40,7 @@ function RegisteredActions({ event, now }: { event: EventSummary; now: Date | nu
     const upcoming = now ? effectiveStatus(event, now) === 'upcoming' : event.status === 'upcoming';
     const current = event.viewer?.reminder?.offsetMinutes ?? null;
     const canLeave = upcoming && !event.viewer?.attended;
+    const open = upcoming || (now ? effectiveStatus(event, now) === 'live' : event.status === 'live');
 
     return (
         <div className="flex flex-wrap items-center gap-2">
@@ -55,6 +58,9 @@ function RegisteredActions({ event, now }: { event: EventSummary; now: Date | nu
                         {REMINDER_OFFSETS.map((o) => <option key={o} value={o}>Remind me {REMINDER_LABEL[o]}</option>)}
                     </select>
                 </>
+            )}
+            {open && event.status !== 'cancelled' && (
+                <AddToCalendarMenu slug={event.slug} title={event.title} startDate={event.startDate} endDate={event.endDate} endsAt={event.endsAt} location={event.location} className="!px-3 !py-1.5 text-xs" />
             )}
             {canLeave && (
                 <button type="button" className={`${btnSecondary} !px-3 !py-1.5 text-xs`} onClick={() => setConfirm(true)}>Cancel registration</button>
@@ -197,6 +203,7 @@ export function MyEventsView() {
             <div id="my-events-panel" role="tabpanel" aria-labelledby={`my-events-${tab}`} tabIndex={0}>
                 <Panel query={queries[tab]} tab={tab} now={now} />
             </div>
+            <div className="mt-10"><CalendarFeedPanel /></div>
         </PageShell>
     );
 }

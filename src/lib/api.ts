@@ -2,6 +2,11 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001
 
 interface FetchOptions extends RequestInit {
     requireAuth?: boolean;
+    /**
+     * Return the Response itself instead of the parsed JSON, for files. Authentication, the one
+     * token refresh and the error mapping are the same.
+     */
+    raw?: boolean;
 }
 
 /** A failed API call. `code` is the machine-readable error code the API sends, when there is one. */
@@ -49,7 +54,7 @@ export const tokenStore = {
  * and attempts a single token refresh on 401 responses.
  */
 export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
-    const { requireAuth = true, headers = {}, ...restOptions } = options;
+    const { requireAuth = true, raw = false, headers = {}, ...restOptions } = options;
 
     const buildHeaders = (): Record<string, string> => {
         const requestHeaders: Record<string, string> = {
@@ -108,6 +113,8 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         }
         throw new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
     }
+
+    if (raw) return response;
 
     try {
         if (response.status !== 204) {

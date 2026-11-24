@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { makeEvent, viewer } from '@/lib/events/__tests__/fixtures'
 
 const replace = vi.fn()
@@ -11,13 +12,14 @@ const queue = vi.hoisted(() => ({ current: {} as Record<string, unknown>, status
 const approve = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const reject = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const idle = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+const del = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/hooks/queries/useEvents', () => ({
     useReviewQueue: (status: string) => { queue.status = status; return queue.current },
     useEventPage: () => ({ data: { pagination: { total: 2 } } }),
     useApproveEvent: () => approve,
     useRejectEvent: () => reject,
     useCancelEvent: () => idle,
-    useDeleteEvent: () => idle,
+    useDeleteEvent: () => del,
     useToggleFeatured: () => idle,
 }))
 
@@ -131,5 +133,63 @@ describe('review queue', () => {
         queue.current = page([])
         rerender(<AdminEventsView />)
         expect(screen.getByText('Nothing waiting for review')).toBeInTheDocument()
+    })
+})
+
+describe('series occurrences', () => {
+    const occurrence = makeEvent({ _id: 'o1', slug: 'weekly-2026-12-10', title: 'Weekly Night', status: 'upcoming', seriesId: '64b000000000000000000009', viewer: undefined })
+
+    it('links the series, cancels the occurrence and offers no delete', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        queue.current = page([occurrence, makeEvent({ _id: 'n1', slug: 'plain', title: 'Plain', viewer: undefined })])
+        render(<AdminEventsView />)
+        const rows = screen.getAllByTestId('queue-row')
+        expect(within(rows[0]).getByRole('link', { name: /Series/ })).toHaveAttribute('href', '/events/series/64b000000000000000000009')
+        expect(within(rows[0]).getByRole('button', { name: 'Cancel this occurrence' })).toBeInTheDocument()
+        expect(within(rows[0]).queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument()
+        expect(within(rows[1]).getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+        expect(within(rows[1]).getByRole('button', { name: /Delete Plain/ })).toBeInTheDocument()
+    })
+
+    it('offers delete for a series date that is not upcoming or live (pending, ended, cancelled)', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        const mk = (id: string, status: string, over: Record<string, unknown> = {}) => makeEvent({ _id: id, slug: id, title: `T ${id}`, status, seriesId: '64b000000000000000000009', viewer: undefined, ...over } as never)
+        queue.current = page([
+            mk('p', 'pending'),
+            mk('c', 'cancelled'),
+            mk('e', 'upcoming', { startDate: '2020-01-01T10:00:00Z', endDate: '2020-01-01T11:00:00Z', endsAt: '2020-01-01T11:00:00Z' }),
+            mk('u', 'upcoming', { startDate: '2099-01-01T10:00:00Z', endDate: '2099-01-01T11:00:00Z', endsAt: '2099-01-01T11:00:00Z' }),
+        ])
+        render(<AdminEventsView />)
+        expect(screen.getByRole('button', { name: 'Delete T p' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Delete T c' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Delete T e' })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Delete T u' })).not.toBeInTheDocument()
+    })
+
+    it('explains that only this date is cancelled', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        queue.current = page([occurrence])
+        render(<AdminEventsView />)
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel this occurrence' }))
+        expect(screen.getByRole('dialog')).toHaveTextContent('Only this date is cancelled and the series goes on.')
+    })
+
+    it('moves to cancelling this date when the API refuses to delete a series occurrence', () => {
+        useAuth.mockReturnValue({ user: { id: 'a1', role: 'admin' }, loading: false })
+        // A stale row without seriesId still shows Delete; the 409 then points to the cancel path
+        queue.current = page([makeEvent({ _id: 'n1', slug: 'late', title: 'Late', status: 'upcoming', viewer: undefined })])
+        del.mutate.mockImplementation((_v, o) => o.onError(new ApiError('x', 409, 'EVENT_IN_SERIES')))
+        render(<AdminEventsView />)
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Late' }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+        const dialog = screen.getByRole('dialog')
+        expect(dialog).toHaveTextContent('Cancel this occurrence instead, or end the series.')
+        expect(within(dialog).getByRole('button', { name: 'Cancel this occurrence' })).toBeInTheDocument()
+    })
+
+    it('links to the series screen for staff', () => {
+        render(<AdminEventsView />)
+        expect(screen.getByRole('link', { name: /Recurring series/ })).toHaveAttribute('href', '/admin/events/series')
     })
 })

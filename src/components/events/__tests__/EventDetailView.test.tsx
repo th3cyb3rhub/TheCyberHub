@@ -22,6 +22,10 @@ vi.mock('@/hooks/queries/useEvents', () => ({
     useMarkAttendance: () => idle,
     useCancelEvent: () => idle,
 }))
+vi.mock('@/hooks/queries/useEventCalendar', () => ({
+    useExportAttendees: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+    useUndoAttendance: () => ({ mutate: vi.fn(), isPending: false }),
+}))
 vi.mock('@/components/ui/ReportContentButton', () => ({ ReportContentButton: ({ contentType, contentId }: { contentType: string; contentId: string }) => <button>Report {contentType} {contentId}</button> }))
 
 import { EventDetailView } from '../EventDetailView'

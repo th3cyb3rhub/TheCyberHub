@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { eventErrorMessage, fieldErrors, isAuthError } from '../errors'
+import { calendarFeedErrorMessage, eventErrorMessage, exportErrorMessage, fieldErrors, isAuthError } from '../errors'
 
 const CODES = [
     'EVENT_REGISTRATION_CLOSED', 'EVENT_FULL', 'EVENT_ALREADY_REGISTERED', 'EVENT_ALREADY_WAITLISTED', 'EVENT_NOT_REGISTERED',
@@ -8,6 +8,7 @@ const CODES = [
     'EVENT_ALREADY_ATTENDED', 'EVENT_EMAIL_NOT_VERIFIED', 'EVENT_PENDING_LIMIT', 'EVENT_DAILY_LIMIT', 'EVENT_DUPLICATE',
     'EVENT_NOT_PENDING', 'EVENT_NOT_CANCELLABLE', 'EVENT_CANCELLED', 'EVENT_FIELD_LOCKED', 'EVENT_FEEDBACK_CLOSED',
     'EVENT_FEEDBACK_EXISTS', 'EVENT_FEEDBACK_FORBIDDEN',
+    'SERIES_NOT_FOUND', 'SERIES_ENDED', 'SERIES_LIMIT', 'SERIES_OCCURRENCE_EXISTS', 'EVENT_NOT_EDITABLE', 'EVENT_IN_SERIES',
 ]
 
 describe('eventErrorMessage', () => {
@@ -49,5 +50,27 @@ describe('fieldErrors and isAuthError', () => {
     it('spots a 401', () => {
         expect(isAuthError(new ApiError('x', 401))).toBe(true)
         expect(isAuthError(new ApiError('x', 403))).toBe(false)
+    })
+})
+
+describe('wave 2 errors', () => {
+    it('names the series limit even though it is a 429', () => {
+        expect(eventErrorMessage(new ApiError('x', 429, 'SERIES_LIMIT'))).toMatch(/20 running series/)
+    })
+    it('explains a forbidden export in terms of the organizer', () => {
+        expect(exportErrorMessage(new ApiError('x', 403, 'AUTHZ_FORBIDDEN'))).toMatch(/organizer/)
+        expect(exportErrorMessage(new ApiError('x', 401))).toMatch(/Sign in/)
+        expect(exportErrorMessage(new Error('Failed to fetch'))).toBe('Failed to fetch')
+        expect(exportErrorMessage('odd')).toMatch(/Could not export/)
+    })
+    it('says the feed is unavailable on a 503 and gives no hint about the address', () => {
+        expect(calendarFeedErrorMessage(new ApiError('x', 503))).toBe('Calendar feed is not available right now. Please try again later.')
+        expect(calendarFeedErrorMessage(new ApiError('x', 401))).toMatch(/Sign in/)
+        expect(calendarFeedErrorMessage(new ApiError('x', 429))).toMatch(/too quickly/)
+    })
+    it('maps the feed token codes before the status', () => {
+        expect(calendarFeedErrorMessage(new ApiError('x', 409, 'CALENDAR_TOKEN_CONFLICT'))).toBe('Someone else rotated this just now, try again.')
+        expect(calendarFeedErrorMessage(new ApiError('x', 503, 'FEED_URL_NOT_CONFIGURED'))).toBe('Calendar feed is not available right now. Please try again later.')
+        expect(calendarFeedErrorMessage(new ApiError('x', 409))).toBe('x')
     })
 })

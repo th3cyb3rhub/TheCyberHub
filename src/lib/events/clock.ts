@@ -23,3 +23,22 @@ export function useNow(intervalMs = 30_000): Date | null {
     }, [intervalMs]);
     return now;
 }
+
+const PHONE_QUERY = '(max-width: 639px)';
+
+function subscribePhone(onChange: () => void) {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+    const media = window.matchMedia(PHONE_QUERY);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+}
+
+const phoneNow = () => (typeof window.matchMedia === 'function' ? window.matchMedia(PHONE_QUERY).matches : false);
+
+/**
+ * Whether the screen is a phone (under 640px). Null on the server and during hydration, so a page
+ * can wait for the answer before it picks a layout.
+ */
+export function useIsPhone(): boolean | null {
+    return useSyncExternalStore(subscribePhone, phoneNow, () => null);
+}

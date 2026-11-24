@@ -1,9 +1,11 @@
 import { API_URL } from '@/lib/api';
-import type { EventDetail } from '@/types/event';
+import type { EventDetail, Series } from '@/types/event';
 import { plainExcerpt } from './display';
 import { effectiveStatus } from './time';
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://thecyberhub.org').replace(/\/$/, '');
+import { SITE_URL } from './site';
+
+export { SITE_URL };
 
 export type ServerEvent =
     | { state: 'ok'; event: EventDetail }
@@ -61,4 +63,27 @@ export function eventJsonLd(event: EventDetail, now: Date = new Date()): Record<
         organizer: { '@type': 'Organization', name: event.organizer },
         url,
     };
+}
+
+export type ServerSeries =
+    | { state: 'ok'; series: Series }
+    | { state: 'missing' }
+    | { state: 'error' };
+
+/** The public view of a series, fetched while rendering. A slow or failing API gives `error`, never an exception. */
+export async function fetchPublicSeries(id: string): Promise<ServerSeries> {
+    try {
+        const res = await fetch(`${API_URL}/api/events/series/${encodeURIComponent(id)}`, {
+            next: { revalidate: 60, tags: ['events'] },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (res.status === 404) return { state: 'missing' };
+        if (!res.ok) return { state: 'error' };
+        const body = await res.json();
+        const series = body?.data as Series | undefined;
+        if (!series || !series.id || !series.recurrence) return { state: 'error' };
+        return { state: 'ok', series };
+    } catch {
+        return { state: 'error' };
+    }
 }

@@ -1,84 +1,166 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { makeEvent } from '@/lib/events/__tests__/fixtures'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import type { CalendarItem } from '@/types/event'
 
+const push = vi.fn()
 const replace = vi.fn()
-let search = 'month=2026-12'
+let search = ''
 vi.mock('next/navigation', () => ({
-    useRouter: () => ({ replace }),
+    useRouter: () => ({ push, replace }),
     usePathname: () => '/events/calendar',
     useSearchParams: () => new URLSearchParams(search),
 }))
-vi.mock('@/lib/events/clock', () => ({ useViewerZone: () => 'UTC' }))
-
-const state = vi.hoisted(() => ({ list: {} as Record<string, unknown>, filters: undefined as Record<string, unknown> | undefined }))
-vi.mock('@/hooks/queries/useEvents', () => ({
-    useEventList: (filters: Record<string, unknown>) => { state.filters = filters; return state.list },
+const env = vi.hoisted(() => ({ zone: 'UTC' as string | null, phone: false as boolean | null }))
+vi.mock('@/lib/events/clock', () => ({ useViewerZone: () => env.zone, useIsPhone: () => env.phone, useNow: () => null }))
+const auth = vi.hoisted(() => ({ user: null as { id: string } | null }))
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => ({ user: auth.user, loading: false }) }))
+const state = vi.hoisted(() => ({ result: {} as Record<string, unknown>, calls: [] as unknown[][] }))
+vi.mock('@/hooks/queries/useEventCalendar', () => ({
+    useEventsCalendar: (...args: unknown[]) => { state.calls.push(args); return state.result },
 }))
+vi.mock('../CalendarFeedPanel', () => ({ CalendarFeedPanel: () => <div data-testid="feed-panel" /> }))
 
-import { EventsCalendar, groupByDay, LOOKBACK_DAYS } from '../EventsCalendar'
+import { EventsCalendar } from '../EventsCalendar'
 
-const page = (data: unknown[], over: Record<string, unknown> = {}) => ({
-    isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
-    data: { pages: [{ data, pagination: { page: 1, limit: 50, total: data.length, hasMore: false } }] },
-    ...over,
+const item = (over: Partial<CalendarItem> = {}): CalendarItem => ({
+    id: 'e1', slug: 'night', title: 'Winter CTF Night', category: 'ctf', startDate: '2026-12-09T19:00:00.000Z', endDate: '2026-12-09T21:00:00.000Z',
+    timezone: 'Europe/Berlin', format: 'online', status: 'upcoming', isAllDay: false, ...over,
+})
+const loaded = (items: CalendarItem[], truncated = false) => ({
+    isLoading: false, isError: false, refetch: vi.fn(),
+    data: { items, meta: { from: '', to: '', count: items.length, truncated } },
 })
 
 beforeEach(() => {
     vi.clearAllMocks()
-    search = 'month=2026-12'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-12-09T12:00:00Z'))
+    search = ''
+    env.zone = 'UTC'
+    env.phone = false
+    auth.user = null
+    state.calls = []
+    state.result = loaded([item()])
 })
-
-describe('groupByDay', () => {
-    const multi = makeEvent({ _id: 'm', slug: 'hack', title: 'Hackathon', startDate: '2026-11-29T10:00:00Z', endDate: '2026-12-02T10:00:00Z', endsAt: '2026-12-02T10:00:00Z' })
-
-    it('lists a multi-day event on every day it covers inside the month', () => {
-        const days = groupByDay([multi], 'UTC', '2026-12-01', '2026-12-31')
-        expect(days.map((d) => d.day)).toEqual(['2026-12-01', '2026-12-02'])
-        expect(days.every((d) => d.items[0].continued)).toBe(true)
-    })
-
-    it('does not put an event that ends at midnight on the next day', () => {
-        const e = makeEvent({ startDate: '2026-12-05T22:00:00Z', endDate: '2026-12-06T00:00:00Z', endsAt: '2026-12-06T00:00:00Z' })
-        expect(groupByDay([e], 'UTC').map((d) => d.day)).toEqual(['2026-12-05'])
-    })
-})
+afterEach(() => vi.useRealTimers())
 
 describe('EventsCalendar', () => {
-    it('asks for the month from a lookback before it, and shows a long event that began earlier', () => {
-        state.list = page([
-            makeEvent({ _id: 'm', slug: 'hack', title: 'Hackathon', startDate: '2026-11-29T10:00:00Z', endDate: '2026-12-02T10:00:00Z', endsAt: '2026-12-02T10:00:00Z' }),
-            makeEvent(),
-        ])
+    it('waits for the zone and the screen size before it asks for anything', () => {
+        env.zone = null
         render(<EventsCalendar />)
-        const first = new Date('2026-12-01T00:00:00.000Z').getTime() - LOOKBACK_DAYS * 86400000
-        expect(state.filters).toMatchObject({ scope: 'all', from: new Date(first).toISOString(), to: '2026-12-31T23:59:59.999Z' })
-        expect(within(screen.getByRole('list', { name: /Events in December 2026/ })).getAllByText('Hackathon')).toHaveLength(2)
-        expect(screen.getAllByText('Continues')).toHaveLength(2)
-        expect(screen.getByText('Winter CTF Night')).toBeInTheDocument()
-    })
-
-    it('follows the next page of the month', () => {
-        const fetchNextPage = vi.fn()
-        state.list = page([makeEvent()], { hasNextPage: true, fetchNextPage })
+        expect(screen.getByRole('status', { name: 'Loading the calendar' })).toBeInTheDocument()
+        expect(state.calls.at(-1)?.[0]).toBeNull()
+        env.zone = 'UTC'
+        env.phone = null
         render(<EventsCalendar />)
-        fireEvent.click(screen.getByRole('button', { name: /Load more/ }))
-        expect(fetchNextPage).toHaveBeenCalled()
+        expect(state.calls.at(-1)?.[0]).toBeNull()
     })
 
-    it('shows the empty and error states', () => {
-        state.list = page([])
-        const { rerender } = render(<EventsCalendar />)
-        expect(screen.getByText('Nothing scheduled in December')).toBeInTheDocument()
-        state.list = { isLoading: false, isError: true, error: new Error('x'), refetch: vi.fn(), data: undefined }
-        rerender(<EventsCalendar />)
-        expect(within(screen.getByRole('alert')).getByText(/Could not load the calendar/)).toBeInTheDocument()
+    it('asks for the whole month grid in one range of at most 62 days, in the viewer zone', () => {
+        render(<EventsCalendar />)
+        const [range, category] = state.calls.at(-1)! as [{ from: string; to: string }, string]
+        expect(range).toEqual({ from: '2026-11-30T00:00:00.000Z', to: '2027-01-10T23:59:59.999Z' })
+        expect((new Date(range.to).getTime() - new Date(range.from).getTime()) / 86400000).toBeLessThan(62)
+        expect(category).toBe('')
+        expect(screen.getByRole('grid', { name: 'December 2026' })).toBeInTheDocument()
+        expect(screen.getByTestId('zone-label')).toHaveTextContent('Times are in your time zone, UTC')
     })
 
-    it('moves between months through the URL', () => {
-        state.list = page([])
+    it('reads view, date and category from the address and passes them on', () => {
+        search = 'view=week&date=2026-12-24&category=workshop'
+        render(<EventsCalendar />)
+        const [range, category] = state.calls.at(-1)! as [{ from: string; to: string }, string]
+        expect(range.from).toBe('2026-12-21T00:00:00.000Z')
+        expect(category).toBe('workshop')
+        expect(screen.getByTestId('calendar-title')).toHaveTextContent('Dec 21 to 27, 2026')
+        expect(screen.getByRole('tab', { name: 'Week' })).toHaveAttribute('aria-selected', 'true')
+        expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+        expect(screen.getByTestId('week-grid')).toBeInTheDocument()
+    })
+
+    it('pushes the new address for next, previous, today and view (so back works), and replaces it for a category', () => {
+        search = 'date=2026-12-24'
         render(<EventsCalendar />)
         fireEvent.click(screen.getByRole('button', { name: 'Next month' }))
-        expect(replace).toHaveBeenCalledWith(expect.stringContaining('month=2027-01'), { scroll: false })
+        expect(push).toHaveBeenLastCalledWith('/events/calendar?date=2027-01-24', { scroll: false })
+        fireEvent.click(screen.getByRole('button', { name: 'Previous month' }))
+        expect(push).toHaveBeenLastCalledWith('/events/calendar?date=2026-11-24', { scroll: false })
+        fireEvent.click(screen.getByRole('button', { name: 'Today' }))
+        expect(push).toHaveBeenLastCalledWith('/events/calendar', { scroll: false })
+        fireEvent.click(screen.getByRole('tab', { name: 'Agenda' }))
+        expect(push).toHaveBeenLastCalledWith('/events/calendar?view=agenda&date=2026-12-24', { scroll: false })
+        const pushes = push.mock.calls.length
+        fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'ctf' } })
+        expect(replace).toHaveBeenLastCalledWith('/events/calendar?date=2026-12-24&category=ctf', { scroll: false })
+        expect(push.mock.calls.length).toBe(pushes)
+    })
+
+    it('marks the new day as today after midnight, when the tab is focused again', () => {
+        render(<EventsCalendar />)
+        expect(document.querySelector('[aria-current="date"]')).toHaveAttribute('data-day', '2026-12-09')
+        act(() => { vi.setSystemTime(new Date('2026-12-10T00:05:00Z')); window.dispatchEvent(new Event('focus')) })
+        expect(document.querySelector('[aria-current="date"]')).toHaveAttribute('data-day', '2026-12-10')
+    })
+
+    it('moves by a week in the week view', () => {
+        search = 'view=week'
+        render(<EventsCalendar />)
+        fireEvent.click(screen.getByRole('button', { name: 'Next week' }))
+        expect(push).toHaveBeenLastCalledWith('/events/calendar?view=week&date=2026-12-16', { scroll: false })
+    })
+
+    it('gives a phone the agenda and offers no month view', () => {
+        env.phone = true
+        search = 'view=month'
+        render(<EventsCalendar />)
+        expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+        expect(screen.getByTestId('agenda-list')).toBeInTheDocument()
+        expect(screen.queryByRole('tab', { name: 'Month' })).not.toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Week' })).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Agenda' })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('shows a loading skeleton, an error with retry and an empty state', () => {
+        state.result = { isLoading: true, isError: false, data: undefined }
+        const { rerender } = render(<EventsCalendar />)
+        expect(screen.getByRole('status', { name: 'Loading the calendar' })).toBeInTheDocument()
+        const refetch = vi.fn()
+        state.result = { isLoading: false, isError: true, error: new Error('x'), refetch, data: undefined }
+        rerender(<EventsCalendar />)
+        fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /Try again/ }))
+        expect(refetch).toHaveBeenCalled()
+        state.result = loaded([])
+        rerender(<EventsCalendar />)
+        expect(screen.getByTestId('empty-range')).toHaveTextContent(/No events from/)
+        search = 'view=agenda'
+        rerender(<EventsCalendar />)
+        expect(screen.getByText('Nothing scheduled in December 2026')).toBeInTheDocument()
+    })
+
+    it('says when the range holds more than can be shown', () => {
+        state.result = loaded([item()], true)
+        render(<EventsCalendar />)
+        expect(screen.getByTestId('truncated-note')).toHaveTextContent(/more events than can be shown/)
+    })
+
+    it('links the API calendar file for exactly the range on screen, and a subscribe address', () => {
+        search = 'category=ctf'
+        render(<EventsCalendar />)
+        const href = screen.getByTestId('download-ics').getAttribute('href')!
+        const url = new URL(href)
+        expect(url.pathname).toBe('/api/events/calendar.ics')
+        expect(Object.fromEntries(url.searchParams)).toEqual({ from: '2026-11-30T00:00:00.000Z', to: '2027-01-10T23:59:59.999Z', category: 'ctf' })
+        fireEvent.click(screen.getByRole('button', { name: /Subscribe/ }))
+        const dialog = screen.getByRole('dialog', { name: 'Subscribe in your calendar app' })
+        expect((within(dialog).getByLabelText('Calendar address') as HTMLInputElement).value).toMatch(/^webcal:\/\/.+\/api\/events\/calendar\.ics\?from=/)
+        expect(within(dialog).getByRole('button', { name: /Copy/ })).toBeInTheDocument()
+    })
+
+    it('shows the personal feed panel only to a signed in member', () => {
+        const { rerender } = render(<EventsCalendar />)
+        expect(screen.queryByTestId('feed-panel')).not.toBeInTheDocument()
+        auth.user = { id: 'u1' }
+        rerender(<EventsCalendar />)
+        expect(screen.getByTestId('feed-panel')).toBeInTheDocument()
     })
 })

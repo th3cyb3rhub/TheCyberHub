@@ -18,6 +18,7 @@ import { CATEGORY_LABELS, FORMAT_LABELS } from '@/lib/events/form';
 import { effectiveStatus, serverClock } from '@/lib/events/time';
 import { isModeratorRole } from '@/lib/roles';
 import type { EventDetail, Speaker } from '@/types/event';
+import { AddToCalendarMenu } from './AddToCalendarMenu';
 import { Countdown } from './Countdown';
 import { EventDescription } from './EventDescription';
 import { EventDialog } from './EventDialog';
@@ -25,6 +26,7 @@ import { EventFeedbackSection } from './EventFeedbackSection';
 import { EventTimes } from './EventTimes';
 import { OrganizerPanel } from './OrganizerPanel';
 import { RegistrationPanel } from './RegistrationPanel';
+import { SeriesChip } from './SeriesChip';
 import { StatusBadge } from './StatusBadge';
 import { btnPrimary, btnSecondary, card, cardPad, chip, muted, pageBg } from './styles';
 
@@ -197,6 +199,7 @@ export function EventDetailView({ slug, initialEvent }: EventDetailViewProps) {
                         <span className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-300`}>{CATEGORY_LABELS[event.category] ?? event.category}</span>
                         <span className={`${chip} bg-gray-200 text-gray-800 dark:bg-neutral-700/60 dark:text-gray-300`}>{FORMAT_LABELS[event.locationType]}</span>
                         {event.eventType === 'official' && <span className={`${chip} bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300`}><BadgeCheck className="h-3 w-3" aria-hidden="true" /> Official</span>}
+                        <SeriesChip seriesId={event.seriesId} />
                     </div>
                     <h1 className="text-3xl font-bold leading-tight text-gray-900 dark:text-white sm:text-4xl">{event.title}</h1>
                     {event.shortDescription && <p className={`mt-2 max-w-3xl text-lg ${muted}`}>{event.shortDescription}</p>}
@@ -269,6 +272,9 @@ export function EventDetailView({ slug, initialEvent }: EventDetailViewProps) {
                                         {event.isFull && <span className="block font-medium text-red-800 dark:text-red-300">Full</span>}
                                     </p>
                                 </div>
+                            )}
+                            {!ended && status !== 'cancelled' && hasRegistration && (
+                                <AddToCalendarMenu slug={event.slug} title={event.title} startDate={event.startDate} endDate={event.endDate} endsAt={event.endsAt} location={event.location} className="w-full" />
                             )}
                             {event.tags.length > 0 && (
                                 <ul className="flex flex-wrap gap-1.5" aria-label="Tags">

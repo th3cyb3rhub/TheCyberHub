@@ -24,6 +24,12 @@ describe('sitemap', () => {
         expect(urls).toContain('https://thecyberhub.org/learning-paths/linux-basics')
         expect(urls).toContain('https://thecyberhub.org/resources/owasp-top-10')
     })
+    it('lists the event archive but no series page (there is no public list of series)', async () => {
+        const urls = (await sitemap()).map((e) => e.url)
+        expect(urls).toContain('https://thecyberhub.org/events/archive')
+        expect(urls).toContain('https://thecyberhub.org/events/calendar')
+        expect(urls.some((u) => u.includes('/events/series'))).toBe(false)
+    })
     it('lists no page that needs a login and no address twice', async () => {
         const urls = (await sitemap()).map((e) => e.url)
         for (const gone of ['/dashboard', '/profile', '/bookmarks', '/blog/write', '/employer/dashboard', '/employer/post-job', '/auth']) {

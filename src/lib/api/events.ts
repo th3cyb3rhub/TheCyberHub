@@ -1,7 +1,8 @@
-import { fetchApi } from '@/lib/api';
+import { API_URL, fetchApi } from '@/lib/api';
 import type {
-    AttendanceResult, Attendee, EventDetail, EventFeedbackPage, EventListFilters, EventPage, RegistrationResult,
-    ReminderOffset,
+    ArchiveFilters, ArchivePage, AttendanceResult, AttendanceUndoResult, Attendee, AttendeesExport, CalendarItem, CalendarQuery,
+    CalendarResult, CalendarTokenCreated, CalendarTokenStatus, EventDetail, EventFeedbackPage, EventListFilters,
+    EventPage, RegistrationResult, ReminderOffset, Series, SeriesCreated, SeriesEnded, SeriesPatchResult,
 } from '@/types/event';
 
 /** Query string for the list endpoints. Empty values are left out; page 1 and the default scope are implied. */
@@ -128,3 +129,142 @@ export async function markAttendance(id: string, userIds: string[]): Promise<Att
     return (await post(`/api/events/${id}/attendance`, { userIds })).data;
 }
 
+
+// ---------------------------------------------------------------------------
+// Calendar, archive and calendar files
+// ---------------------------------------------------------------------------
+
+/** The rows a CSV export holds at most (the API stops here and says so) */
+export const EXPORT_ROW_LIMIT = 5000;
+
+function calendarParams(query: CalendarQuery): URLSearchParams {
+    const params = new URLSearchParams();
+    params.set('from', query.from);
+    params.set('to', query.to);
+    if (query.category) params.set('category', query.category);
+    if (query.limit) params.set('limit', String(query.limit));
+    return params;
+}
+
+/** A public, cached read: no token is sent, so everyone gets the same answer */
+export async function getCalendar(query: CalendarQuery): Promise<CalendarResult> {
+    const res = await fetchApi(`/api/events/calendar?${calendarParams(query).toString()}`, { requireAuth: false });
+    const items: CalendarItem[] = res.data ?? [];
+    // The API always sends `meta`; a missing one must not take the page down
+    return { items, meta: res.meta ?? { from: query.from, to: query.to, count: items.length, truncated: false } };
+}
+
+/** The range as a calendar file. A plain link: the browser downloads it, nothing here builds the file. */
+export function calendarIcsUrl(query: CalendarQuery): string {
+    return `${API_URL}/api/events/calendar.ics?${calendarParams(query).toString()}`;
+}
+
+/** One event as a calendar file */
+export function eventIcsUrl(slug: string): string {
+    return `${API_URL}/api/events/${encodeURIComponent(slug)}/ics`;
+}
+
+/** The same address for calendar apps that subscribe (`webcal://` is `https://` that opens the app) */
+export function webcalUrl(url: string): string {
+    return url.replace(/^https?:/i, 'webcal:');
+}
+
+function archiveParams(filters: ArchiveFilters & { page?: number }): string {
+    const params = new URLSearchParams();
+    if (filters.category) params.set('category', filters.category);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    if (filters.q?.trim()) params.set('q', filters.q.trim());
+    if (filters.page && filters.page > 1) params.set('page', String(filters.page));
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+}
+
+export function listArchives(filters: ArchiveFilters & { page?: number } = {}): Promise<ArchivePage> {
+    return fetchApi(`/api/events/archives${archiveParams(filters)}`, { requireAuth: false });
+}
+
+// ---------------------------------------------------------------------------
+// The member's private calendar feed
+// ---------------------------------------------------------------------------
+
+export async function getCalendarTokenStatus(): Promise<CalendarTokenStatus> {
+    return (await fetchApi('/api/events/me/calendar-token')).data;
+}
+
+/** Creates the feed address, or replaces it (the old one stops working). The URL is in this answer only. */
+export async function createCalendarToken(): Promise<CalendarTokenCreated> {
+    return (await post('/api/events/me/calendar-token')).data;
+}
+
+export async function revokeCalendarToken(): Promise<void> {
+    await fetchApi('/api/events/me/calendar-token', { method: 'DELETE' });
+}
+
+// ---------------------------------------------------------------------------
+// Series
+// ---------------------------------------------------------------------------
+
+/** The token is sent when there is one: the creator and administrators get more than the public */
+export async function getSeries(id: string, limit?: number): Promise<Series> {
+    const qs = limit ? `?limit=${limit}` : '';
+    return (await fetchApi(`/api/events/series/${encodeURIComponent(id)}${qs}`)).data;
+}
+
+export async function createSeries(payload: Record<string, unknown>): Promise<SeriesCreated> {
+    return (await post('/api/events/series', payload)).data;
+}
+
+export async function patchSeries(id: string, payload: Record<string, unknown>): Promise<SeriesPatchResult> {
+    return (await fetchApi(`/api/events/series/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) })).data;
+}
+
+export async function pauseSeries(id: string): Promise<Series> {
+    return (await post(`/api/events/series/${encodeURIComponent(id)}/pause`)).data;
+}
+
+export async function resumeSeries(id: string): Promise<Series> {
+    return (await post(`/api/events/series/${encodeURIComponent(id)}/resume`)).data;
+}
+
+export async function endSeries(id: string, reason?: string): Promise<SeriesEnded> {
+    return (await post(`/api/events/series/${encodeURIComponent(id)}/end`, reason ? { reason } : {})).data;
+}
+
+// ---------------------------------------------------------------------------
+// Organizer exports
+// ---------------------------------------------------------------------------
+
+/** A file name that is safe on any system, from a slug */
+export function exportFilename(slug: string): string {
+    const clean = slug.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100);
+    return `${clean || 'event'}-attendees.csv`;
+}
+
+/**
+ * The attendee list as a file. The call needs the member's token, so it is fetched with it (never a
+ * link with the token in the address) and handed back as a Blob for the caller to save.
+ *
+ * The API says `X-Export-Truncated: true` when it stopped at the row limit. A browser only sees that
+ * header when the API lists it in `Access-Control-Expose-Headers`; when it cannot be read, a file with
+ * as many rows as the limit counts as cut off.
+ */
+export async function exportAttendees(id: string, slug: string): Promise<AttendeesExport> {
+    const res = (await fetchApi(`/api/events/${encodeURIComponent(id)}/attendees.csv`, {
+        raw: true,
+        headers: { Accept: 'text/csv' },
+    })) as Response;
+    const blob = await res.blob();
+    const header = res.headers.get('X-Export-Truncated');
+    const text = await blob.text();
+    // The header line is not a row; every cell is quoted and has no line break inside
+    const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+    const rows = Math.max(0, lines.length - 1);
+    const truncated = header === null ? rows >= EXPORT_ROW_LIMIT : header === 'true';
+    return { blob, filename: exportFilename(slug), truncated, rows };
+}
+
+export async function undoAttendance(id: string, userIds: string[]): Promise<AttendanceUndoResult> {
+    return (await post(`/api/events/${encodeURIComponent(id)}/attendance/undo`, { userIds })).data;
+}

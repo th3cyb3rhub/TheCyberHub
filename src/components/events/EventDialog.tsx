@@ -13,7 +13,7 @@ interface EventDialogProps {
     confirmLabel: string;
     destructive?: boolean;
     /** Ask for a reason; the confirm button waits until it is long enough */
-    reason?: { label: string; min: number; max: number; placeholder?: string };
+    reason?: { label: string; min: number; max: number; placeholder?: string; /** May be left empty; if something is written it still needs `min` characters */ optional?: boolean };
     pending?: boolean;
     /** Shown inside the dialog, so a failed call keeps what was typed */
     error?: string | null;
@@ -28,7 +28,7 @@ export function EventDialog({ open, onOpenChange, title, description, confirmLab
     }, [open]);
 
     const trimmed = text.trim();
-    const tooShort = !!reason && trimmed.length < reason.min;
+    const tooShort = !!reason && trimmed.length < reason.min && !(reason.optional && trimmed.length === 0);
     const fieldId = 'event-dialog-reason';
 
     return (
@@ -62,7 +62,7 @@ export function EventDialog({ open, onOpenChange, title, description, confirmLab
                                 className={`${input} resize-none ${error ? inputError : ''}`}
                             />
                             <p id={`${fieldId}-hint`} className="mt-1 flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                                <span>At least {reason.min} characters</span>
+                                <span>{reason.optional ? `Optional. If you write one, at least ${reason.min} characters` : `At least ${reason.min} characters`}</span>
                                 <span aria-hidden="true">{trimmed.length}/{reason.max}</span>
                             </p>
                         </div>

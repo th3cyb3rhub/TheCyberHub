@@ -8,6 +8,7 @@ import { CATEGORY_LABELS, FORMAT_LABELS } from '@/lib/events/form';
 import { effectiveStatus, toLocalParts } from '@/lib/events/time';
 import type { EventSummary } from '@/types/event';
 import { EventTimes } from './EventTimes';
+import { SeriesChip } from './SeriesChip';
 import { StatusBadge } from './StatusBadge';
 import { card, chip, muted } from './styles';
 
@@ -82,6 +83,7 @@ export function EventCard({ event, now = null, footer, featured = false, href }:
                             {event.eventType === 'official' && (
                                 <span className={`${chip} bg-blue-100 text-blue-900 dark:bg-blue-500/15 dark:text-blue-300`}><BadgeCheck className="h-3 w-3" aria-hidden="true" /> Official</span>
                             )}
+                            <SeriesChip seriesId={event.seriesId} className="relative z-10" />
                         </div>
                         <h3 className="text-base font-semibold leading-snug text-gray-900 dark:text-white">
                             <Link href={link} className="rounded after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">

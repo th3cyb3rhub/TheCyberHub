@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Ban, ClipboardCheck, Loader2, Pencil, Users } from 'lucide-react';
+import { Ban, ClipboardCheck, Download, Loader2, Pencil, Undo2, Users } from 'lucide-react';
 import { useCancelEvent, useEventAttendees, useMarkAttendance } from '@/hooks/queries/useEvents';
-import { eventErrorMessage } from '@/lib/events/errors';
+import { useExportAttendees, useUndoAttendance, type ExportSummary } from '@/hooks/queries/useEventCalendar';
+import { eventErrorMessage, exportErrorMessage } from '@/lib/events/errors';
 import { effectiveStatus } from '@/lib/events/time';
 import type { Attendee, EventDetail } from '@/types/event';
 import { EventDialog } from './EventDialog';
@@ -27,6 +28,11 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
     const attendees = useEventAttendees(event._id, { status: group }, published);
     const mark = useMarkAttendance();
     const cancel = useCancelEvent();
+    const exportCsv = useExportAttendees();
+    const undo = useUndoAttendance();
+    const [exported, setExported] = useState<ExportSummary | null>(null);
+    const [undoTarget, setUndoTarget] = useState<Attendee | null>(null);
+    const [undoError, setUndoError] = useState<string | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [confirmCancel, setConfirmCancel] = useState(false);
     const [cancelError, setCancelError] = useState<string | null>(null);
@@ -53,6 +59,17 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                 </h2>
                 <div className="flex flex-wrap gap-2">
                     <Link href={`/events/${event.slug}/edit`} className={btnSecondary}><Pencil className="h-4 w-4" aria-hidden="true" /> Edit event</Link>
+                    {published && (
+                        <button
+                            type="button"
+                            className={btnSecondary}
+                            disabled={exportCsv.isPending}
+                            onClick={() => { setExported(null); exportCsv.mutate({ id: event._id, slug: event.slug }, { onSuccess: setExported }); }}
+                        >
+                            {exportCsv.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+                            {exportCsv.isPending ? 'Exporting' : 'Export CSV'}
+                        </button>
+                    )}
                     {canCancel && (
                         <button type="button" className={btnSecondary} onClick={() => { setCancelError(null); setConfirmCancel(true); }}>
                             <Ban className="h-4 w-4" aria-hidden="true" /> Cancel event
@@ -60,6 +77,15 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                     )}
                 </div>
             </div>
+
+            {exportCsv.isError && (
+                <p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-400" data-testid="export-error">{exportErrorMessage(exportCsv.error)}</p>
+            )}
+            {exported?.truncated && (
+                <p role="status" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="export-truncated">
+                    The file holds the first {exported.rows} rows only. The list is longer than the export limit, so the newest registrations are missing.
+                </p>
+            )}
 
             {!published ? (
                 <p className={`text-sm ${muted}`}>The attendee list opens once the event is approved and public.</p>
@@ -135,6 +161,16 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                                     <span className={`shrink-0 text-xs ${r.status === 'attended' ? 'text-green-800 dark:text-green-300' : muted}`}>
                                         {group === 'waitlisted' ? `#${i + 1}` : r.attendedAt ? 'Attended' : ''}
                                     </span>
+                                    {group === 'attended' && r.user && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Undo attendance for ${r.user.name || r.user.username}`}
+                                            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 text-xs font-medium text-gray-800 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-neutral-700 dark:text-gray-200 dark:hover:bg-neutral-800"
+                                            onClick={() => { setUndoError(null); setUndoTarget(r); }}
+                                        >
+                                            <Undo2 className="h-3 w-3" aria-hidden="true" /> Undo
+                                        </button>
+                                    )}
                                 </li>
                             ))}
                         </ul>
@@ -153,6 +189,20 @@ export function OrganizerPanel({ event, now, onCancelled }: { event: EventDetail
                 </>
             )}
 
+            <EventDialog
+                open={!!undoTarget}
+                onOpenChange={(o) => { if (!o) { setUndoTarget(null); setUndoError(null); } }}
+                title={`Undo attendance for ${undoTarget?.user?.name || undoTarget?.user?.username || 'this member'}?`}
+                description="They go back to registered, and the points they earned for this event are taken back. You can mark them as attended again later."
+                confirmLabel="Undo attendance"
+                destructive
+                pending={undo.isPending}
+                error={undoError}
+                onConfirm={() => undoTarget?.user && undo.mutate({ id: event._id, userIds: [undoTarget.user._id] }, {
+                    onSuccess: () => setUndoTarget(null),
+                    onError: (err) => setUndoError(eventErrorMessage(err)),
+                })}
+            />
             <EventDialog
                 open={confirmCancel}
                 onOpenChange={setConfirmCancel}
