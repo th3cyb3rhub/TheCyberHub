@@ -1,265 +1,156 @@
-"use client"
+'use client';
 
-import React, { useState } from 'react';
-import { Server, Search, Copy, Check, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ToolShell } from '@/components/tools/ToolShell';
+import { ToolForm, useTargetParam } from '@/components/tools/ToolForm';
+import { Pill, ResultActions, ResultMeta, ResultPanel, ResultSkeleton, ToolErrorPanel } from '@/components/tools/ResultParts';
+import { card, focusRing, muted } from '@/components/tools/styles';
+import { useDns, useTool } from '@/hooks/queries/useTools';
+import { dnsSummary } from '@/lib/tools/summaries';
+import { checkDnsName, isIp } from '@/lib/tools/validate';
+import type { DnsRecord, DnsResult, DnsTypeResult } from '@/types/tools';
 
-interface DNSRecord {
-    type: string;
-    value: string;
-    ttl?: number;
-    priority?: number;
-}
+const SLUG = 'dns-lookup';
+const ALL_TYPES: readonly string[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA', 'SRV', 'PTR'];
+const DEFAULT_TYPES = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA'];
 
-const DNSLookupPage = () => {
-    const [domain, setDomain] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [records, setRecords] = useState<DNSRecord[]>([]);
-    const [copied, setCopied] = useState<string | null>(null);
+const sameTypes = (a: string[], b: string[]) => a.length === b.length && a.every((t) => b.includes(t));
 
-    const isValidDomain = (d: string): boolean => {
-        const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
-        return domainRegex.test(d);
-    };
-
-    const lookupDNS = async () => {
-        const cleanDomain = domain.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-
-        if (!cleanDomain) {
-            setError('Please enter a domain name');
-            return;
-        }
-
-        if (!isValidDomain(cleanDomain)) {
-            setError('Invalid domain format. Use a valid domain like example.com');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        setRecords([]);
-
-        try {
-            // Using Google DNS-over-HTTPS API
-            const types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME'];
-            const results: DNSRecord[] = [];
-
-            for (const type of types) {
-                try {
-                    const response = await fetch(
-                        `https://dns.google/resolve?name=${cleanDomain}&type=${type}`
-                    );
-                    const data = await response.json();
-                    
-                    if (data.Answer) {
-                        data.Answer.forEach((record: { type: number; data: string; TTL: number }) => {
-                            const typeMap: { [key: number]: string } = {
-                                1: 'A', 2: 'NS', 5: 'CNAME', 15: 'MX', 16: 'TXT', 28: 'AAAA'
-                            };
-                            results.push({
-                                type: typeMap[record.type] || type,
-                                value: record.data.replace(/"/g, ''),
-                                ttl: record.TTL
-                            });
-                        });
-                    }
-                } catch {
-                    // Skip failed record types
-                }
-            }
-
-            if (results.length === 0) {
-                setError('No DNS records found for this domain');
-            } else {
-                setRecords(results);
-            }
-        } catch {
-            setError('Failed to lookup DNS records');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const copyToClipboard = async (text: string) => {
-        await navigator.clipboard.writeText(text);
-        setCopied(text);
-        setTimeout(() => setCopied(null), 2000);
-    };
-
-    const getRecordColor = (type: string) => {
-        const colors: { [key: string]: string } = {
-            'A': 'text-green-400 bg-green-500/10 border-green-500/20',
-            'AAAA': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-            'MX': 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-            'NS': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-            'TXT': 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-            'CNAME': 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-        };
-        return colors[type] || 'text-gray-400 bg-gray-500/10 border-gray-500/20';
-    };
-
-    const groupedRecords = records.reduce((acc, record) => {
-        if (!acc[record.type]) acc[record.type] = [];
-        acc[record.type].push(record);
-        return acc;
-    }, {} as { [key: string]: DNSRecord[] });
-
-    return (
-        <div className="min-h-screen bg-black">
-            {/* Hero */}
-            <section className="relative pt-32 pb-16 px-4 sm:px-6">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
-                
-                <div className="relative max-w-2xl mx-auto text-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/5">
-                        <Server className="w-4 h-4 text-orange-500" />
-                        <span className="text-sm text-gray-400">Network Tool</span>
-                    </div>
-
-                    <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-6">
-                        DNS <span className="text-orange-500">Lookup</span>
-                    </h1>
-
-                    <p className="text-lg text-gray-400 max-w-xl mx-auto">
-                        Query DNS records for any domain - A, AAAA, MX, NS, TXT, CNAME.
-                    </p>
-                </div>
-            </section>
-
-            {/* Lookup */}
-            <section className="max-w-2xl mx-auto px-4 sm:px-6 pb-20">
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
-                    {/* Input */}
-                    <div className="mb-6">
-                        <label className="block text-sm text-gray-400 mb-2">Domain Name</label>
-                        <div className="flex gap-3">
-                            <input
-                                type="text"
-                                value={domain}
-                                onChange={(e) => setDomain(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && lookupDNS()}
-                                placeholder="example.com"
-                                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
-                            />
-                            <button
-                                onClick={lookupDNS}
-                                disabled={loading}
-                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-                            >
-                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                                Lookup
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Error */}
-                    {error && (
-                        <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Results */}
-                    {Object.keys(groupedRecords).length > 0 && (
-                        <div className="space-y-4">
-                            {/* Copy All */}
-                            <button
-                                onClick={() => {
-                                    const text = records.map(r => `${r.type}\t${r.value}${r.ttl ? `\tTTL:${r.ttl}` : ''}`).join('\n');
-                                    copyToClipboard(text);
-                                }}
-                                className="w-full p-3 text-center rounded-lg border border-white/10 text-sm text-gray-400 hover:text-white hover:border-orange-500/30 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <Copy className="w-4 h-4" />
-                                Copy All Records
-                            </button>
-                            {Object.entries(groupedRecords).map(([type, typeRecords]) => (
-                                <div key={type} className="rounded-lg bg-white/[0.02] border border-white/5 overflow-hidden">
-                                    <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3">
-                                        <span className={`text-xs px-2 py-1 rounded border font-medium ${getRecordColor(type)}`}>
-                                            {type}
-                                        </span>
-                                        <span className="text-xs text-gray-500">{typeRecords.length} record(s)</span>
-                                    </div>
-                                    <div className="divide-y divide-white/5">
-                                        {typeRecords.map((record, index) => (
-                                            <div 
-                                                key={index}
-                                                className="flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors group"
-                                            >
-                                                <div className="flex-1 min-w-0">
-                                                    <code className="text-sm text-white font-mono break-all">
-                                                        {record.value}
-                                                    </code>
-                                                    {record.ttl && (
-                                                        <p className="text-xs text-gray-500 mt-1">TTL: {record.ttl}s</p>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => copyToClipboard(record.value)}
-                                                    className="p-2 text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all ml-2"
-                                                >
-                                                    {copied === record.value 
-                                                        ? <Check className="w-4 h-4 text-green-400" />
-                                                        : <Copy className="w-4 h-4" />
-                                                    }
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Quick Lookup */}
-                <div className="mt-8 rounded-xl border border-white/10 bg-white/[0.02] p-6">
-                    <h3 className="font-medium text-white mb-4">Quick Lookup</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {['google.com', 'cloudflare.com', 'github.com'].map((d) => (
-                            <button
-                                key={d}
-                                onClick={() => {
-                                    setDomain(d);
-                                }}
-                                className="px-3 py-1.5 text-sm text-gray-400 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
-                            >
-                                {d}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Record Types Info */}
-                <div className="mt-8 rounded-xl border border-white/10 bg-white/[0.02] p-6">
-                    <h3 className="font-medium text-white mb-4">DNS Record Types</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {[
-                            { type: 'A', desc: 'IPv4 address' },
-                            { type: 'AAAA', desc: 'IPv6 address' },
-                            { type: 'MX', desc: 'Mail server' },
-                            { type: 'NS', desc: 'Name server' },
-                            { type: 'TXT', desc: 'Text record' },
-                            { type: 'CNAME', desc: 'Alias' },
-                        ].map(({ type, desc }) => (
-                            <div key={type} className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
-                                <span className={`text-xs px-2 py-0.5 rounded border ${getRecordColor(type)}`}>{type}</span>
-                                <p className="text-xs text-gray-500 mt-2">{desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Info */}
-                <div className="mt-4 p-4 rounded-lg bg-white/[0.02] border border-white/5">
-                    <p className="text-xs text-gray-500">
-                        <strong className="text-gray-400">Note:</strong> DNS lookups are performed using Google Public DNS (8.8.8.8).
-                    </p>
-                </div>
-            </section>
-        </div>
-    );
+const STATUS_TEXT: Record<DnsTypeResult['status'], { label: string; tone: 'good' | 'neutral' | 'warn' | 'bad' }> = {
+    ok: { label: 'Records found', tone: 'good' },
+    empty: { label: 'No records of this type', tone: 'neutral' },
+    nxdomain: { label: 'Name does not exist', tone: 'warn' },
+    error: { label: 'Lookup failed', tone: 'bad' },
 };
 
-export default DNSLookupPage;
+const ERROR_TEXT: Record<string, string> = {
+    timeout: 'The resolver did not answer in time.',
+    servfail: 'The resolver reported a server failure.',
+    refused: 'The resolver refused the query.',
+    resolver_unreachable: 'The resolver could not be reached.',
+    invalid_name: 'The name is not valid for this record type.',
+    failed: 'The lookup failed.',
+};
+
+function extra(record: DnsRecord | string): string {
+    if (typeof record === 'string') return '';
+    const bits: string[] = [];
+    if (typeof record.priority === 'number') bits.push(`priority ${record.priority}`);
+    if (typeof record.ttl === 'number') bits.push(`TTL ${record.ttl}s`);
+    return bits.join(', ');
+}
+
+function TypeSection({ type, entry }: { type: string; entry: DnsTypeResult }) {
+    const status = STATUS_TEXT[entry.status] ?? { label: entry.status ? String(entry.status) : 'Unknown', tone: 'neutral' as const };
+    return (
+        <section className={`${card} p-4`} aria-labelledby={`dns-${type}`} data-testid={`dns-${type}`} data-status={entry.status}>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 id={`dns-${type}`} className="font-mono text-sm font-semibold text-gray-900 dark:text-white">{type}</h3>
+                <Pill tone={status.tone}>{status.label}</Pill>
+            </div>
+            {entry.status === 'ok' && (
+                <ul className="space-y-1.5">
+                    {entry.records.map((record, i) => {
+                        const value = typeof record === 'string' ? record : record.value;
+                        const more = extra(record);
+                        return (
+                            <li key={`${value}-${i}`} className="flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg bg-gray-100 px-3 py-1.5 font-mono text-[13px] text-gray-900 dark:bg-neutral-950 dark:text-gray-200">
+                                <span className="break-all">{value}</span>
+                                {more && <span className={`text-xs ${muted}`}>{more}</span>}
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+            {entry.status === 'error' && <p className="text-sm text-red-800 dark:text-red-300">{(entry.error && ERROR_TEXT[entry.error]) || 'The lookup failed.'} This is not the same as having no records: try again.</p>}
+            {entry.status === 'nxdomain' && <p className={`text-sm ${muted}`}>The resolver says this name does not exist.</p>}
+        </section>
+    );
+}
+
+function Existence({ result }: { result: DnsResult }) {
+    if (result.exists === true) return <Pill tone="good">Name exists</Pill>;
+    if (result.exists === false) return <Pill tone="warn">Name does not exist</Pill>;
+    return <Pill tone="neutral" title="Some lookups failed, so the answer is not certain.">Existence unknown</Pill>;
+}
+
+export default function DnsLookupPage() {
+    const { available } = useTool(SLUG);
+    const { initial, save } = useTargetParam();
+    const [value, setValue] = useState('');
+    const [types, setTypes] = useState<string[]>(DEFAULT_TYPES);
+    const [submitted, setSubmitted] = useState<{ name: string; types: string[] } | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+    // Sent only when it differs from the API's default, so the common lookup shares one cache entry
+    const sentTypes = submitted && !isIp(submitted.name) && !sameTypes(submitted.types, DEFAULT_TYPES) ? submitted.types : undefined;
+    const query = useDns(submitted?.name ?? null, sentTypes);
+
+    useEffect(() => { if (initial) setValue(initial); }, [initial]);
+
+    const typedIp = useMemo(() => isIp(value.trim().replace(/^\[|\]$/g, '')), [value]);
+
+    const toggle = (type: string) => setTypes((current) => (current.includes(type) ? current.filter((t) => t !== type) : ALL_TYPES.filter((t) => current.includes(t) || t === type)));
+
+    const run = () => {
+        const checked = checkDnsName(value);
+        if (!checked.ok) { setFormError(checked.error); return; }
+        if (!isIp(checked.value) && types.length === 0) { setFormError('Pick at least one record type.'); return; }
+        setFormError(null);
+        save(checked.value);
+        const next = { name: checked.value, types: [...types] };
+        if (submitted && submitted.name === next.name && sameTypes(submitted.types, next.types)) query.refetch();
+        else setSubmitted(next);
+    };
+
+    const result = query.data?.data;
+    const order = result ? ALL_TYPES.filter((t) => result.results[t]).concat(Object.keys(result.results).filter((t) => ALL_TYPES.indexOf(t) < 0)) : [];
+
+    return (
+        <ToolShell slug={SLUG}>
+            <ToolForm
+                id="dns-name" label="Domain name or IP address" value={value} onChange={setValue} onSubmit={run}
+                placeholder="example.com" buttonLabel="Look up" pending={query.isFetching} disabled={!available}
+                error={formError} inputMode="url"
+                hint="An IP address is looked up in reverse (PTR). The lookup uses public resolvers, so private zones are never visible."
+            >
+                {!typedIp && (
+                    <fieldset>
+                        <legend className="mb-1.5 text-sm font-medium text-gray-800 dark:text-gray-200">Record types</legend>
+                        <div className="flex flex-wrap gap-2">
+                            {ALL_TYPES.filter((t) => t !== 'PTR').map((type) => {
+                                const on = types.includes(type);
+                                return (
+                                    <button
+                                        key={type} type="button" aria-pressed={on} onClick={() => toggle(type)}
+                                        className={`rounded-full border px-3 py-1 font-mono text-xs ${focusRing} ${on ? 'border-orange-700 bg-orange-700 text-white' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200 dark:hover:bg-neutral-800'}`}
+                                    >{type}</button>
+                                );
+                            })}
+                        </div>
+                    </fieldset>
+                )}
+            </ToolForm>
+
+            <div className="mt-6" data-testid="dns-output">
+                {query.isFetching && <ResultSkeleton label="Looking up DNS records" />}
+                {!query.isFetching && query.isError && <ToolErrorPanel error={query.error} onRetry={() => query.refetch()} />}
+                {!query.isFetching && result && (
+                    <ResultPanel label="DNS result">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-mono text-sm text-gray-900 dark:text-white">{result.name}</span>
+                                <Existence result={result} />
+                            </div>
+                            <ResultActions data={result} text={dnsSummary(result)} filename={`dns-${result.name}`} />
+                        </div>
+                        <div className="mb-3"><ResultMeta meta={query.data?.meta} /></div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {order.map((type) => <TypeSection key={type} type={type} entry={result.results[type]} />)}
+                        </div>
+                    </ResultPanel>
+                )}
+                {!submitted && !query.isFetching && <p className={`text-sm ${muted}`}>Enter a name to see its records. Each record type reports its own status, so a failed lookup is never shown as an empty answer.</p>}
+            </div>
+        </ToolShell>
+    );
+}

@@ -23,7 +23,8 @@ import {
     Clock,
     Target,
     BarChart3,
-    HardDrive
+    HardDrive,
+    Wrench
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
 
@@ -132,6 +133,14 @@ const adminSections = [
         href: '/admin/moderation',
         color: 'from-red-500 to-rose-600',
         minRole: 'moderator' as MinRole,
+    },
+    {
+        title: 'Security Tools',
+        description: 'Pause tools, set daily caps, block targets and see usage',
+        icon: Wrench,
+        href: '/admin/tools',
+        color: 'from-orange-500 to-red-600',
+        minRole: 'admin' as MinRole,
     },
     {
         title: 'Settings',

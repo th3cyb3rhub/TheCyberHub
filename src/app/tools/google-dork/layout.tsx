@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'Google Dork Generator | TheCyberHub',
-    description: 'Generate Google dorking queries for OSINT and security reconnaissance. Build advanced search operators to find exposed data.',
-}
+export const metadata = toolMetadata('google-dork')
 
 export default function GoogleDorkLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

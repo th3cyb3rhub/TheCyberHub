@@ -1,24 +1,17 @@
-import { SkeletonToolsGrid } from '@/components/ui/skeleton';
+import { ToolCardSkeleton } from '@/components/tools/ToolCard';
+import { pageBg } from '@/components/tools/styles';
 
 export default function ToolsLoading() {
     return (
-        <div className="min-h-screen bg-black pt-32 pb-16 px-4 sm:px-6">
-            <div className="max-w-5xl mx-auto">
-                {/* Header skeleton */}
-                <div className="mb-8 space-y-4">
-                    <div className="h-6 w-32 bg-white/5 rounded animate-pulse" />
-                    <div className="h-12 w-64 bg-white/5 rounded animate-pulse" />
-                    <div className="h-5 w-96 max-w-full bg-white/5 rounded animate-pulse" />
+        <div className={pageBg} role="status" aria-label="Loading tools">
+            <div className="mx-auto max-w-6xl px-4 pb-16 pt-32 sm:px-6">
+                <div className="mb-8 space-y-3">
+                    <div className="h-10 w-64 animate-pulse rounded bg-gray-200 dark:bg-neutral-800" />
+                    <div className="h-5 w-96 max-w-full animate-pulse rounded bg-gray-200 dark:bg-neutral-800" />
                 </div>
-                
-                {/* Search skeleton */}
-                <div className="flex gap-3 mb-8">
-                    <div className="flex-1 h-12 bg-white/5 rounded-xl animate-pulse" />
-                    <div className="h-12 w-20 bg-white/5 rounded-xl animate-pulse" />
-                    <div className="h-12 w-24 bg-white/5 rounded-xl animate-pulse" />
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => <ToolCardSkeleton key={i} />)}
                 </div>
-
-                <SkeletonToolsGrid />
             </div>
         </div>
     );

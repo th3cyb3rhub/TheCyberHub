@@ -10,12 +10,15 @@ export class ApiError extends Error {
     code?: string;
     /** Field level problems of a 400 VALIDATION_ERROR: `[{ field: 'startDate', message: '...' }]` */
     details?: ApiErrorDetail[];
-    constructor(message: string, status: number, code?: string, details?: ApiErrorDetail[]) {
+    /** Machine-readable context some errors carry (`reason`, `scope`, `retryAfter` on the tools API) */
+    meta?: Record<string, unknown>;
+    constructor(message: string, status: number, code?: string, details?: ApiErrorDetail[], meta?: Record<string, unknown>) {
         super(message);
         this.name = 'ApiError';
         this.status = status;
         this.code = code;
         this.details = details;
+        this.meta = meta;
     }
 }
 
@@ -84,10 +87,14 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         let errorMessage = 'An error occurred while fetching data';
         let errorCode: string | undefined;
         let errorDetails: ApiErrorDetail[] | undefined;
+        let errorMeta: Record<string, unknown> | undefined;
         try {
             const data = await response.json();
             errorMessage = data.message || data.error?.message || errorMessage;
             if (typeof data.error?.code === 'string') errorCode = data.error.code;
+            if (data.error?.meta && typeof data.error.meta === 'object' && !Array.isArray(data.error.meta)) {
+                errorMeta = data.error.meta;
+            }
             if (Array.isArray(data.error?.details)) {
                 errorDetails = data.error.details
                     .filter((d: unknown): d is { field?: unknown; message: string } => !!d && typeof (d as { message?: unknown }).message === 'string')
@@ -99,7 +106,7 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
         } catch {
             // Ignore JSON parsing errors
         }
-        throw new ApiError(errorMessage, response.status, errorCode, errorDetails);
+        throw new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
     }
 
     try {

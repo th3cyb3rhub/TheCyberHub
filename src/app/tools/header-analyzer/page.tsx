@@ -1,223 +1,158 @@
-"use client"
+'use client';
 
-import React, { useState } from 'react';
-import {
-    Search,
-    Lock,
-    Loader2,
-    RefreshCw,
-    AlertTriangle,
-    ShieldCheck,
-    ShieldAlert,
-    ShieldOff,
-    Info,
-    ChevronDown,
-    ChevronUp
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+import { ToolShell } from '@/components/tools/ToolShell';
+import { ToolForm, useTargetParam } from '@/components/tools/ToolForm';
+import { AccessNotice, AckCheckbox, useToolAccess } from '@/components/tools/ToolAccess';
+import { DataRow, Pill, ResultActions, ResultMeta, ResultPanel, ResultSkeleton, ToolErrorPanel } from '@/components/tools/ResultParts';
+import { card, muted, type Tone } from '@/components/tools/styles';
+import { useHeaderScan, useTool } from '@/hooks/queries/useTools';
+import { headersSummary } from '@/lib/tools/summaries';
+import { checkHttpUrl, urlWithoutQuery } from '@/lib/tools/validate';
+import type { CheckStatus, HeaderCheck, HeadersResult } from '@/types/tools';
 
-interface HeaderAnalysis {
-    title: string;
-    score: 'good' | 'warning' | 'bad';
-    description: string;
-}
+const SLUG = 'header-analyzer';
 
-interface OtherHeader {
-    name: string;
-    value: string | string[] | undefined;
-}
-
-interface ScanResult {
-    targetUrl: string;
-    analysis: HeaderAnalysis[];
-    otherHeaders: OtherHeader[];
-}
-
-// --- Helper Components ---
-const ScoreIcon = ({ score }: { score: 'good' | 'warning' | 'bad' }) => {
-    switch (score) {
-        case 'good':
-            return <ShieldCheck className="h-6 w-6 text-green-400 flex-shrink-0" />;
-        case 'warning':
-            return <ShieldAlert className="h-6 w-6 text-yellow-400 flex-shrink-0" />;
-        case 'bad':
-            return <ShieldOff className="h-6 w-6 text-red-400 flex-shrink-0" />;
-        default:
-            return <Info className="h-6 w-6 text-gray-400 flex-shrink-0" />;
-    }
+const STATUS: Record<CheckStatus, { label: string; tone: Tone; order: number }> = {
+    fail: { label: 'Fail', tone: 'bad', order: 0 },
+    warn: { label: 'Warning', tone: 'warn', order: 1 },
+    info: { label: 'Info', tone: 'info', order: 2 },
+    pass: { label: 'Pass', tone: 'good', order: 3 },
+    na: { label: 'Not applicable', tone: 'neutral', order: 4 },
 };
 
-const scoreColorClasses = {
-    good: 'border-green-500/30 bg-green-900/20',
-    warning: 'border-yellow-500/30 bg-yellow-900/20',
-    bad: 'border-red-500/30 bg-red-900/20',
-};
-
-// --- Main Component ---
-const HeaderAnalyzerPage = () => {
-    // State management
-    const [url, setUrl] = useState('');
-    const [results, setResults] = useState<ScanResult | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [showOtherHeaders, setShowOtherHeaders] = useState(false);
-
-    // API endpoint for the httpHeaderAnalyzer Lambda function - using environment variable for security
-    const LAMBDA_URL = process.env.NEXT_PUBLIC_HEADER_ANALYZER_API_URL || '';
-
-    const handleScan = async () => {
-        if (!url.trim()) {
-            setError('Please enter a URL to analyze.');
-            return;
-        }
-        // A simple regex to validate it looks like a domain/URL
-        const urlRegex = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/.*)*$/i;
-        if (!urlRegex.test(url.trim())) {
-            setError('Please enter a valid URL or domain name.');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-        setResults(null);
-
-        try {
-            const response = await fetch(LAMBDA_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url.trim() }),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || errData.details || `Request failed with status ${response.status}`);
-            }
-
-            const data: ScanResult = await response.json();
-            setResults(data);
-
-        } catch (err) {
-            console.error('Scan error:', err);
-            const errorMessage =
-                err instanceof Error
-                    ? err.message
-                    : 'An unexpected error occurred. The service might be down or the URL is unreachable.';
-
-            setError(errorMessage);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleClear = () => {
-        setUrl('');
-        setResults(null);
-        setError('');
-        setShowOtherHeaders(false);
-    };
-
+function Check({ check }: { check: HeaderCheck }) {
+    const s = STATUS[check.status] ?? STATUS.info;
     return (
-        <div className="min-h-screen bg-black text-slate-300">
-            <main className="pt-24 pb-20">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <li className="border-b border-gray-200 py-3 last:border-b-0 dark:border-neutral-800" data-testid="header-check" data-status={check.status}>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Pill tone={s.tone}>{s.label}</Pill>
+                {check.header && <span className="font-mono text-[13px] text-gray-900 dark:text-white">{check.header}</span>}
+            </div>
+            <p className="text-sm text-gray-800 dark:text-gray-200">{check.message}</p>
+            {check.value && <p className={`mt-1 break-all font-mono text-xs ${muted}`}>{check.value}</p>}
+        </li>
+    );
+}
 
-                    {/* Hero Section */}
-                    <section className="text-center mb-16">
-                        <div className="flex items-center justify-center space-x-4 mb-5">
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/10">
-                                <Lock className="h-8 w-8 text-blue-400" />
-                            </div>
-                            <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">
-                                HTTP Security Header Analyzer
-                            </h1>
-                        </div>
-                        <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto">
-                            Analyze a website&#39;s HTTP response headers to identify potential security misconfigurations.
-                        </p>
-                    </section>
+function Result({ data }: { data: HeadersResult }) {
+    const checks = [...data.checks].sort((a, b) => (STATUS[a.status]?.order ?? 9) - (STATUS[b.status]?.order ?? 9));
+    const redirected = data.redirects.length > 0;
+    return (
+        <div className="space-y-4">
+            <div className={`${card} p-5`}>
+                <dl>
+                    <DataRow label="Requested"><span className="break-all font-mono text-[13px]">{data.requestedUrl}</span></DataRow>
+                    <DataRow label="Final address"><span className="break-all font-mono text-[13px]">{data.finalUrl}</span></DataRow>
+                    <DataRow label="Status"><Pill tone={data.status < 400 ? 'good' : 'warn'}>{data.status} {data.statusText}</Pill></DataRow>
+                    <DataRow label="Summary">
+                        <span className="flex flex-wrap gap-1.5">
+                            {(['fail', 'warn', 'info', 'pass'] as CheckStatus[]).map((k) => <Pill key={k} tone={STATUS[k].tone}>{data.summary[k] ?? 0} {STATUS[k].label.toLowerCase()}</Pill>)}
+                        </span>
+                    </DataRow>
+                </dl>
+                {redirected && (
+                    <div className="mt-3" data-testid="redirect-chain">
+                        <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-white">Redirects</h3>
+                        <ol className="space-y-1 text-[13px]">
+                            {data.redirects.map((hop, i) => (
+                                <li key={i} className="flex flex-wrap items-center gap-1.5 font-mono">
+                                    <span className="break-all">{hop.url ?? hop.from}</span>
+                                    {hop.status && <Pill>{hop.status}</Pill>}
+                                    <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                    <span className="break-all">{hop.location ?? hop.to}</span>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                )}
+            </div>
 
-                    {/* Scan Input Section */}
-                    <section className="max-w-4xl mx-auto mb-16">
-                        <div className="bg-gray-950/60 border border-gray-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/20 backdrop-blur-sm">
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                                <input
-                                    type="text"
-                                    value={url}
-                                    onChange={(e) => setUrl(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleScan()}
-                                    placeholder="Enter target URL, e.g., https://google.com"
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-900/80 border border-gray-700/60 rounded-xl text-slate-100 placeholder:text-gray-500 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 outline-none text-base backdrop-blur-sm"
-                                    disabled={loading}
-                                />
-                            </div>
+            <section className={`${card} p-5`} aria-labelledby="header-checks">
+                <h2 id="header-checks" className="mb-1 text-base font-semibold text-gray-900 dark:text-white">Security header review</h2>
+                <p className={`mb-2 text-xs ${muted}`}>There is no overall grade: each line says what was found and why it matters.</p>
+                <ul>{checks.map((c) => <Check key={c.id} check={c} />)}</ul>
+            </section>
 
-                            {error && (
-                                <div className="flex items-center space-x-3 text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-4 mt-6 backdrop-blur-sm">
-                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                    <span className="text-sm font-medium">{error}</span>
-                                </div>
-                            )}
+            {data.cookies.length > 0 && (
+                <section className={`${card} overflow-x-auto p-5`} aria-labelledby="header-cookies">
+                    <h2 id="header-cookies" className="mb-2 text-base font-semibold text-gray-900 dark:text-white">Cookies</h2>
+                    <p className={`mb-2 text-xs ${muted}`}>Cookie values are never shown or stored.</p>
+                    <table className="w-full text-left text-sm">
+                        <thead className={muted}><tr><th className="py-1.5 pr-3 font-medium">Name</th><th className="pr-3 font-medium">Secure</th><th className="pr-3 font-medium">HttpOnly</th><th className="font-medium">SameSite</th></tr></thead>
+                        <tbody>
+                            {data.cookies.map((c, i) => (
+                                <tr key={`${i}-${c.name}`} className="border-t border-gray-200 dark:border-neutral-800">
+                                    <td className="py-1.5 pr-3 font-mono text-[13px]">{c.name}</td>
+                                    <td className="pr-3">{c.secure ? 'Yes' : 'No'}</td>
+                                    <td className="pr-3">{c.httpOnly ? 'Yes' : 'No'}</td>
+                                    <td>{c.sameSite ?? 'Not set'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </section>
+            )}
 
-                            <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                                <button onClick={handleScan} disabled={loading || !url.trim()} className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center space-x-3 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:shadow-none transform hover:scale-105 disabled:hover:scale-100">
-                                    {loading ? (<><Loader2 className="h-5 w-5 animate-spin" /><span>Analyzing...</span></>) : (<><Search className="h-5 w-5" /><span>Analyze Headers</span></>)}
-                                </button>
-                                <button onClick={handleClear} className="px-6 py-4 bg-gray-800/80 hover:bg-gray-700/80 text-slate-200 font-semibold rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 border border-gray-700/50 hover:border-gray-600/50">
-                                    <RefreshCw className="h-4 w-4" /><span>Clear</span>
-                                </button>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Results Section */}
-                    {loading && (
-                        <div className="p-16 text-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-400 mx-auto mb-4" />
-                            <p className="text-gray-400">Fetching and analyzing headers...</p>
-                        </div>
-                    )}
-
-                    {results && !loading && (
-                        <section>
-                            <div className="mb-6">
-                                <h2 className="text-2xl font-bold text-slate-100 mb-2">Analysis for: <span className="text-blue-400 font-mono">{results.targetUrl}</span></h2>
-                                <p className="text-slate-400">Found {results.analysis.length} security headers and {results.otherHeaders.length} other headers.</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {results.analysis.map((item, index) => (
-                                    <div key={index} className={`border rounded-xl p-5 transition-all duration-300 ${scoreColorClasses[item.score]}`}>
-                                        <div className="flex items-start space-x-4">
-                                            <ScoreIcon score={item.score} />
-                                            <div>
-                                                <h3 className="text-lg font-bold text-slate-100">{item.title}</h3>
-                                                <p className="text-slate-300 mt-1 text-sm">{item.description}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Other Headers Section */}
-                            <div className="mt-12">
-                                <button onClick={() => setShowOtherHeaders(!showOtherHeaders)} className="w-full flex justify-between items-center text-left text-xl font-bold text-slate-200 p-4 bg-gray-900/80 rounded-lg border border-gray-800/80 hover:bg-gray-800/80 transition-colors duration-200">
-                                    <span>All Other Headers</span>
-                                    {showOtherHeaders ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />}
-                                </button>
-                                {showOtherHeaders && (
-                                    <div className="mt-2 p-4 bg-gray-950/70 border border-gray-800/80 rounded-lg font-mono text-sm text-slate-400 overflow-x-auto">
-                                        <pre>
-                                            {results.otherHeaders.map(h => `${h.name}: ${h.value}`).join('\n')}
-                                        </pre>
-                                    </div>
-                                )}
-                            </div>
-                        </section>
-                    )}
-                </div>
-            </main>
+            <details className={`${card} p-5`}>
+                <summary className="cursor-pointer text-base font-semibold text-gray-900 dark:text-white">All response headers ({data.headers.length})</summary>
+                <dl className="mt-3">
+                    {data.headers.map((h, i) => <DataRow key={`${h.name}-${i}`} label={h.name}><span className="break-all font-mono text-[13px]">{h.value}</span></DataRow>)}
+                </dl>
+            </details>
         </div>
     );
-};
+}
 
-export default HeaderAnalyzerPage;
+export default function HeaderAnalyzerPage() {
+    const { tool, available } = useTool(SLUG);
+    const access = useToolAccess(tool?.auth !== 'optional');
+    const { initial, save } = useTargetParam();
+    const [value, setValue] = useState('');
+    const [ack, setAck] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const scan = useHeaderScan();
+
+    useEffect(() => { if (initial) setValue(initial); }, [initial]);
+
+    const run = () => {
+        const checked = checkHttpUrl(value);
+        if (!checked.ok) { setFormError(checked.error); return; }
+        if (!ack) { setFormError('Confirm that you may test this target first.'); return; }
+        setFormError(null);
+        save(urlWithoutQuery(checked.value));
+        scan.mutate({ url: checked.value, ack: true });
+    };
+
+    const locked = !available || access !== 'ok';
+
+    return (
+        <ToolShell slug={SLUG}>
+            <AccessNotice state={access} />
+            <ToolForm
+                id="header-url" label="URL to check" value={value} onChange={setValue} onSubmit={run}
+                placeholder="https://example.com" buttonLabel="Analyze headers" pending={scan.isPending} disabled={locked}
+                error={formError} inputMode="url" submitDisabled={!ack}
+                hint="We fetch the page once from our server and only read the headers. Private, loopback and internal addresses are refused."
+            >
+                <AckCheckbox id="header-ack" checked={ack} onChange={setAck} disabled={locked} />
+            </ToolForm>
+
+            <div className="mt-6" data-testid="header-output">
+                {scan.isPending && <ResultSkeleton label="Fetching the headers" />}
+                {!scan.isPending && scan.isError && <ToolErrorPanel error={scan.error} onRetry={() => scan.variables && scan.mutate(scan.variables)} />}
+                {!scan.isPending && scan.data && (
+                    <ResultPanel label="Header analysis">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <ResultMeta meta={scan.data.meta} scannedAt={scan.data.data.scannedAt} />
+                            <ResultActions data={scan.data.data} text={headersSummary(scan.data.data)} filename="http-headers" />
+                        </div>
+                        <Result data={scan.data.data} />
+                    </ResultPanel>
+                )}
+                {!scan.isPending && !scan.isError && !scan.data && <p className={`text-sm ${muted}`}>Enter an address to review its security headers, cookies and redirects.</p>}
+            </div>
+        </ToolShell>
+    );
+}

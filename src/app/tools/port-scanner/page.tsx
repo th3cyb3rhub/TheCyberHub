@@ -1,377 +1,154 @@
-"use client"
+'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Play, Loader2, CheckCircle, XCircle, AlertTriangle, Copy, Check, Info } from 'lucide-react';
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { Info } from 'lucide-react';
+import { ToolShell } from '@/components/tools/ToolShell';
+import { CopyButton } from '@/components/tools/ResultParts';
+import { card, focusRing, input, label as labelClass, muted, codeBlock } from '@/components/tools/styles';
+import { buildNmapCommand, DEFAULT_OPTIONS, validatePortList, validateTarget, type ScanType, type Timing } from '@/lib/tools/nmap';
+import { matchesPort, PORT_PRESETS, PORTS, type PortPreset } from '@/lib/tools/ports';
 
-interface PortResult {
-    port: number;
-    status: 'open' | 'closed' | 'filtered';
-    service: string;
-    description: string;
+const SLUG = 'port-scanner';
+const CUSTOM: PortPreset = { id: 'custom', label: 'Custom', ports: [] };
+const PRESETS = [...PORT_PRESETS, CUSTOM];
+
+function Check({ id, checked, onChange, children }: { id: string; checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+    return (
+        <label htmlFor={id} className="flex cursor-pointer items-start gap-2 text-sm text-gray-800 dark:text-gray-200">
+            <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-orange-600" />
+            <span>{children}</span>
+        </label>
+    );
 }
 
-interface ScanResult {
-    target: string;
-    scanTime: number;
-    ports: PortResult[];
-    openCount: number;
-}
-
-// Common ports and their services
-const commonPorts: Record<number, { service: string; description: string }> = {
-    21: { service: 'FTP', description: 'File Transfer Protocol' },
-    22: { service: 'SSH', description: 'Secure Shell' },
-    23: { service: 'Telnet', description: 'Telnet (insecure)' },
-    25: { service: 'SMTP', description: 'Simple Mail Transfer Protocol' },
-    53: { service: 'DNS', description: 'Domain Name System' },
-    80: { service: 'HTTP', description: 'Hypertext Transfer Protocol' },
-    110: { service: 'POP3', description: 'Post Office Protocol v3' },
-    143: { service: 'IMAP', description: 'Internet Message Access Protocol' },
-    443: { service: 'HTTPS', description: 'HTTP Secure' },
-    445: { service: 'SMB', description: 'Server Message Block' },
-    993: { service: 'IMAPS', description: 'IMAP over SSL' },
-    995: { service: 'POP3S', description: 'POP3 over SSL' },
-    1433: { service: 'MSSQL', description: 'Microsoft SQL Server' },
-    1521: { service: 'Oracle', description: 'Oracle Database' },
-    3306: { service: 'MySQL', description: 'MySQL Database' },
-    3389: { service: 'RDP', description: 'Remote Desktop Protocol' },
-    5432: { service: 'PostgreSQL', description: 'PostgreSQL Database' },
-    5900: { service: 'VNC', description: 'Virtual Network Computing' },
-    6379: { service: 'Redis', description: 'Redis Database' },
-    8080: { service: 'HTTP-Alt', description: 'HTTP Alternate' },
-    8443: { service: 'HTTPS-Alt', description: 'HTTPS Alternate' },
-    27017: { service: 'MongoDB', description: 'MongoDB Database' },
-};
-
-const portPresets = [
-    { label: 'Top 20', ports: [21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 993, 995, 1433, 3306, 3389, 5432, 5900, 6379, 8080, 8443] },
-    { label: 'Web', ports: [80, 443, 8080, 8443, 8000, 8888, 3000, 5000] },
-    { label: 'Database', ports: [1433, 1521, 3306, 5432, 6379, 27017, 9200, 9300] },
-    { label: 'Mail', ports: [25, 110, 143, 465, 587, 993, 995] },
-];
-
-const PortScannerPage = () => {
-    const [target, setTarget] = useState('');
+function CommandBuilder() {
+    const [target, setTarget] = useState(DEFAULT_OPTIONS.target);
+    const [preset, setPreset] = useState<PortPreset>(PRESETS[1]);
     const [customPorts, setCustomPorts] = useState('');
-    const [selectedPreset, setSelectedPreset] = useState<number[]>(portPresets[0].ports);
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<ScanResult | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
-    const [scanProgress, setScanProgress] = useState(0);
+    const [scanType, setScanType] = useState<ScanType>(DEFAULT_OPTIONS.scanType);
+    const [serviceVersion, setServiceVersion] = useState(DEFAULT_OPTIONS.serviceVersion);
+    const [defaultScripts, setDefaultScripts] = useState(DEFAULT_OPTIONS.defaultScripts);
+    const [skipPing, setSkipPing] = useState(DEFAULT_OPTIONS.skipPing);
+    const [timing, setTiming] = useState<Timing>(DEFAULT_OPTIONS.timing);
+    const [saveOutput, setSaveOutput] = useState(DEFAULT_OPTIONS.saveOutput);
 
-    const scanPorts = async () => {
-        if (!target) {
-            setError('Please enter a target hostname or IP');
-            return;
-        }
-
-        setLoading(true);
-        setError(null);
-        setResult(null);
-        setScanProgress(0);
-
-        const portsToScan = customPorts
-            ? customPorts.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p > 0 && p <= 65535)
-            : selectedPreset;
-
-        if (portsToScan.length === 0) {
-            setError('No valid ports to scan');
-            setLoading(false);
-            return;
-        }
-
-        const startTime = Date.now();
-        const results: PortResult[] = [];
-
-        // Note: Browser-based port scanning is limited due to CORS
-        // This is a simulation for educational purposes
-        // Real port scanning requires a backend service
-
-        for (let i = 0; i < portsToScan.length; i++) {
-            const port = portsToScan[i];
-            setScanProgress(Math.round((i / portsToScan.length) * 100));
-
-            // Simulate scan delay
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Simulate results (in real implementation, this would check actual connectivity)
-            const portInfo = commonPorts[port] || { service: 'Unknown', description: 'Unknown service' };
-            
-            // Simulate some ports being open for demo
-            const isOpen = [80, 443, 22].includes(port) || Math.random() < 0.1;
-            
-            results.push({
-                port,
-                status: isOpen ? 'open' : 'closed',
-                service: portInfo.service,
-                description: portInfo.description
-            });
-        }
-
-        setScanProgress(100);
-        const scanTime = Date.now() - startTime;
-
-        setResult({
-            target,
-            scanTime,
-            ports: results,
-            openCount: results.filter(r => r.status === 'open').length
-        });
-
-        setLoading(false);
-    };
-
-    const copyToClipboard = (id: string, text: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-    };
-
-    const nmapCommand = `nmap -sV -sC ${target || 'target.com'} -p ${customPorts || selectedPreset.join(',')}`;
+    const targetCheck = target.trim() ? validateTarget(target) : null;
+    const portsCheck = preset.id === 'custom' && customPorts.trim() ? validatePortList(customPorts) : null;
+    const command = useMemo(
+        () => buildNmapCommand({ target, preset, customPorts, scanType, serviceVersion, defaultScripts, skipPing, timing, saveOutput }),
+        [target, preset, customPorts, scanType, serviceVersion, defaultScripts, skipPing, timing, saveOutput],
+    );
+    const ready = !!targetCheck?.ok && (preset.id !== 'custom' || !!portsCheck?.ok);
 
     return (
-        <div className="min-h-screen pt-20">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
-                {/* Header */}
-                <div className="mb-8">
-                    <Link 
-                        href="/tools" 
-                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-white mb-4 transition-colors"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Tools
-                    </Link>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                        Port Scanner
-                    </h1>
-                    <p className="text-gray-400">
-                        Scan common ports to discover open services.
-                    </p>
+        <section className={`${card} p-5`} aria-labelledby="nmap-builder" data-testid="nmap-builder">
+            <h2 id="nmap-builder" className="mb-1 text-lg font-semibold text-gray-900 dark:text-white">Nmap command builder</h2>
+            <p className={`mb-4 text-sm ${muted}`}>Builds a command for you to run on your own machine against hosts you own or have written permission to scan. This site never scans anything.</p>
+
+            <div className="mb-4">
+                <label htmlFor="nmap-target" className={labelClass}>Target</label>
+                <input id="nmap-target" type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="scanme.nmap.org or 192.168.1.0/24" className={input} autoComplete="off" spellCheck={false} aria-invalid={targetCheck ? !targetCheck.ok : undefined} aria-describedby="nmap-target-msg" />
+                <p id="nmap-target-msg" className={`mt-1 text-xs ${targetCheck && !targetCheck.ok ? 'text-red-800 dark:text-red-300' : muted}`} role={targetCheck && !targetCheck.ok ? 'alert' : undefined}>
+                    {targetCheck && !targetCheck.ok ? targetCheck.error : 'A host name, IP address or CIDR range.'}
+                </p>
+            </div>
+
+            <fieldset className="mb-4">
+                <legend className={labelClass}>Ports</legend>
+                <div className="flex flex-wrap gap-2">
+                    {PRESETS.map((p) => (
+                        <button key={p.id} type="button" aria-pressed={preset.id === p.id} onClick={() => setPreset(p)}
+                            className={`rounded-full border px-3 py-1 text-sm ${focusRing} ${preset.id === p.id ? 'border-orange-700 bg-orange-700 text-white' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200 dark:hover:bg-neutral-800'}`}
+                        >{p.label}</button>
+                    ))}
                 </div>
-
-                {/* Warning */}
-                <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                    <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                            <p className="text-yellow-400 font-medium text-sm">Authorization Required</p>
-                            <p className="text-yellow-500/80 text-sm mt-1">
-                                Only scan systems you own or have explicit permission to test. 
-                                Unauthorized port scanning may be illegal in your jurisdiction.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Info */}
-                <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                    <div className="flex items-start gap-3">
-                        <Info className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                            <p className="text-blue-400 font-medium text-sm">Browser Limitations</p>
-                            <p className="text-blue-500/80 text-sm mt-1">
-                                Browser-based port scanning is limited. For accurate results, use the nmap command below 
-                                or a dedicated scanning tool.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Scan Form */}
-                <div className="mb-8 p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                    <h2 className="text-white font-medium mb-4">Scan Configuration</h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-2">Target Host</label>
-                            <input
-                                type="text"
-                                value={target}
-                                onChange={(e) => setTarget(e.target.value)}
-                                placeholder="example.com or 192.168.1.1"
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-600 focus:border-orange-500/50 focus:outline-none transition-colors"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-2">Port Presets</label>
-                            <div className="flex flex-wrap gap-2">
-                                {portPresets.map((preset) => (
-                                    <button
-                                        key={preset.label}
-                                        onClick={() => {
-                                            setSelectedPreset(preset.ports);
-                                            setCustomPorts('');
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                                            JSON.stringify(selectedPreset) === JSON.stringify(preset.ports) && !customPorts
-                                                ? 'bg-orange-500 text-white'
-                                                : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
-                                        }`}
-                                    >
-                                        {preset.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-2">Custom Ports (comma-separated)</label>
-                            <input
-                                type="text"
-                                value={customPorts}
-                                onChange={(e) => setCustomPorts(e.target.value)}
-                                placeholder="80, 443, 8080, 3000"
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-600 focus:border-orange-500/50 focus:outline-none transition-colors font-mono text-sm"
-                            />
-                        </div>
-
-                        <button
-                            onClick={scanPorts}
-                            disabled={loading || !target}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-xl transition-all"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Scanning... {scanProgress}%
-                                </>
-                            ) : (
-                                <>
-                                    <Play className="w-4 h-4" />
-                                    Start Scan
-                                </>
-                            )}
-                        </button>
-
-                        {/* Progress Bar */}
-                        {loading && (
-                            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-orange-500 transition-all duration-300"
-                                    style={{ width: `${scanProgress}%` }}
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Error */}
-                {error && (
-                    <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                        <div className="flex items-start gap-3">
-                            <XCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                            <p className="text-red-400 text-sm">{error}</p>
-                        </div>
+                {preset.id === 'custom' && (
+                    <div className="mt-3">
+                        <label htmlFor="nmap-ports" className={labelClass}>Port list</label>
+                        <input id="nmap-ports" type="text" value={customPorts} onChange={(e) => setCustomPorts(e.target.value)} placeholder="22,80,443,8000-8100" className={input} autoComplete="off" spellCheck={false} aria-invalid={portsCheck ? !portsCheck.ok : undefined} />
+                        {portsCheck && !portsCheck.ok && <p role="alert" className="mt-1 text-xs text-red-800 dark:text-red-300">{portsCheck.error}</p>}
                     </div>
                 )}
+                {preset.ports.length > 0 && <p className={`mt-2 font-mono text-xs ${muted}`}>{preset.ports.join(', ')}</p>}
+            </fieldset>
 
-                {/* Results */}
-                {result && (
-                    <div className="space-y-4">
-                        {/* Summary */}
-                        <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-white font-medium">Scan Results</h3>
-                                <span className="text-sm text-gray-500">
-                                    Completed in {(result.scanTime / 1000).toFixed(2)}s
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-4 text-center">
-                                <div className="p-3 rounded-lg bg-white/5">
-                                    <p className="text-2xl font-bold text-white">{result.ports.length}</p>
-                                    <p className="text-xs text-gray-500">Ports Scanned</p>
-                                </div>
-                                <div className="p-3 rounded-lg bg-green-500/10">
-                                    <p className="text-2xl font-bold text-green-400">{result.openCount}</p>
-                                    <p className="text-xs text-gray-500">Open</p>
-                                </div>
-                                <div className="p-3 rounded-lg bg-red-500/10">
-                                    <p className="text-2xl font-bold text-red-400">{result.ports.length - result.openCount}</p>
-                                    <p className="text-xs text-gray-500">Closed</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Open Ports */}
-                        {result.openCount > 0 && (
-                            <div className="p-5 rounded-xl border border-green-500/30 bg-green-500/5">
-                                <h3 className="text-green-400 font-medium mb-3 flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    Open Ports
-                                </h3>
-                                <div className="space-y-2">
-                                    {result.ports.filter(p => p.status === 'open').map((port) => (
-                                        <div key={port.port} className="flex items-center justify-between p-3 rounded-lg bg-black/20">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-white font-mono font-medium">{port.port}</span>
-                                                <span className="text-orange-400">{port.service}</span>
-                                            </div>
-                                            <span className="text-sm text-gray-500">{port.description}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* All Ports Table */}
-                        <div className="p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                            <h3 className="text-white font-medium mb-3">All Scanned Ports</h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-left text-gray-500 border-b border-white/10">
-                                            <th className="pb-2 pr-4">Port</th>
-                                            <th className="pb-2 pr-4">Status</th>
-                                            <th className="pb-2 pr-4">Service</th>
-                                            <th className="pb-2">Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {result.ports.map((port) => (
-                                            <tr key={port.port} className="border-b border-white/5">
-                                                <td className="py-2 pr-4 font-mono text-white">{port.port}</td>
-                                                <td className="py-2 pr-4">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
-                                                        port.status === 'open' 
-                                                            ? 'bg-green-500/20 text-green-400' 
-                                                            : 'bg-red-500/20 text-red-400'
-                                                    }`}>
-                                                        {port.status === 'open' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                                                        {port.status}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2 pr-4 text-orange-400">{port.service}</td>
-                                                <td className="py-2 text-gray-500">{port.description}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Nmap Command */}
-                <div className="mt-8 p-5 rounded-xl border border-white/10 bg-white/[0.02]">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-white font-medium">Scan with Nmap</h3>
-                        <button
-                            onClick={() => copyToClipboard('nmap', nmapCommand)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-sm transition-colors"
-                        >
-                            {copiedId === 'nmap' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                            Copy
-                        </button>
-                    </div>
-                    <pre className="p-4 rounded-lg bg-black/50 border border-white/5 overflow-x-auto">
-                        <code className="text-sm text-orange-400">{nmapCommand}</code>
-                    </pre>
+            <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label htmlFor="nmap-scan" className={labelClass}>Scan type</label>
+                    <select id="nmap-scan" value={scanType} onChange={(e) => setScanType(e.target.value as ScanType)} className={input}>
+                        <option value="connect">TCP connect (-sT), no special rights</option>
+                        <option value="syn">SYN scan (-sS), needs root</option>
+                        <option value="udp">UDP (-sU), slow, needs root</option>
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="nmap-timing" className={labelClass}>Speed</label>
+                    <select id="nmap-timing" value={timing} onChange={(e) => setTiming(e.target.value as Timing)} className={input}>
+                        <option value="T2">Polite (-T2)</option>
+                        <option value="T3">Normal (-T3)</option>
+                        <option value="T4">Fast (-T4), for reliable networks</option>
+                    </select>
                 </div>
             </div>
-        </div>
-    );
-};
+            <div className="mb-5 grid gap-2 sm:grid-cols-2">
+                <Check id="nmap-sv" checked={serviceVersion} onChange={setServiceVersion}>Detect service versions (-sV)</Check>
+                <Check id="nmap-sc" checked={defaultScripts} onChange={setDefaultScripts}>Run default scripts (-sC)</Check>
+                <Check id="nmap-pn" checked={skipPing} onChange={setSkipPing}>Skip host discovery (-Pn)</Check>
+                <Check id="nmap-oa" checked={saveOutput} onChange={setSaveOutput}>Save all output formats (-oA)</Check>
+            </div>
 
-export default PortScannerPage;
+            <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Command</h3>
+            <pre className={codeBlock} data-testid="nmap-command"><code>{command}</code></pre>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+                <CopyButton text={command} label="Copy command" />
+                {!ready && <span className={`text-xs ${muted}`}>Fill in the placeholders before running it.</span>}
+            </div>
+        </section>
+    );
+}
+
+function PortTable() {
+    const [query, setQuery] = useState('');
+    const rows = useMemo(() => PORTS.filter((p) => matchesPort(p, query)), [query]);
+    return (
+        <section className={`${card} mt-6 p-5`} aria-labelledby="port-reference">
+            <h2 id="port-reference" className="mb-1 text-lg font-semibold text-gray-900 dark:text-white">Common ports</h2>
+            <p className={`mb-4 text-sm ${muted}`}>What usually listens where, and what to look at first.</p>
+            <label htmlFor="port-filter" className={labelClass}>Filter by number or service</label>
+            <input id="port-filter" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="443, ssh, database" className={`${input} mb-3 sm:max-w-sm`} autoComplete="off" />
+            <p className={`mb-2 text-xs ${muted}`} aria-live="polite">{rows.length} of {PORTS.length} ports</p>
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[32rem] text-left text-sm" data-testid="port-table">
+                    <caption className="sr-only">Common ports and services</caption>
+                    <thead className={muted}><tr><th scope="col" className="py-1.5 pr-3 font-medium">Port</th><th scope="col" className="pr-3 font-medium">Service</th><th scope="col" className="pr-3 font-medium">What it is</th><th scope="col" className="font-medium">Worth knowing</th></tr></thead>
+                    <tbody>
+                        {rows.map((p) => (
+                            <tr key={p.port} className="border-t border-gray-200 align-top dark:border-neutral-800">
+                                <td className="py-1.5 pr-3 font-mono">{p.port}</td><td className="pr-3 font-medium">{p.service}</td><td className="pr-3">{p.description}</td><td className="text-[13px]">{p.note ?? ''}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {rows.length === 0 && <p className={`py-4 text-sm ${muted}`}>No port matches that. Try a number or a service name.</p>}
+            </div>
+        </section>
+    );
+}
+
+export default function PortReferencePage() {
+    return (
+        <ToolShell
+            slug={SLUG}
+            notice={(
+                <div role="note" className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-300 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+                    <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <p>This page does not scan hosts. A browser cannot open raw connections, and scanning from our servers would be abuse. Use the builder to prepare an Nmap command, and see the <Link href="/cheatsheets/networking" className="font-medium underline underline-offset-2">networking cheatsheet</Link> for how to read the results.</p>
+                </div>
+            )}
+        >
+            <CommandBuilder />
+            <PortTable />
+        </ToolShell>
+    );
+}

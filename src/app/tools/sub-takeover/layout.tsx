@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'Subdomain Takeover Checker | TheCyberHub',
-    description: 'Check for subdomain takeover vulnerabilities. Identify dangling DNS records that could be exploited by attackers.',
-}
+export const metadata = toolMetadata('sub-takeover')
 
 export default function SubTakeoverLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

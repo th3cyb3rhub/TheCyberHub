@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'Markdown Editor | TheCyberHub',
-    description: 'Write and preview Markdown with live rendering. A simple online Markdown editor for documentation and notes.',
-}
+export const metadata = toolMetadata('markdown-editor')
 
 export default function MarkdownEditorLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

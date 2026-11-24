@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'IP Lookup | TheCyberHub',
-    description: 'Look up IP address information including geolocation, ISP, ASN, and organization details for security investigations.',
-}
+export const metadata = toolMetadata('ip-lookup')
 
 export default function IPLookupLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

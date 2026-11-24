@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'HTTP Header Analyzer | TheCyberHub',
-    description: 'Analyze HTTP response headers for security misconfigurations. Check for missing security headers like CSP, HSTS, and X-Frame-Options.',
-}
+export const metadata = toolMetadata('header-analyzer')
 
 export default function HeaderAnalyzerLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

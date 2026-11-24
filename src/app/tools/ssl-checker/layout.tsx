@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'SSL/TLS Checker | TheCyberHub',
-    description: 'Check SSL/TLS certificate validity, expiration dates, and cipher suite configurations for any domain.',
-}
+export const metadata = toolMetadata('ssl-checker')
 
 export default function SSLCheckerLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>

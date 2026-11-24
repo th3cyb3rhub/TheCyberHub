@@ -1,9 +1,6 @@
-import type { Metadata } from 'next'
+import { toolMetadata } from '@/lib/tools/metadata'
 
-export const metadata: Metadata = {
-    title: 'CORS Tester | TheCyberHub',
-    description: 'Test Cross-Origin Resource Sharing (CORS) configurations. Check if a target URL has misconfigured CORS headers.',
-}
+export const metadata = toolMetadata('cors-tester')
 
 export default function CORSTesterLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>
