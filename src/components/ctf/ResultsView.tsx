@@ -8,6 +8,7 @@ import { useCtfCompetition, useCtfResults } from '@/hooks/queries/useCtf';
 import { ApiError } from '@/lib/api';
 import { categoryLabel, participantsText, placeLabel, scoreText, sortedPrizes } from '@/lib/ctf/display';
 import { entryKey } from '@/lib/ctf/scoreboard';
+import { effectiveCtfStatus } from '@/lib/ctf/status';
 import { formatRange } from '@/lib/events/time';
 import { isTeamEntry, type CtfBoardEntry, type CtfResults } from '@/types/ctf';
 import { CtfDifficultyBadge, CtfStatusBadge } from './Badges';
@@ -47,9 +48,25 @@ function PodiumCard({ entry, reward }: { entry: CtfBoardEntry; reward?: string }
     );
 }
 
-/** The results page of an ended competition: podium, top 20, challenges with first bloods, totals */
+export type ResultsStage = 'final' | 'frozen' | 'so-far';
+
+/**
+ * What the standings are. "Final" only when the competition has ended and the board is not a
+ * frozen one; staff can open the page earlier, and then it says so.
+ */
+export function resultsStage(results: Pick<CtfResults, 'frozen' | 'competition'>): ResultsStage {
+    if (results.frozen) return 'frozen';
+    const ended = results.competition.status === 'ended' || effectiveCtfStatus(results.competition) === 'ended';
+    return ended ? 'final' : 'so-far';
+}
+
+const STAGE_TITLE: Record<ResultsStage, string> = { final: 'final results', frozen: 'frozen standings', 'so-far': 'standings so far' };
+const STAGE_CAPTION: Record<ResultsStage, string> = { final: 'Final standings', frozen: 'Frozen standings', 'so-far': 'Standings so far' };
+
+/** The results page: podium, top 20, challenges with first bloods, totals. Final once the competition has ended. */
 export function ResultsBody({ results }: { results: CtfResults }) {
     const c = results.competition;
+    const stage = resultsStage(results);
     const prizes = new Map(sortedPrizes(c.prizes).map((p) => [p.place, p.reward]));
     const podium = results.podium.slice(0, 3);
     return (
@@ -59,7 +76,7 @@ export function ResultsBody({ results }: { results: CtfResults }) {
                     <CtfStatusBadge status={c.status} />
                     <span className={`text-sm ${muted}`}>{c.teamsEnabled ? 'Team competition' : 'Solo competition'}</span>
                 </div>
-                <h1 className="break-words text-3xl font-bold text-gray-900 dark:text-white">{c.title}: final results</h1>
+                <h1 className="break-words text-3xl font-bold text-gray-900 dark:text-white">{c.title}: {STAGE_TITLE[stage]}</h1>
                 <p className={`mt-2 text-sm ${muted}`}>{formatRange(c, c.timezone, { withYear: true })}</p>
             </header>
 
@@ -100,7 +117,7 @@ export function ResultsBody({ results }: { results: CtfResults }) {
                     <p className={`${cardPad} text-center text-sm ${muted}`}>No standings: nobody scored.</p>
                 ) : (
                     <>
-                        <BoardTable entries={results.standings} mode={results.mode} caption={`Final standings, top ${results.standings.length}`} />
+                        <BoardTable entries={results.standings} mode={results.mode} caption={`${STAGE_CAPTION[stage]}, top ${results.standings.length}`} />
                         <p className={`mt-2 text-xs ${muted}`}>The top {results.standings.length} are shown. Ties are broken by who reached the total first.</p>
                     </>
                 )}

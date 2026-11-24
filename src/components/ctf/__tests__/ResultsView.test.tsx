@@ -41,6 +41,49 @@ describe('ResultsView', () => {
         expect(screen.queryByTestId('results-frozen')).toBeNull()
     })
 
+    describe('what the heading and the table call the standings', () => {
+        const running = () => {
+            const r = makeResults()
+            r.competition.status = 'live'
+            return r
+        }
+
+        it('says "final results" only when the competition has ended', () => {
+            results.data = makeResults()
+            renderView()
+            expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Winter CTF: final results')
+            expect(screen.getByRole('table', { name: /Final standings/ })).toBeInTheDocument()
+        })
+
+        it('says "standings so far" when staff open the page while the competition runs', () => {
+            vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-12-06T12:00:00.000Z'))
+            try {
+                results.data = running()
+                renderView()
+                expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Winter CTF: standings so far')
+                expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('final')
+                expect(screen.getByRole('table', { name: /Standings so far/ })).toBeInTheDocument()
+                expect(screen.queryByRole('table', { name: /Final/ })).toBeNull()
+            } finally { vi.useRealTimers() }
+        })
+
+        it('says "frozen standings" for a frozen board, even before the end', () => {
+            results.data = { ...running(), frozen: true }
+            renderView()
+            expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Winter CTF: frozen standings')
+            expect(screen.getByRole('table', { name: /Frozen standings/ })).toBeInTheDocument()
+        })
+
+        it('counts a stale "live" status as ended once the end has passed', () => {
+            vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-12-08T00:00:00.000Z'))
+            try {
+                results.data = running()
+                renderView()
+                expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('final results')
+            } finally { vi.useRealTimers() }
+        })
+    })
+
     it('names a first blood and says when nobody solved a challenge', () => {
         results.data = makeResults()
         renderView()
