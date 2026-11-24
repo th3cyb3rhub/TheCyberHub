@@ -22,7 +22,7 @@ function Row({ cohort, onClose }: { cohort: CohortCard; onClose: (c: CohortCard)
     return (
         <li className={`${card} p-4 sm:p-5`} data-testid="admin-cohort" data-status={cohort.status}>
             <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[min(100%,18rem)] flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                         <CohortStatusBadge status={cohort.status} />
                         <span className={`${chip} bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-300`}>{TYPE_LABELS[cohort.type] ?? cohort.type}</span>

@@ -19,7 +19,7 @@ import { ViewerTime } from './ViewerTime';
 
 const LINK_FIELDS = [
     { name: 'githubUrl', label: 'GitHub profile', placeholder: 'https://github.com/username' },
-    { name: 'linkedinUrl', label: 'LinkedIn profile', placeholder: 'https://www.linkedin.com/in/username' },
+    { name: 'linkedinUrl', label: 'LinkedIn profile', placeholder: 'https://linkedin.com/in/username' },
     { name: 'portfolioUrl', label: 'Portfolio or website', placeholder: 'https://example.com' },
     { name: 'resumeUrl', label: 'Resume link', placeholder: 'https://drive.google.com/...' },
 ] as const;
