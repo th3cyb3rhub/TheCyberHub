@@ -61,6 +61,12 @@ describe('the public certificate page', () => {
         expect(screen.getByText('Could not check this certificate')).toBeInTheDocument()
         expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument()
     })
+    it('treats a malformed id (400) like an unknown one', () => {
+        query.current = result(undefined, { isError: true, error: new ApiError('bad id', 400, 'VALIDATION_ERROR') })
+        render(<CertificateView id="%%" />)
+        expect(screen.getByText('Certificate not found')).toBeInTheDocument()
+        expect(screen.queryByText('Could not check this certificate')).toBeNull()
+    })
     it('shows a loading state', () => {
         query.current = result(undefined)
         render(<CertificateView id="x" />)

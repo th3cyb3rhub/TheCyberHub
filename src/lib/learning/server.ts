@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { API_URL } from '@/lib/api';
 import type { Certificate, LearningDetail, LearningCard } from '@/types/learning';
 import type { Resource } from '@/types/resource';
@@ -36,8 +37,12 @@ export const fetchPublicPath = (slug: string): Promise<ServerResult<LearningDeta
 export const fetchPublicResource = (slug: string): Promise<ServerResult<Resource>> =>
     fetchPublic<Resource>(`/api/resources/${encodeURIComponent(slug)}`, 'resources');
 
-/** The public certificate check. Not cached: a certificate is checked when someone opens the link. */
-export async function fetchCertificate(id: string): Promise<ServerResult<Certificate>> {
+/**
+ * The public certificate check. Never stored between requests (a certificate is checked when someone
+ * opens the link), but `cache()` makes the page and its metadata share one call per request, so a view
+ * costs one hit on the rate-limited verify endpoint.
+ */
+export const fetchCertificate = cache(async (id: string): Promise<ServerResult<Certificate>> => {
     try {
         const res = await fetch(`${API_URL}/api/certificates/${encodeURIComponent(id)}`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
         if (res.status === 404 || res.status === 400) return { state: 'missing' };
@@ -47,7 +52,7 @@ export async function fetchCertificate(id: string): Promise<ServerResult<Certifi
     } catch {
         return { state: 'error' };
     }
-}
+});
 
 const clip = (text: string, max: number) => {
     const clean = text.replace(/\s+/g, ' ').trim();

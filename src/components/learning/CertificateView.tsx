@@ -10,6 +10,7 @@ import type { Certificate } from '@/types/learning';
 import { EmptyBlock, ErrorState, Skeleton } from './shared';
 import { btnPrimary, btnSecondary, muted, pageBg } from '@/components/events/styles';
 import { isNotFound } from '@/lib/learning/errors';
+import { ApiError } from '@/lib/api';
 
 /** The public certificate page: what was completed, by whom, when, and that the id is real */
 export function CertificateView({ id, initial }: { id: string; initial?: Certificate | null }) {
@@ -28,7 +29,8 @@ export function CertificateView({ id, initial }: { id: string; initial?: Certifi
             <div className="mx-auto max-w-3xl px-4 pb-16 pt-24 sm:px-6 print:pt-0">
                 {!cert ? (
                     query.isError ? (
-                        isNotFound(query.error) ? (
+                        // A malformed id answers 400: to the visitor it is the same as an id that does not exist
+                        isNotFound(query.error) || (query.error instanceof ApiError && query.error.status === 400) ? (
                             <EmptyBlock icon={Award} title="Certificate not found" action={<Link href="/roadmaps" className={btnPrimary}>Browse roadmaps</Link>}>
                                 No certificate has this id. Check the link or ask the person who shared it.
                             </EmptyBlock>
