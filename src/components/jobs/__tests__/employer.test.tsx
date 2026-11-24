@@ -16,7 +16,7 @@ const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), params: { id: '
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: nav.push, replace: nav.replace }), usePathname: () => '/employer', useParams: () => nav.params }))
 const api = vi.hoisted(() => ({
     listMyJobs: vi.fn(), getMyStats: vi.fn(), getMyCompany: vi.fn(), createJob: vi.fn(), updateJob: vi.fn(), submitJob: vi.fn(), closeJob: vi.fn(),
-    reopenJob: vi.fn(), deleteJob: vi.fn(), saveMyCompany: vi.fn(), becomeEmployer: vi.fn(), getJob: vi.fn(),
+    reopenJob: vi.fn(), deleteJob: vi.fn(), saveMyCompany: vi.fn(), becomeEmployer: vi.fn(), getJob: vi.fn(), resubmitMyCompany: vi.fn(),
 }))
 vi.mock('@/lib/api/jobs', () => api)
 vi.mock('@/lib/jobs/revalidate', () => ({ refreshPublicJobs: vi.fn() }))
@@ -164,6 +164,30 @@ describe('EmployerDashboard', () => {
         expect(card).toHaveTextContent('Rejected')
         expect(card).toHaveTextContent('Website is empty')
         expect(within(card).getByRole('link', { name: 'Fix the profile' })).toHaveAttribute('href', '/employer/company')
+        // A save does not send it back to review any more: the owner asks
+        expect(card).not.toHaveTextContent(/save to send it back/)
+        expect(card).toHaveTextContent(/ask for a new review/)
+        expect(within(card).getByTestId('resubmit-company')).toBeInTheDocument()
+    })
+
+    it('asks for a new review from the banner of a rejected company', async () => {
+        api.listMyJobs.mockResolvedValue(rows())
+        api.getMyCompany.mockResolvedValue(company({ status: 'rejected' }))
+        api.resubmitMyCompany.mockResolvedValue(company({ status: 'pending' }))
+        renderWithClient(<EmployerDashboard />)
+        await userEvent.click(await screen.findByTestId('resubmit-company'))
+        await waitFor(() => expect(api.resubmitMyCompany).toHaveBeenCalledTimes(1))
+        expect(toast.addToast).toHaveBeenCalledWith({ variant: 'success', message: expect.stringMatching(/new review/) })
+    })
+
+    it('does not tell an administrator to add a company profile', async () => {
+        auth.current = { user: { id: 'a1', role: 'admin' }, loading: false, refreshUser: vi.fn() }
+        api.listMyJobs.mockResolvedValue(rows())
+        api.getMyCompany.mockResolvedValue(null)
+        renderWithClient(<EmployerDashboard />)
+        expect(await screen.findByTestId('admin-no-company')).toHaveTextContent(/no company profile is needed/)
+        expect(screen.queryByRole('link', { name: 'Create company profile' })).not.toBeInTheDocument()
+        expect(screen.queryByText(/Add your company profile/)).not.toBeInTheDocument()
     })
 
     it('asks for a company profile when there is none, and shows an empty list kindly', async () => {
@@ -314,7 +338,10 @@ describe('company profile and the become-employer flow', () => {
         api.saveMyCompany.mockResolvedValue(company({ status: 'pending' }))
         renderWithClient(<CompanyView />)
         const name = await screen.findByLabelText(/Company name/)
-        expect(screen.getByText(/back to review/)).toBeInTheDocument()
+        expect(screen.getByText(/sends a verified company back to review/)).toBeInTheDocument()
+        // The logo and the website follow the same rule
+        expect(screen.getByText(/A new logo is reviewed before the public sees it/)).toBeInTheDocument()
+        expect(screen.getByText(/A new website is reviewed before the public sees it/)).toBeInTheDocument()
         await userEvent.clear(name)
         await userEvent.type(name, 'Acme Labs')
         await userEvent.click(screen.getByTestId('save-company'))
@@ -327,6 +354,58 @@ describe('company profile and the become-employer flow', () => {
         renderWithClient(<CompanyView />)
         expect(await screen.findByTestId('company-reject-reason')).toHaveTextContent('We could not find your site')
         expect(screen.queryByRole('link', { name: /View public page/ })).not.toBeInTheDocument()
+    })
+
+    it('asks for a new review of a rejected company, and says when it is too soon in the viewer\'s zone', async () => {
+        api.getMyCompany.mockResolvedValue(company({ status: 'rejected', moderation: { reason: 'No site' } }))
+        const retryAt = '2030-03-10T15:30:00.000Z'
+        api.resubmitMyCompany.mockRejectedValueOnce(new ApiError('x', 409, 'COMPANY_RESUBMIT_TOO_SOON', undefined, { retryAt }))
+        renderWithClient(<CompanyView />)
+        const box = await screen.findByTestId('resubmit-box')
+        expect(screen.getByTestId('company-review')).toHaveTextContent(/Saving the profile does not change that/)
+        expect(screen.getByTestId('company-review')).not.toHaveTextContent(/save: that sends it back/)
+        await userEvent.click(within(box).getByTestId('resubmit-company'))
+        const shown = new Date(retryAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+        expect(await within(box).findByTestId('resubmit-error')).toHaveTextContent(`from ${shown}`)
+        // Nothing was toasted: the answer sits beside the button
+        expect(toast.addToast).not.toHaveBeenCalled()
+        api.resubmitMyCompany.mockResolvedValueOnce(company({ status: 'pending' }))
+        await userEvent.click(within(box).getByTestId('resubmit-company'))
+        await waitFor(() => expect(toast.addToast).toHaveBeenCalledWith({ variant: 'success', message: expect.stringMatching(/new review/) }))
+    })
+
+    it('explains a company that is not rejected any more (COMPANY_NOT_REJECTED)', async () => {
+        api.getMyCompany.mockResolvedValue(company({ status: 'rejected' }))
+        api.resubmitMyCompany.mockRejectedValue(new ApiError('x', 409, 'COMPANY_NOT_REJECTED'))
+        renderWithClient(<CompanyView />)
+        await userEvent.click(await screen.findByTestId('resubmit-company'))
+        expect(await screen.findByTestId('resubmit-error')).toHaveTextContent(/turned down/)
+    })
+
+    it('tells a saved rejected company it is still rejected', async () => {
+        api.getMyCompany.mockResolvedValue(company({ status: 'rejected' }))
+        api.saveMyCompany.mockResolvedValue(company({ status: 'rejected' }))
+        renderWithClient(<CompanyView />)
+        await userEvent.click(await screen.findByTestId('save-company'))
+        await waitFor(() => expect(toast.addToast).toHaveBeenCalledWith({ variant: 'success', message: expect.stringMatching(/still rejected/) }))
+    })
+
+    it('shows the owner what the public page shows and that a change waits for a reviewer', async () => {
+        api.getMyCompany.mockResolvedValue(company({
+            name: 'Acme Labs', website: 'https://labs.example', status: 'pending', reviewed: { name: 'Acme Security', website: 'https://acme.example', logo: null },
+        }))
+        renderWithClient(<CompanyView />)
+        const shows = await screen.findByTestId('public-shows')
+        expect(shows).toHaveTextContent('The public page shows: Acme Security')
+        expect(screen.getByTestId('pending-change')).toHaveTextContent('Your saved name and website changes wait for a reviewer')
+        expect(screen.getByTestId('pending-change')).not.toHaveTextContent(/logo/i)
+    })
+
+    it('says so when nobody approved the profile yet', async () => {
+        api.getMyCompany.mockResolvedValue(company({ status: 'pending', reviewed: null }))
+        renderWithClient(<CompanyView />)
+        expect(await screen.findByTestId('public-shows')).toHaveTextContent(/Nobody has approved this profile yet/)
+        expect(screen.queryByTestId('pending-change')).not.toBeInTheDocument()
     })
 
     it('refuses a bad link before it sends', async () => {

@@ -2,7 +2,7 @@ import { excerpt, hostOf, LINK_REL, safeHref } from '@/lib/labs/display';
 import {
     CATEGORY_NAMES, COMPANY_STATUS_LABELS, EMPLOYMENT_NAMES, EXPERIENCE_NAMES, LOCATION_NAMES, STATUS_LABELS,
 } from './constants';
-import type { CompanyStatus, JobSalary, JobStatus } from '@/types/job';
+import type { Company, CompanyStatus, JobSalary, JobStatus } from '@/types/job';
 
 /**
  * Outbound links of a job (apply link, company website, logo) come from people, so they are shown
@@ -109,3 +109,19 @@ export function mailtoHref(email: string | null | undefined, title?: string): st
 
 /** The text of a count: "1 view", "12 views" */
 export const countText = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+/**
+ * What an owner (or a reviewer) saved that the public does not see yet: the name, website or logo that
+ * differ from the last approved ones. Empty when nothing was approved yet (the public then sees what is
+ * saved) or nothing changed.
+ */
+export function savedChanges(company: Pick<Company, 'name' | 'website' | 'logo' | 'reviewed'>): { field: string; saved: string; reviewed: string }[] {
+    const reviewed = company.reviewed;
+    if (!reviewed) return [];
+    const pairs: [string, string | null | undefined, string | null | undefined][] = [
+        ['Name', company.name, reviewed.name], ['Website', company.website, reviewed.website], ['Logo', company.logo, reviewed.logo],
+    ];
+    return pairs
+        .filter(([, saved, was]) => (saved || '') !== (was || ''))
+        .map(([field, saved, was]) => ({ field, saved: saved || 'none', reviewed: was || 'none' }));
+}

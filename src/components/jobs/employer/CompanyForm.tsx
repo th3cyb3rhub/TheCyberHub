@@ -21,8 +21,8 @@ interface Props {
 }
 
 /**
- * The company profile. It names the employer on every job. A verified company that changes its name
- * or website goes back to review, and the form says so before the save.
+ * The company profile. It names the employer on every job. A verified company that changes its name,
+ * website or logo goes back to review, and the form says so before the save.
  */
 export function CompanyForm({ mode, company, fallbackName = '', onSaved }: Props) {
     const id = useId();
@@ -82,6 +82,12 @@ export function CompanyForm({ mode, company, fallbackName = '', onSaved }: Props
         <Field id={`${id}-${key}`} label={label} required={opts.required} hint={opts.hint} error={errors[key]} className={opts.className}>{control}</Field>
     );
     const wasVerified = company?.status === 'verified';
+    const reviewedBefore = mode === 'profile' && !!company && company.status !== 'rejected';
+    // The same rule for the three fields the public reads: a verified company goes back to review (its jobs keep the
+    // approved details meanwhile); a company nobody approved yet takes its live jobs back to review
+    const identityHint = wasVerified
+        ? 'sends a verified company back to review. Its jobs stay public under the last approved name, website and logo while it waits.'
+        : reviewedBefore ? 'sends your live jobs back to review until a reviewer approves the new details.' : undefined;
 
     return (
         <form ref={formRef} onSubmit={(e) => void submit(e)} noValidate className="space-y-6" data-testid="company-form">
@@ -96,7 +102,7 @@ export function CompanyForm({ mode, company, fallbackName = '', onSaved }: Props
                 <legend className="px-1 text-base font-semibold text-gray-900 dark:text-white">About the company</legend>
                 {field('name', 'Company name', (p) => <input {...p} type="text" value={values.name} onChange={(e) => set('name', e.target.value)} maxLength={JOB_LIMITS.companyName.max + 20} autoComplete="organization" className={`${input} ${invalid('name')}`} />, {
                     required: true,
-                    hint: wasVerified ? 'Changing the name or the website sends a verified company back to review. Its jobs stay public while it waits.' : undefined,
+                    hint: identityHint ? `Changing the name, the website or the logo ${identityHint}` : undefined,
                 })}
                 {field('description', 'Description', (p) => (
                     <>
@@ -119,8 +125,8 @@ export function CompanyForm({ mode, company, fallbackName = '', onSaved }: Props
             <fieldset className={`${card} space-y-5 p-5 sm:p-6`}>
                 <legend className="px-1 text-base font-semibold text-gray-900 dark:text-white">Links</legend>
                 <p className={`text-sm ${muted}`}>Every link must start with https:// (or http://).</p>
-                {field('website', 'Website', (p) => <input {...p} type="url" value={values.website} onChange={(e) => set('website', e.target.value)} placeholder="https://example.com" className={`${input} ${invalid('website')}`} autoComplete="url" />)}
-                {field('logo', 'Logo address', (p) => <input {...p} type="url" value={values.logo} onChange={(e) => set('logo', e.target.value)} placeholder="https://example.com/logo.png" className={`${input} ${invalid('logo')}`} />, { hint: 'A link to an image. It is shown beside your jobs.' })}
+                {field('website', 'Website', (p) => <input {...p} type="url" value={values.website} onChange={(e) => set('website', e.target.value)} placeholder="https://example.com" className={`${input} ${invalid('website')}`} autoComplete="url" />, { hint: identityHint ? 'A new website is reviewed before the public sees it.' : undefined })}
+                {field('logo', 'Logo address', (p) => <input {...p} type="url" value={values.logo} onChange={(e) => set('logo', e.target.value)} placeholder="https://example.com/logo.png" className={`${input} ${invalid('logo')}`} />, { hint: `A link to an image. It is shown beside your jobs.${identityHint ? ' A new logo is reviewed before the public sees it.' : ''}` })}
                 <div className="grid gap-5 sm:grid-cols-2">
                     {field('socialLinks.linkedin', 'LinkedIn', (p) => <input {...p} type="url" value={values.linkedin} onChange={(e) => set('linkedin', e.target.value)} placeholder="https://www.linkedin.com/company/example" className={`${input} ${invalid('socialLinks.linkedin')}`} />)}
                     {field('socialLinks.twitter', 'X (Twitter)', (p) => <input {...p} type="url" value={values.twitter} onChange={(e) => set('twitter', e.target.value)} placeholder="https://x.com/example" className={`${input} ${invalid('socialLinks.twitter')}`} />)}

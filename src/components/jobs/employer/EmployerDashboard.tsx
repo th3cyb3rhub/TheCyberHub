@@ -17,6 +17,7 @@ import { isJobAdmin } from '@/lib/jobs/roles';
 import { JOB_STATUSES, type EmployerJob, type JobStatus } from '@/types/job';
 import { CompanyStatusChip, JobStatusChip } from '../StatusChips';
 import { ErrorState, ListSkeleton } from '../ListStates';
+import { ResubmitCompany } from './ResubmitCompany';
 
 type Filter = JobStatus | '';
 
@@ -44,11 +45,19 @@ function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: st
     );
 }
 
-function CompanyCard() {
+function CompanyCard({ admin }: { admin: boolean }) {
     const { data: company, isLoading, isError } = useMyCompany();
     if (isLoading) return <div className={`${card} h-20 animate-pulse`} aria-hidden="true" />;
     if (isError) return null;
     if (!company) {
+        // Administrators and owners name the company on each job: they need no profile to post
+        if (admin) {
+            return (
+                <p className={`${card} p-4 text-sm ${muted}`} data-testid="admin-no-company">
+                    <Building2 className="mr-2 inline h-4 w-4" aria-hidden="true" />You post as an administrator: you name the company on each job, so no company profile is needed.
+                </p>
+            );
+        }
         return (
             <div className={`${card} flex flex-wrap items-center justify-between gap-3 p-4`}>
                 <p className="text-sm text-gray-800 dark:text-gray-200"><Building2 className="mr-2 inline h-4 w-4" aria-hidden="true" />Add your company profile before you post: it names the employer on every job.</p>
@@ -57,7 +66,7 @@ function CompanyCard() {
         );
     }
     const note = company.status === 'rejected'
-        ? `A reviewer rejected the profile${company.moderation?.reason ? `: ${company.moderation.reason}` : '.'} Fix it and save to send it back to review. You cannot post until then.`
+        ? `A reviewer rejected the profile${company.moderation?.reason ? `: ${company.moderation.reason}` : '.'} Saving the profile does not change that: fix it, then ask for a new review. You cannot post until a reviewer approves it.`
         : company.status === 'pending'
             ? 'Your profile is waiting for review. Jobs you post are checked by a reviewer before they go live.'
             : 'Your company is verified: new jobs go live at once.';
@@ -67,7 +76,10 @@ function CompanyCard() {
                 <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"><Building2 className="h-4 w-4" aria-hidden="true" /><span className="break-words">{company.name}</span> <CompanyStatusChip status={company.status} /></p>
                 <p className={`mt-1 text-sm ${muted}`}>{note}</p>
             </div>
-            <Link href="/employer/company" className={btnSecondary}>{company.status === 'rejected' ? 'Fix the profile' : 'Edit profile'}</Link>
+            <div className="flex flex-wrap items-start gap-2">
+                <Link href="/employer/company" className={btnSecondary}>{company.status === 'rejected' ? 'Fix the profile' : 'Edit profile'}</Link>
+                {company.status === 'rejected' && <ResubmitCompany compact />}
+            </div>
         </div>
     );
 }
@@ -83,7 +95,8 @@ interface RowProps {
 function JobRow({ job, busy, onAction, onReopen, onDelete }: RowProps) {
     const status = job.status ?? 'draft';
     const shown = effectiveStatus({ status, expiresAt: job.expiresAt });
-    const reopenable = status === 'closed' || status === 'expired';
+    // A job past its end date that the sweep has not reached yet is still `approved` in the data, but it is over: it is reopened, not edited
+    const reopenable = shown === 'closed' || shown === 'expired';
     const left = status === 'approved' && shown === 'approved' ? daysLeftText(job.expiresAt) : null;
     const reason = status === 'rejected' ? job.moderation?.reason : null;
     const small = `${btnSecondary} !px-3 !py-1.5 !text-xs`;
@@ -156,7 +169,7 @@ export function EmployerDashboard() {
             actions={<Link href="/employer/post" className={btnPrimary}><Plus className="h-4 w-4" aria-hidden="true" /> Post a job</Link>}
         >
             <div className="space-y-6">
-                <CompanyCard />
+                <CompanyCard admin={admin} />
 
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Your numbers">
                     <Stat icon={Briefcase} label="Jobs" value={stats.data?.totalJobs ?? '-'} />

@@ -5,7 +5,7 @@ import { useId, useState } from 'react';
 import { Ban, Building2, CheckCircle2, ChevronDown, ExternalLink, EyeOff, Flag, Lock, Mail, ShieldCheck, ThumbsDown, User } from 'lucide-react';
 import { btnPrimary, btnSecondary, card, chip, focusRing, muted } from '@/components/events/styles';
 import { ViewerTime } from '@/components/internships/ViewerTime';
-import { categoryName, countText, employmentName, excerpt, experienceName, formatSalary, hostOf, LINK_REL, locationText, safeHref } from '@/lib/jobs/display';
+import { categoryName, countText, employmentName, excerpt, experienceName, formatSalary, hostOf, LINK_REL, locationText, safeHref, savedChanges } from '@/lib/jobs/display';
 import type { AdminCompany, Job, JobPoster } from '@/types/job';
 import { JobMarkdown } from '../JobMarkdown';
 import { CompanyStatusChip, JobStatusChip } from '../StatusChips';
@@ -185,21 +185,6 @@ interface CompanyRowProps {
 
 const ownerOf = (c: AdminCompany): JobPoster | null => (c.owner && typeof c.owner === 'object' ? c.owner : null);
 const ownerId = (c: AdminCompany): string | null => (typeof c.owner === 'string' ? c.owner : c.owner?._id ?? null);
-
-/**
- * What the owner saved that the public does not see yet: the name, website or logo that differ from the
- * last reviewed ones. Empty when nothing was reviewed yet (the public then sees what is saved) or nothing changed.
- */
-export function savedChanges(company: AdminCompany): { field: string; saved: string; reviewed: string }[] {
-    const reviewed = company.reviewed;
-    if (!reviewed) return [];
-    const pairs: [string, string | null | undefined, string | null | undefined][] = [
-        ['Name', company.name, reviewed.name], ['Website', company.website, reviewed.website], ['Logo', company.logo, reviewed.logo],
-    ];
-    return pairs
-        .filter(([, saved, was]) => (saved || '') !== (was || ''))
-        .map(([field, saved, was]) => ({ field, saved: saved || 'none', reviewed: was || 'none' }));
-}
 
 /** One company waiting for, or already past, review */
 export function AdminCompanyRow({ company, viewerId, busy, onApprove, onReject }: CompanyRowProps) {

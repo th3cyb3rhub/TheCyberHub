@@ -322,6 +322,24 @@ export function useSaveMyCompany() {
     });
 }
 
+/**
+ * A rejected company asks for a new review. The button that asked shows the error itself (it can say
+ * when the next ask is allowed), so a failure is not toasted here.
+ */
+export function useResubmitCompany() {
+    const qc = useQueryClient();
+    const { addToast } = useToast();
+    return useMutation<Company, unknown, void>({
+        mutationFn: () => api.resubmitMyCompany(),
+        retry: 0,
+        onSuccess: () => addToast({ variant: 'success', message: 'Sent for a new review. You will be told when a reviewer decides.' }),
+        onSettled: () => {
+            void qc.invalidateQueries({ queryKey: ['jobs', 'mine', 'company'] });
+            void qc.invalidateQueries({ queryKey: jobKeys.admin() });
+        },
+    });
+}
+
 export function useBecomeEmployer() {
     const qc = useQueryClient();
     return useMutation<Company, unknown, CompanyPayload>({

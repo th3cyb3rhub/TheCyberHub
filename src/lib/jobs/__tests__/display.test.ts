@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { applyTarget, openOutbound } from '../apply'
 import {
-    daysLeftText, effectiveStatus, formatSalary, hostOf, isEmail, isPublicNow, LINK_REL, locationText, mailtoHref, safeHref,
+    daysLeftText, effectiveStatus, savedChanges, formatSalary, hostOf, isEmail, isPublicNow, LINK_REL, locationText, mailtoHref, safeHref,
 } from '../display'
 
 describe('link guard', () => {
@@ -94,5 +94,20 @@ describe('job facts', () => {
         expect(formatSalary(null)).toBeNull()
         expect(locationText({ locationType: 'remote', location: null })).toMatch(/Remote/)
         expect(locationText({ locationType: 'onsite', location: 'Berlin' })).toMatch(/Berlin/)
+    })
+})
+
+describe('the saved change of a company against what the public sees', () => {
+    const base = { name: 'Acme', website: 'https://a.example', logo: null }
+    it('lists only the fields that differ from the approved ones', () => {
+        expect(savedChanges({ ...base, reviewed: { name: 'Acme', website: 'https://a.example', logo: null } })).toEqual([])
+        expect(savedChanges({ ...base, name: 'Acme Labs', logo: 'https://a.example/l.png', reviewed: { name: 'Acme', website: 'https://a.example', logo: null } })).toEqual([
+            { field: 'Name', saved: 'Acme Labs', reviewed: 'Acme' },
+            { field: 'Logo', saved: 'https://a.example/l.png', reviewed: 'none' },
+        ])
+    })
+    it('has nothing to compare when nobody approved the company yet', () => {
+        expect(savedChanges({ ...base, reviewed: null })).toEqual([])
+        expect(savedChanges(base)).toEqual([])
     })
 })
