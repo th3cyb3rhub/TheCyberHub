@@ -292,10 +292,10 @@ export function SeriesManagePanel({ series }: { series: Series }) {
                 description="No more dates are created. Upcoming dates with registrations are cancelled and those members are told. Upcoming dates nobody joined are removed. Past dates stay. This cannot be undone."
                 confirmLabel="End the series"
                 destructive
-                reason={{ label: 'Reason, shown to registered members', min: SERIES_LIMITS.reason.min, max: SERIES_LIMITS.reason.max, placeholder: 'For example: the host team is taking a break.' }}
+                reason={{ label: 'Reason, shown to registered members', min: SERIES_LIMITS.reason.min, max: SERIES_LIMITS.reason.max, optional: true, placeholder: 'For example: the host team is taking a break.' }}
                 pending={end.isPending}
                 error={error}
-                onConfirm={(reason) => end.mutate({ id: series.id, reason }, { onSuccess: close, onError: fail })}
+                onConfirm={(reason) => end.mutate({ id: series.id, reason: reason.trim() || undefined }, { onSuccess: close, onError: fail })}
             />
         </section>
     );

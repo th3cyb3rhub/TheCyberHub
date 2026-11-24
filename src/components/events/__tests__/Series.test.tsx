@@ -132,17 +132,24 @@ describe('series management', () => {
         expect(mut.resume.mutate).toHaveBeenCalled()
     })
 
-    it('needs a reason to end the series, and sends it', () => {
+    it('ends the series with an optional reason: empty sends none, a short one is refused, a real one is sent', () => {
         auth.user = { id: 'a1', role: 'admin' }
         query.current = ok(manageable())
         render(<SeriesView id="x" />)
         fireEvent.click(screen.getByRole('button', { name: /End the series/ }))
         const dialog = screen.getByRole('dialog', { name: 'End this series for good?' })
         const confirm = within(dialog).getByRole('button', { name: 'End the series' })
+        expect(within(dialog).getByText(/Optional/)).toBeInTheDocument()
+        expect(confirm).toBeEnabled()
+        fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'ab' } })
         expect(confirm).toBeDisabled()
+        fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: '  ' } })
+        expect(confirm).toBeEnabled()
+        fireEvent.click(confirm)
+        expect(mut.end.mutate).toHaveBeenLastCalledWith({ id: series().id, reason: undefined }, expect.any(Object))
         fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'Taking a break' } })
         fireEvent.click(confirm)
-        expect(mut.end.mutate).toHaveBeenCalledWith({ id: series().id, reason: 'Taking a break' }, expect.any(Object))
+        expect(mut.end.mutate).toHaveBeenLastCalledWith({ id: series().id, reason: 'Taking a break' }, expect.any(Object))
     })
 
     it('has no actions for an ended series', () => {
