@@ -37,6 +37,9 @@ const MESSAGES: Record<string, string> = {
     CTF_CHALLENGE_HAS_SOLVES: 'A challenge that has solves cannot be removed from the competition: earned points stay.',
 };
 
+/** What the API says when a captain tries to leave a team that still has members */
+export const CAPTAIN_LEAVE_MESSAGE = MESSAGES.CTF_CAPTAIN_CANNOT_LEAVE;
+
 export function ctfErrorCode(err: unknown): string | undefined {
     return err instanceof ApiError ? err.code : undefined;
 }
