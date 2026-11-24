@@ -1,6 +1,6 @@
 import { API_URL, fetchApi } from '@/lib/api';
 import type {
-    ArchiveFilters, ArchivePage, AttendanceResult, AttendanceUndoResult, Attendee, AttendeesExport, CalendarQuery,
+    ArchiveFilters, ArchivePage, AttendanceResult, AttendanceUndoResult, Attendee, AttendeesExport, CalendarItem, CalendarQuery,
     CalendarResult, CalendarTokenCreated, CalendarTokenStatus, EventDetail, EventFeedbackPage, EventListFilters,
     EventPage, RegistrationResult, ReminderOffset, Series, SeriesCreated, SeriesEnded, SeriesPatchResult,
 } from '@/types/event';
@@ -149,7 +149,9 @@ function calendarParams(query: CalendarQuery): URLSearchParams {
 /** A public, cached read: no token is sent, so everyone gets the same answer */
 export async function getCalendar(query: CalendarQuery): Promise<CalendarResult> {
     const res = await fetchApi(`/api/events/calendar?${calendarParams(query).toString()}`, { requireAuth: false });
-    return { items: res.data ?? [], meta: res.meta };
+    const items: CalendarItem[] = res.data ?? [];
+    // The API always sends `meta`; a missing one must not take the page down
+    return { items, meta: res.meta ?? { from: query.from, to: query.to, count: items.length, truncated: false } };
 }
 
 /** The range as a calendar file. A plain link: the browser downloads it, nothing here builds the file. */

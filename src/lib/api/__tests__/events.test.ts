@@ -110,6 +110,12 @@ describe('calendar and archive', () => {
         expect(options).toEqual({ requireAuth: false })
     })
 
+    it('does not fail when the answer has no meta', async () => {
+        fetchApi.mockResolvedValue({ success: true, data: [{ id: 'a' }] })
+        const result = await api.getCalendar({ from: 'f', to: 't' })
+        expect(result.meta).toEqual({ from: 'f', to: 't', count: 1, truncated: false })
+    })
+
     it('builds plain links for the calendar files from the API address', () => {
         const url = api.calendarIcsUrl({ from: '2026-12-01', to: '2026-12-31', category: '' })
         expect(url).toBe('https://api.example.test/api/events/calendar.ics?from=2026-12-01&to=2026-12-31')
