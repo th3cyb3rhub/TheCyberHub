@@ -85,8 +85,8 @@ export function EventsCalendar() {
                 <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Event calendar</h1>
-                        <p className={`mt-1 flex items-center gap-1.5 text-sm ${muted}`} data-testid="zone-label">
-                            <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <p className={`mt-1 flex items-start gap-1.5 text-sm ${muted}`} data-testid="zone-label">
+                            <Globe2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                             <span>Times are in your time zone, {zone} ({abbreviation}). An event hosted in another zone shows its own time too.</span>
                         </p>
                     </div>

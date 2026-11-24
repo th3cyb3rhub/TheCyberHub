@@ -17,6 +17,9 @@ export function itemTimeLabel(item: CalendarItem, zone: string, continued: boole
     return `${formatClock(item.startDate, zone)} – ${formatClock(item.endDate, zone)}`;
 }
 
+/** A narrow column may break after the dash, never inside "6:00 PM" */
+const noBreakClock = (label: string) => label.replace(/(\d) ([AP]M)/g, '$1\u00a0$2');
+
 /** The event's own clock, when it differs from the viewer's: "6:00 PM GMT+1 at the event" */
 export function eventClockNote(item: CalendarItem, zone: string): string | null {
     if (item.isAllDay || sameClock(item.startDate, item.timezone, zone)) return null;
@@ -42,7 +45,7 @@ export function CalendarItemRow({ item, zone, continued = false, dense = false }
                     {item.title}
                 </span>
                 <span className={`mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs ${muted}`}>
-                    <span className="font-medium text-gray-800 dark:text-gray-200">{itemTimeLabel(item, zone, continued)}</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-200">{noBreakClock(itemTimeLabel(item, zone, continued))}</span>
                     <span>{CATEGORY_LABELS[item.category] ?? item.category}</span>
                     <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden="true" />{FORMAT_LABELS[item.format] ?? item.format}</span>
                 </span>
