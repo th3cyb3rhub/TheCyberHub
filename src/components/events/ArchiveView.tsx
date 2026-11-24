@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Archive, CalendarDays, Loader2, Presentation, Search, Star, Users, Video, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useEventArchives } from '@/hooks/queries/useEventCalendar';
-import { archiveRangeInvalid, archiveSearch, parseArchiveParams, toArchiveFilters, type ArchiveState } from '@/lib/events/archive';
+import { ARCHIVE_MAX_PAGE, archiveRangeInvalid, archiveSearch, parseArchiveParams, toArchiveFilters, type ArchiveState } from '@/lib/events/archive';
 import { safeHref } from '@/lib/events/display';
 import { CATEGORY_LABELS, FORMAT_LABELS } from '@/lib/events/form';
 import { formatDayYear, toLocalParts } from '@/lib/events/time';
@@ -115,6 +115,8 @@ export function ArchiveView() {
 
     const invalid = archiveRangeInvalid(state);
     const query = useEventArchives(toArchiveFilters(state), { enabled: !invalid });
+    const lastPage = query.data?.pages.at(-1)?.pagination;
+    const capped = !query.hasNextPage && !!lastPage?.hasMore && lastPage.page >= ARCHIVE_MAX_PAGE;
     const items = useMemo(() => {
         const seen = new Set<string>();
         return (query.data?.pages.flatMap((p) => p.data) ?? []).filter((e) => !seen.has(e.id) && !!seen.add(e.id));
@@ -180,6 +182,11 @@ export function ArchiveView() {
                         <div className={`grid gap-5 sm:grid-cols-2 lg:grid-cols-3 ${query.isPlaceholderData ? 'opacity-60' : ''}`} aria-busy={query.isPlaceholderData}>
                             {items.map((item) => <ArchiveCard key={item.id} item={item} />)}
                         </div>
+                        {capped && (
+                            <p role="status" className={`mt-8 text-center text-sm ${muted}`} data-testid="archive-capped">
+                                That is as far as the list goes. Narrow your filters to see more.
+                            </p>
+                        )}
                         {query.hasNextPage && (
                             <div className="mt-8 text-center">
                                 <button type="button" className={`${btnSecondary} ${focusRing}`} disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>

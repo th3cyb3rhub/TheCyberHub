@@ -3,6 +3,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import * as api from '@/lib/api/events';
+import { ARCHIVE_MAX_PAGE } from '@/lib/events/archive';
 import { saveBlob } from '@/lib/events/download';
 import { calendarFeedErrorMessage, eventErrorMessage, exportErrorMessage } from '@/lib/events/errors';
 import type { ArchiveFilters, ArchivePage, AttendanceUndoResult, CalendarTokenCreated, EventCategory } from '@/types/event';
@@ -33,7 +34,7 @@ export function useEventArchives(filters: ArchiveFilters, { enabled = true }: { 
         queryKey: eventKeys.archives(base),
         queryFn: ({ pageParam }) => api.listArchives({ ...base, page: pageParam }),
         initialPageParam: 1,
-        getNextPageParam: (last: ArchivePage) => (last.pagination.hasMore ? last.pagination.page + 1 : undefined),
+        getNextPageParam: (last: ArchivePage) => (last.pagination.hasMore && last.pagination.page < ARCHIVE_MAX_PAGE ? last.pagination.page + 1 : undefined),
         enabled,
         staleTime: 60_000,
         placeholderData: keepPreviousData,

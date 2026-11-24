@@ -99,6 +99,13 @@ describe('useEventArchives', () => {
         expect(result.current.hasNextPage).toBe(false)
     })
 
+    it('stops asking for more at page 200, even if the API says there is more', async () => {
+        api.listArchives.mockResolvedValue({ data: [{ id: 'p200' }], pagination: { page: 200, limit: 12, hasMore: true } })
+        const { result } = renderHook(() => useEventArchives({}), { wrapper })
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+        expect(result.current.hasNextPage).toBe(false)
+    })
+
     it('waits when disabled', () => {
         renderHook(() => useEventArchives({}, { enabled: false }), { wrapper })
         expect(api.listArchives).not.toHaveBeenCalled()

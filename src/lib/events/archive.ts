@@ -34,3 +34,6 @@ export function toArchiveFilters(state: ArchiveState): ArchiveFilters {
         q: state.q || undefined,
     };
 }
+
+/** The API stops answering past this page, so "load more" stops here and asks for narrower filters */
+export const ARCHIVE_MAX_PAGE = 200;

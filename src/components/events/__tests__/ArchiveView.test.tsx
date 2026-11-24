@@ -97,6 +97,18 @@ describe('ArchiveView', () => {
         expect(replace).toHaveBeenLastCalledWith('/events/archive?category=ctf&q=web', { scroll: false })
     })
 
+    it('at page 200 hides the button and asks for narrower filters', () => {
+        state.result = loaded([item()], { data: { pages: [{ data: [item()], pagination: { page: 200, limit: 12, hasMore: true } }] } })
+        render(<ArchiveView />)
+        expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument()
+        expect(screen.getByTestId('archive-capped')).toHaveTextContent('Narrow your filters')
+    })
+
+    it('does not show the limit note when everything is loaded', () => {
+        render(<ArchiveView />)
+        expect(screen.queryByTestId('archive-capped')).not.toBeInTheDocument()
+    })
+
     it('loads more with the page the API said exists', () => {
         const fetchNextPage = vi.fn()
         state.result = loaded([item()], { hasNextPage: true, fetchNextPage })
