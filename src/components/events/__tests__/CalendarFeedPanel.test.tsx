@@ -95,6 +95,18 @@ describe('CalendarFeedPanel', () => {
         fireEvent.click(await screen.findByRole('button', { name: /Replace the address/ }))
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Go back' }))
         expect(api.createCalendarToken).not.toHaveBeenCalled()
+        await waitFor(() => expect(screen.getByRole('button', { name: /Replace the address/ })).toHaveFocus())
+    })
+
+    it('gives focus back to the Replace button after the new address dialog closes', async () => {
+        api.getCalendarTokenStatus.mockResolvedValue(on)
+        api.createCalendarToken.mockResolvedValue(created(true))
+        renderPanel()
+        fireEvent.click(await screen.findByRole('button', { name: /Replace the address/ }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Replace the address' }))
+        const secretDialog = await screen.findByRole('dialog', { name: 'Your new calendar address' })
+        fireEvent.click(within(secretDialog).getByRole('button', { name: 'I have copied it' }))
+        await waitFor(() => expect(screen.getByRole('button', { name: /Replace the address/ })).toHaveFocus())
     })
 
     it('asks before it turns the feed off', async () => {
@@ -107,6 +119,7 @@ describe('CalendarFeedPanel', () => {
         fireEvent.click(within(confirm).getByRole('button', { name: 'Turn off the feed' }))
         await waitFor(() => expect(api.revokeCalendarToken).toHaveBeenCalledTimes(1))
         expect(await screen.findByRole('button', { name: /Create my feed/ })).toBeInTheDocument()
+        await waitFor(() => expect(screen.getByRole('button', { name: /Create my feed/ })).toHaveFocus())
     })
 
     it('shows the friendly message when the server cannot make the address (503)', async () => {

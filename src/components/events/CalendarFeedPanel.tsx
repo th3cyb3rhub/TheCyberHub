@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarSync, Loader2, RefreshCw, Rss, ShieldAlert, Trash2 } from 'lucide-react';
 import { useCalendarToken, useCreateCalendarToken, useRevokeCalendarToken } from '@/hooks/queries/useEventCalendar';
 import { useViewerZone } from '@/lib/events/clock';
@@ -26,9 +26,20 @@ export function CalendarFeedPanel() {
     const [secret, setSecret] = useState<CalendarTokenCreated | null>(null);
     const [confirm, setConfirm] = useState<'rotate' | 'revoke' | null>(null);
     const [confirmError, setConfirmError] = useState<string | null>(null);
+    // These dialogs are opened from buttons by state, so focus is handed back by hand once they are closed
+    const replaceRef = useRef<HTMLButtonElement>(null);
+    const offRef = useRef<HTMLButtonElement>(null);
+    const createRef = useRef<HTMLButtonElement>(null);
+    const [refocus, setRefocus] = useState<'replace' | 'off' | 'create' | null>(null);
 
     const when = (iso: string | null | undefined) => (iso ? `${formatDayYear(iso, zone)} at ${formatClock(iso, zone)}` : null);
     const active = !!status.data?.active;
+
+    useEffect(() => {
+        if (!refocus || confirm || secret) return;
+        const target = { replace: replaceRef, off: offRef, create: createRef }[refocus].current;
+        if (target) { target.focus(); setRefocus(null); }
+    }, [refocus, confirm, secret, active]);
 
     const makeFeed = async () => {
         const created = await create();
@@ -63,27 +74,27 @@ export function CalendarFeedPanel() {
                     </dl>
                     <p className={`text-xs ${muted}`}>For safety the address is not shown again. If you lost it, replace it with a new one.</p>
                     <div className="flex flex-wrap gap-2">
-                        <button type="button" className={btnSecondary} onClick={() => { setConfirmError(null); setConfirm('rotate'); }}>
+                        <button ref={replaceRef} type="button" className={btnSecondary} onClick={() => { setConfirmError(null); setConfirm('rotate'); }}>
                             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Replace the address
                         </button>
-                        <button type="button" className={`${btnSecondary} text-red-800 dark:text-red-300`} onClick={() => { setConfirmError(null); setConfirm('revoke'); }}>
+                        <button ref={offRef} type="button" className={`${btnSecondary} text-red-800 dark:text-red-300`} onClick={() => { setConfirmError(null); setConfirm('revoke'); }}>
                             <Trash2 className="h-4 w-4" aria-hidden="true" /> Turn off the feed
                         </button>
                     </div>
                 </div>
             ) : (
-                <button type="button" className={btnPrimary} disabled={creating} onClick={() => void makeFeed()}>
+                <button ref={createRef} type="button" className={btnPrimary} disabled={creating} onClick={() => void makeFeed()}>
                     {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Rss className="h-4 w-4" aria-hidden="true" />} Create my feed
                 </button>
             )}
 
             <DialogShell
                 open={!!secret}
-                onOpenChange={(open) => { if (!open) setSecret(null); }}
+                onOpenChange={(open) => { if (!open) { setSecret(null); setRefocus('replace'); } }}
                 title={secret?.rotated ? 'Your new calendar address' : 'Your calendar address'}
                 description="Copy it into your calendar app now. It is shown only this once."
                 wide
-                footer={<button type="button" className={btnPrimary} onClick={() => setSecret(null)}>I have copied it</button>}
+                footer={<button type="button" className={btnPrimary} onClick={() => { setSecret(null); setRefocus('replace'); }}>I have copied it</button>}
             >
                 {secret && (
                     <div className="space-y-4">
@@ -99,7 +110,7 @@ export function CalendarFeedPanel() {
 
             <EventDialog
                 open={confirm === 'rotate'}
-                onOpenChange={(open) => !open && setConfirm(null)}
+                onOpenChange={(open) => { if (!open) { setConfirm(null); setRefocus('replace'); } }}
                 title="Replace your calendar address?"
                 description="The current address stops working at once. Calendar apps that use it stop updating until you add the new one."
                 confirmLabel="Replace the address"
@@ -110,7 +121,7 @@ export function CalendarFeedPanel() {
             />
             <EventDialog
                 open={confirm === 'revoke'}
-                onOpenChange={(open) => !open && setConfirm(null)}
+                onOpenChange={(open) => { if (!open) { setConfirm(null); setRefocus('off'); } }}
                 title="Turn off your calendar feed?"
                 description="The address stops working at once and calendar apps stop updating. You can create a new feed later."
                 confirmLabel="Turn off the feed"
@@ -118,7 +129,7 @@ export function CalendarFeedPanel() {
                 pending={revoke.isPending}
                 error={confirmError}
                 onConfirm={() => revoke.mutate(undefined, {
-                    onSuccess: () => setConfirm(null),
+                    onSuccess: () => { setConfirm(null); setRefocus('create'); },
                     onError: (err) => setConfirmError(calendarFeedErrorMessage(err)),
                 })}
             />
