@@ -28,10 +28,12 @@ const chipClass = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-s
 interface ExplorerProps {
     initialPage: Page<LabCardData> | null;
     initialFacets: LabFacets | null;
+    /** When the server built them (ms): the copy is as old as that, not as old as the page load */
+    initialUpdatedAt?: number;
 }
 
 /** Search, filters and the grid. The filters live in the address, so a reload or a shared link shows the same list. */
-export function LabsExplorer({ initialPage, initialFacets }: ExplorerProps) {
+export function LabsExplorer({ initialPage, initialFacets, initialUpdatedAt }: ExplorerProps) {
     const router = useRouter();
     const pathname = usePathname();
     const search = useSearchParams();
@@ -65,8 +67,8 @@ export function LabsExplorer({ initialPage, initialFacets }: ExplorerProps) {
     const filters = apiFilters(url, signedIn);
     // The server renders the plain list only: any narrowing asks the API
     const plain = isDefaultList(url, signedIn);
-    const query = useLabs(filters, plain ? initialPage : null);
-    const facets = useLabCategories(initialFacets);
+    const query = useLabs(filters, plain ? initialPage : null, initialUpdatedAt);
+    const facets = useLabCategories(initialFacets, initialUpdatedAt);
 
     const labs = useMemo(() => {
         const seen = new Set<string>();

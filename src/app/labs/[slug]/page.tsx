@@ -47,5 +47,5 @@ export default async function LabPage({ params }: PageProps) {
     // the browser asks again with the token and shows "not available" on its own 404. The same goes
     // for a slow or failing API. The answer is HTTP 200 on purpose (a 404 here would hide the staff
     // preview), so the page is marked noindex in `generateMetadata` instead.
-    return <LabDetailView slug={slug.toLowerCase()} initialLab={result.state === 'ok' ? result.lab : null} />;
+    return <LabDetailView slug={slug.toLowerCase()} initialLab={result.state === 'ok' ? result.lab : null} initialUpdatedAt={Date.now()} />;
 }

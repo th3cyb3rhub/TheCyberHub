@@ -6,6 +6,7 @@ import * as api from '@/lib/api/labs';
 import { ApiError } from '@/lib/api';
 import { lockedUntilFromError } from '@/lib/labs/errors';
 import { lockEndsAt } from '@/lib/labs/lock';
+import { refreshPublicLabs } from '@/lib/labs/revalidate';
 import type {
     GlobalLeaderRow, HintResult, LabAdminView, LabCard, LabCategory, LabDetail, LabFacets, LabFilters, LabLeaderRow,
     LabPayload, LabProgressRow, LabStats, LabStatus, LabViewer, Page, StopResult, SubmitResult,
@@ -59,7 +60,7 @@ const isStaleState = (err: unknown) => err instanceof ApiError && !!err.code && 
  * leaves it out for any filter): it counts as fresh for a visitor, and is only a placeholder for a
  * member, whose cards also carry `myStatus`.
  */
-export function useLabs(filters: LabFilters = {}, initialPage?: Page<LabCard> | null) {
+export function useLabs(filters: LabFilters = {}, initialPage?: Page<LabCard> | null, initialUpdatedAt?: number) {
     const { user, loading } = useAuth();
     const signedIn = !!user;
     const base: LabFilters = { limit: LABS_PAGE_SIZE, ...filters, page: undefined };
@@ -73,17 +74,21 @@ export function useLabs(filters: LabFilters = {}, initialPage?: Page<LabCard> | 
         enabled: !loading,
         staleTime: 5 * 60_000,
         initialData: !signedIn ? seed : undefined,
+        // When the server built the copy, not when the browser got it: a page that sat in the cache
+        // is old on arrival and is refreshed, instead of being trusted for another five minutes
+        initialDataUpdatedAt: initialUpdatedAt,
         // Keep the old list on screen while a new filter loads; the server copy is the first placeholder for a member
         placeholderData: (previous) => previous ?? (signedIn ? seed : undefined),
     });
 }
 
 /** Category and difficulty counts of the published labs, for the filters */
-export function useLabCategories(initial?: LabFacets | null) {
+export function useLabCategories(initial?: LabFacets | null, initialUpdatedAt?: number) {
     return useQuery({
         queryKey: labKeys.categories(),
         queryFn: api.getFacets,
         initialData: initial ?? undefined,
+        initialDataUpdatedAt: initialUpdatedAt,
         staleTime: 5 * 60_000,
     });
 }
@@ -96,7 +101,7 @@ export function useLabCategories(initial?: LabFacets | null) {
  * - A signed-in member only gets it as `placeholderData`: shown while the answer with their own
  *   token is on its way, and never taken for the answer itself (`isPlaceholderData` tells them apart).
  */
-export function useLab(slug: string, serverLab?: LabDetail | null) {
+export function useLab(slug: string, serverLab?: LabDetail | null, initialUpdatedAt?: number) {
     const { user, loading } = useAuth();
     const signedIn = !!user;
     return useQuery({
@@ -104,6 +109,7 @@ export function useLab(slug: string, serverLab?: LabDetail | null) {
         queryFn: () => api.getLab(slug),
         enabled: !!slug && !loading,
         initialData: !signedIn ? (serverLab ?? undefined) : undefined,
+        initialDataUpdatedAt: initialUpdatedAt,
         placeholderData: signedIn ? (serverLab ?? undefined) : undefined,
         staleTime: 30_000,
         retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 2,
@@ -324,12 +330,24 @@ export function useStopLab() {
 
 // ---- Admin and owner ----
 
+/** A saved lab changes what every cache shows, here and on the app server */
+const afterAdminWrite = (qc: QueryClient) => {
+    void qc.invalidateQueries({ queryKey: labKeys.all });
+    void refreshPublicLabs();
+};
+
+/**
+ * The payload of a create or an edit holds the flags in plain text. Like the flag form, the call is
+ * dropped from the mutation cache as soon as nothing observes it (`gcTime: 0`) and the screen calls
+ * `reset()` once it settles, so a flag is never kept after it was sent.
+ */
 export function useCreateLab() {
     const qc = useQueryClient();
     return useMutation<LabAdminView, unknown, LabPayload>({
         mutationFn: (payload) => api.createLab(payload),
         retry: 0,
-        onSuccess: () => void qc.invalidateQueries({ queryKey: labKeys.all }),
+        gcTime: 0,
+        onSuccess: () => afterAdminWrite(qc),
     });
 }
 
@@ -338,7 +356,8 @@ export function useUpdateLab() {
     return useMutation<LabAdminView, unknown, { slug: string; payload: LabPayload }>({
         mutationFn: (v) => api.updateLab(v.slug, v.payload),
         retry: 0,
-        onSuccess: () => void qc.invalidateQueries({ queryKey: labKeys.all }),
+        gcTime: 0,
+        onSuccess: () => afterAdminWrite(qc),
     });
 }
 
@@ -347,6 +366,8 @@ export function useDeleteLab() {
     return useMutation<{ _id: string; slug: string }, unknown, { slug: string }>({
         mutationFn: (v) => api.deleteLab(v.slug),
         retry: 0,
-        onSuccess: () => void qc.invalidateQueries({ queryKey: labKeys.all }),
+        onSuccess: () => afterAdminWrite(qc),
+        // Members completed it meanwhile: the list and the lab on screen were out of date, show the truth
+        onError: (err) => { if (err instanceof ApiError && err.code === 'LAB_HAS_COMPLETIONS') void qc.invalidateQueries({ queryKey: labKeys.all }); },
     });
 }

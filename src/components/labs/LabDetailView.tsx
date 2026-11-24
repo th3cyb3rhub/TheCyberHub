@@ -24,9 +24,9 @@ function Shell({ children }: { children: React.ReactNode }) {
  * One lab. The server renders the public copy (no viewer); a signed-in member's own answer, with
  * the viewer block, replaces it. A visitor reads everything and is asked to sign in to act.
  */
-export function LabDetailView({ slug, initialLab }: { slug: string; initialLab: LabDetail | null }) {
+export function LabDetailView({ slug, initialLab, initialUpdatedAt }: { slug: string; initialLab: LabDetail | null; initialUpdatedAt?: number }) {
     const { user, loading } = useAuth();
-    const query = useLab(slug, initialLab);
+    const query = useLab(slug, initialLab, initialUpdatedAt);
     const lab = query.data;
     const signedIn = !!user;
 

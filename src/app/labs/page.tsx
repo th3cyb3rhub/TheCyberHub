@@ -11,12 +11,14 @@ export const revalidate = 300;
 export default async function LabsPage() {
     // Fail-soft: a slow or failing API gives null, and the browser asks again
     const [page, facets] = await Promise.all([fetchLabsPage(12), fetchLabFacets()]);
+    // When this copy was built (the render of a cached page is the moment it was cached)
+    const builtAt = Date.now();
     return (
         <div className={pageBg}>
             <div className={pageWrap}>
                 <LabsHero />
                 <Suspense fallback={<ServerLabList labs={page ? page.data : null} />}>
-                    <LabsExplorer initialPage={page} initialFacets={facets} />
+                    <LabsExplorer initialPage={page} initialFacets={facets} initialUpdatedAt={builtAt} />
                 </Suspense>
             </div>
         </div>

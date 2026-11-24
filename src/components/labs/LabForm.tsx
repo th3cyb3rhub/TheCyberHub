@@ -145,11 +145,13 @@ export function LabForm({ lab }: { lab?: LabDetail }) {
             update.mutate({ slug: lab.slug, payload }, {
                 onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: 'Lab saved.' }); router.push('/admin/labs'); },
                 onError,
+                onSettled: () => update.reset(),
             });
         } else {
             create.mutate(buildCreatePayload(values), {
                 onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: values.status === 'published' ? 'Lab created and published.' : 'Lab saved as a draft.' }); router.push('/admin/labs'); },
                 onError,
+                onSettled: () => create.reset(),
             });
         }
     };
@@ -173,6 +175,7 @@ export function LabForm({ lab }: { lab?: LabDetail }) {
         update.mutate({ slug: lab.slug, payload: { status: 'archived' } }, {
             onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: 'Lab archived. It is hidden from members, and completions and points stay.' }); router.push('/admin/labs'); },
             onError: (err) => addToast({ variant: 'error', message: labErrorMessage(err) }),
+            onSettled: () => update.reset(),
         });
     };
 

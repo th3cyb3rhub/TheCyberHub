@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
     listManagedLabs: vi.fn(), createLab: vi.fn(), updateLab: vi.fn(), deleteLab: vi.fn(),
 }))
 vi.mock('@/lib/api/labs', () => api)
+const revalidate = vi.hoisted(() => ({ refreshPublicLabs: vi.fn() }))
+vi.mock('@/lib/labs/revalidate', () => revalidate)
 
 import {
     labKeys, useCreateLab, useDeleteLab, useLab, useLabs, useStartLab, useStopLab, useSubmitFlag, useUnlockHint, useUpdateLab,
@@ -241,6 +243,56 @@ describe('admin writes', () => {
         await act(async () => { await update.result.current.mutateAsync({ slug: 'a', payload: { title: 'B' } }) })
         await act(async () => { await del.result.current.mutateAsync({ slug: 'a' }) })
         expect(invalidated(spy).filter((k) => k === JSON.stringify(labKeys.all))).toHaveLength(3)
+    })
+
+    it('ask the app server to drop its cached public pages after each write', async () => {
+        api.createLab.mockResolvedValue({ slug: 'a' }); api.updateLab.mockResolvedValue({ slug: 'a' }); api.deleteLab.mockResolvedValue({ slug: 'a' })
+        const create = renderHook(() => useCreateLab(), { wrapper })
+        const update = renderHook(() => useUpdateLab(), { wrapper })
+        const del = renderHook(() => useDeleteLab(), { wrapper })
+        await act(async () => { await create.result.current.mutateAsync({ title: 'A' }) })
+        expect(revalidate.refreshPublicLabs).toHaveBeenCalledTimes(1)
+        await act(async () => { await update.result.current.mutateAsync({ slug: 'a', payload: { title: 'B' } }) })
+        expect(revalidate.refreshPublicLabs).toHaveBeenCalledTimes(2)
+        await act(async () => { await del.result.current.mutateAsync({ slug: 'a' }) })
+        expect(revalidate.refreshPublicLabs).toHaveBeenCalledTimes(3)
+    })
+
+    it('do not purge anything when the write failed', async () => {
+        api.createLab.mockRejectedValue(new ApiError('bad', 400, 'VALIDATION_ERROR'))
+        const create = renderHook(() => useCreateLab(), { wrapper })
+        await act(async () => { await create.result.current.mutateAsync({ title: 'A' }).catch(() => undefined) })
+        expect(revalidate.refreshPublicLabs).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        ['create', () => useCreateLab(), (r: { mutateAsync: (v: never) => Promise<unknown> }) => r.mutateAsync({ title: 'A', flags: [{ value: 'flag{secret}' }] } as never), 'createLab'],
+        ['edit', () => useUpdateLab(), (r: { mutateAsync: (v: never) => Promise<unknown> }) => r.mutateAsync({ slug: 'a', payload: { flags: [{ value: 'flag{secret}' }] } } as never), 'updateLab'],
+    ])('do not keep the flags of a %s in the mutation cache', async (_name, hook, run, fn) => {
+        api[fn as 'createLab'].mockResolvedValue({ slug: 'a' })
+        const { result, unmount } = renderHook(hook as () => { mutateAsync: (v: never) => Promise<unknown>; reset: () => void }, { wrapper })
+        await act(async () => { await run(result.current) })
+        act(() => result.current.reset())
+        unmount()
+        await waitFor(() => expect(qc.getMutationCache().getAll().some((m) => JSON.stringify(m.state.variables ?? '').includes('secret'))).toBe(false))
+    })
+
+    it('refresh the caches when a delete is refused because members completed the lab', async () => {
+        api.deleteLab.mockRejectedValue(new ApiError('has completions', 409, 'LAB_HAS_COMPLETIONS'))
+        const spy = spyInvalidate()
+        const del = renderHook(() => useDeleteLab(), { wrapper })
+        await act(async () => { await del.result.current.mutateAsync({ slug: 'a' }).catch(() => undefined) })
+        expect(invalidated(spy)).toContain(JSON.stringify(labKeys.all))
+        expect(revalidate.refreshPublicLabs).not.toHaveBeenCalled()
+    })
+
+    it('keep the fetch time of the server copy so an old page is refreshed', async () => {
+        const builtAt = Date.now() - 10 * 60_000
+        auth.current = { user: null, loading: false, refreshUser: vi.fn() }
+        api.listLabs.mockResolvedValue(page([makeCard()]))
+        renderHook(() => useLabs({}, page([makeCard()]), builtAt), { wrapper })
+        expect(qc.getQueryState(labKeys.list({ limit: 12, page: undefined }, null))?.dataUpdatedAt).toBeLessThanOrEqual(builtAt + 1000)
+        await waitFor(() => expect(api.listLabs).toHaveBeenCalled())
     })
 })
 
