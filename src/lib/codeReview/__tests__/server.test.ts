@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T,>(fn: T) => fn }))
 
-import { fetchPublicSnippet, fetchSnippetStats, fetchSnippetsPage, isSnippetRef } from '../server'
+import { fetchPublicSnippet, fetchSitemapSlugs, fetchSnippetStats, fetchSnippetsPage, isSnippetRef } from '../server'
 import { makeCard, makeDetail, makeViewer } from './fixtures'
 
 const respond = (status: number, body?: unknown) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -85,5 +85,28 @@ describe('the totals', () => {
         expect((await fetchSnippetStats())?.viewer).toBeNull()
         fetchMock.mockResolvedValue(respond(500))
         expect(await fetchSnippetStats()).toBeNull()
+    })
+})
+
+describe('the exercises for the sitemap', () => {
+    it('reads every page of the public list and keeps only the addresses', async () => {
+        fetchMock
+            .mockResolvedValueOnce(respond(200, { data: [{ ...makeCard({ slug: 'a-one' }), vulnerableCode: 'x' }, { slug: 'manage' }, { slug: 'Bad Slug' }, { title: 'no slug' }], pagination: { ...pagination, hasMore: true } }))
+            .mockResolvedValueOnce(respond(200, { data: [{ slug: 'b-two' }, { slug: 'a-one' }], pagination }))
+        expect(await fetchSitemapSlugs()).toEqual(['a-one', 'b-two'])
+        expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/code-review\?limit=50&page=1$/)
+        expect(String(fetchMock.mock.calls[1][0])).toMatch(/page=2$/)
+        expect(fetchMock.mock.calls[0][1].next.revalidate).toBe(3600)
+    })
+
+    it('keeps what it read when the API fails later, and is empty when it fails at once', async () => {
+        fetchMock.mockResolvedValueOnce(respond(200, { data: [{ slug: 'a-one' }], pagination: { ...pagination, hasMore: true } })).mockResolvedValueOnce(respond(503))
+        expect(await fetchSitemapSlugs()).toEqual(['a-one'])
+        fetchMock.mockReset()
+        fetchMock.mockRejectedValue(new Error('down'))
+        expect(await fetchSitemapSlugs()).toEqual([])
+        fetchMock.mockReset()
+        fetchMock.mockResolvedValue(respond(200, { data: 'x' }))
+        expect(await fetchSitemapSlugs()).toEqual([])
     })
 })

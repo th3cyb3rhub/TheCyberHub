@@ -93,3 +93,31 @@ export const fetchSnippetStats = cache(async (): Promise<CrStats | null> => {
         return null;
     }
 });
+
+const SITEMAP_PAGE_SIZE = 50;
+const SITEMAP_MAX_PAGES = 10;
+
+/**
+ * The published exercises for the sitemap: the card's address only, never a title, hint or answer.
+ * The list is public and has the same pages as the site. A failing API gives what was read so far
+ * (or nothing), so the sitemap never fails because of it.
+ */
+export async function fetchSitemapSlugs(): Promise<string[]> {
+    const slugs: string[] = [];
+    try {
+        for (let page = 1; page <= SITEMAP_MAX_PAGES; page += 1) {
+            const res = await get(`/api/code-review?limit=${SITEMAP_PAGE_SIZE}&page=${page}`, 3600);
+            if (!res.ok) break;
+            const body = await res.json();
+            if (!Array.isArray(body?.data)) break;
+            for (const item of body.data) {
+                const slug = typeof item?.slug === 'string' ? item.slug : '';
+                if (slug && isSnippetRef(slug) && !slugs.includes(slug)) slugs.push(slug);
+            }
+            if (!body?.pagination?.hasMore) break;
+        }
+    } catch {
+        // What was read stays; the static pages are listed either way
+    }
+    return slugs;
+}

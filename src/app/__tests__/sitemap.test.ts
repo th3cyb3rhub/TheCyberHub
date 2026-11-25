@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const rows = vi.hoisted(() => ({ fetchSitemapRows: vi.fn() }))
 vi.mock('@/lib/learning/server', () => rows)
+const cr = vi.hoisted(() => ({ fetchSitemapSlugs: vi.fn() }))
+vi.mock('@/lib/codeReview/server', () => cr)
 vi.mock('@/lib/mentorship/server', () => ({ fetchMentorIdsForSitemap: vi.fn().mockResolvedValue([]) }))
 
 import sitemap from '../sitemap'
 
 beforeEach(() => {
+    cr.fetchSitemapSlugs.mockResolvedValue([])
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }))
     rows.fetchSitemapRows.mockImplementation(async (path: string) => {
         if (path.includes('kind=roadmap')) return [{ slug: 'web-hacking', updatedAt: '2026-11-01T00:00:00Z' }]
@@ -70,5 +73,22 @@ describe('sitemap', () => {
         const urls = (await sitemap()).map((e) => e.url)
         expect(urls).toContain('https://thecyberhub.org/jobs')
         expect(urls.some((u) => /\/company\/[^/]+$/.test(u) && !u.endsWith('/company/'))).toBe(false)
+    })
+
+    it('lists the published code review exercises by address, and nothing else of them', async () => {
+        cr.fetchSitemapSlugs.mockResolvedValue(['sql-injection-login', 'a/b?'])
+        const entries = await sitemap()
+        const urls = entries.map((e) => e.url)
+        expect(urls).toContain('https://thecyberhub.org/code-review')
+        expect(urls).toContain('https://thecyberhub.org/code-review/sql-injection-login')
+        // an address is encoded, never concatenated raw
+        expect(urls).toContain('https://thecyberhub.org/code-review/a%2Fb%3F')
+        expect(new Set(urls).size).toBe(urls.length)
+    })
+
+    it('still lists the code review page when the exercises cannot be read', async () => {
+        const urls = (await sitemap()).map((e) => e.url)
+        expect(urls).toContain('https://thecyberhub.org/code-review')
+        expect(urls.some((u) => u.startsWith('https://thecyberhub.org/code-review/'))).toBe(false)
     })
 })
