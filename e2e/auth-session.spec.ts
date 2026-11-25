@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mockAuthApi, storeToken } from './auth-mocks';
+import { mockAuthApi, storeRefreshCookie, storeToken } from './auth-mocks';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
@@ -13,6 +13,7 @@ const desktopOnly = (isMobile: boolean) => test.skip(isMobile, 'The user menu op
 test.describe('Access token renewal', () => {
     test('an expired token is renewed once and the original request is sent again', async ({ page }) => {
         const api = await mockAuthApi(page);
+        await storeRefreshCookie(page);
         await storeToken(page, 'expired-token');
         await page.goto(`${BASE_URL}/profile/sessions`);
 
@@ -21,7 +22,9 @@ test.describe('Access token renewal', () => {
         // The same call went out twice: refused with the old token, accepted with the new one
         const me = api.calls('/api/auth/me');
         expect(me.map((r) => r.token)).toEqual(['expired-token', 'fresh-token']);
-        // The refresh used the cookie, which the browser only sends with credentials
+        // The refresh carried the cookie, which the browser only sends with credentials, and no token in the body
+        expect(api.calls('/api/auth/refresh')[0].credentials).toBe(true);
+        expect(api.calls('/api/auth/refresh')[0].cookie).toContain('refreshToken=cookie-refresh');
         expect(api.calls('/api/auth/refresh')[0].body).toEqual({});
         expect(await storedToken(page)).toBe('fresh-token');
     });
@@ -61,7 +64,8 @@ test.describe('Access token renewal', () => {
         await page.goto(`${BASE_URL}/profile/sessions`);
         await expect(page.getByText('Chrome on macOS')).toBeVisible();
         expect(await storedToken(page)).toBe('fresh-token');
-        expect(api.calls('/api/auth/refresh').length).toBeGreaterThanOrEqual(1);
+        // The first refresh was refused as a race, the second one was answered
+        expect(api.calls('/api/auth/refresh')).toHaveLength(2);
     });
 
     test('a server that is down during the refresh does not sign anyone out', async ({ page }) => {
@@ -202,6 +206,25 @@ test.describe('Sessions page', () => {
     });
 });
 
+test.describe('Password change', () => {
+    test('stores the new access token the change answers, and keeps the member signed in on it', async ({ page }) => {
+        const api = await mockAuthApi(page);
+        await storeToken(page, 'good-token');
+        await page.goto(`${BASE_URL}/profile?tab=security`);
+        await page.getByLabel('Current Password').fill('Old-password-1!');
+        await page.getByLabel('New Password', { exact: true }).fill('New-password-1!');
+        await page.getByLabel('Confirm New Password').fill('New-password-1!');
+        await page.getByRole('button', { name: 'Update Password' }).click();
+
+        await expect.poll(() => storedToken(page)).toBe('password-token');
+        expect(api.calls('/api/auth/password', 'PUT')).toHaveLength(1);
+        // And the next call is made with it (a client-side visit: a reload would run the stored-token init script again)
+        await page.getByRole('link', { name: 'Manage sessions' }).click();
+        await expect(page.getByText('Chrome on macOS')).toBeVisible();
+        expect(api.calls('/api/auth/sessions', 'GET').at(-1)?.token).toBe('password-token');
+    });
+});
+
 test.describe('Two-step sign-in', () => {
     test('asks for the code after the password, then signs in and goes to the page they wanted', async ({ page }) => {
         const api = await mockAuthApi(page, { login: 'requires2FA' });
@@ -227,6 +250,22 @@ test.describe('Two-step sign-in', () => {
         await page.waitForURL(/\/badges$/);
         expect(api.calls('/api/auth/2fa/verify').at(-1)?.body).toEqual({ tempToken: 'temp-opaque', code: '123456' });
         expect(await storedToken(page)).toBe('login-token');
+    });
+
+    test('an expired second step goes back to the password step with a message', async ({ page }) => {
+        const api = await mockAuthApi(page, { login: 'requires2FA', challengeExpired: true });
+        await page.goto(`${BASE_URL}/auth`);
+        await page.getByLabel('Email').fill('test@example.com');
+        await page.getByLabel('Password', { exact: true }).fill('Correct-horse-1!');
+        await page.locator('button[type="submit"]').click();
+        await page.getByLabel('Authenticator Code').fill('123456');
+        await page.locator('button[type="submit"]').click();
+
+        await expect(alertIn(page)).toContainText('expired');
+        await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+        await expect(page.getByLabel('Authenticator Code')).toHaveCount(0);
+        // Not a token problem: nothing was renewed
+        expect(api.calls('/api/auth/refresh')).toHaveLength(0);
     });
 
     test('a refused password shows the server message and does not try to renew anything', async ({ page }) => {
@@ -287,6 +326,18 @@ test.describe('OAuth callbacks', () => {
         expect(exchanges).toHaveLength(1);
         expect(exchanges[0].body).toEqual({ code: 'abc123' });
         expect(await storedToken(page)).toBe('oauth-token');
+    });
+
+    test('the Google token does not stay in the address bar once it has been sent', async ({ page }) => {
+        const api = await mockAuthApi(page);
+        await page.goto(`${BASE_URL}/auth/callback/google#id_token=google-id-token&state=x`);
+        await expect.poll(() => api.calls('/api/auth/oauth/google', 'POST').length).toBe(1);
+        expect(api.calls('/api/auth/oauth/google')[0].body).toEqual({ idToken: 'google-id-token' });
+        expect(page.url()).not.toContain('id_token');
+        await page.waitForURL((url) => !url.pathname.startsWith('/auth/callback'));
+        // Going back does not return to a page that still holds the token
+        await page.goBack();
+        expect(page.url()).not.toContain('id_token');
     });
 
     test('is readable in both themes', async ({ page }) => {

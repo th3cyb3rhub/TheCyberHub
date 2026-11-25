@@ -14,6 +14,9 @@ export interface SeenRequest {
     /** The bearer token of the call, or null */
     token: string | null;
     body: Record<string, unknown> | null;
+    /** The Cookie header the browser really sent, or null */
+    cookie: string | null;
+    /** Whether the browser sent the refresh cookie (the call was made with credentials) */
     credentials: boolean;
 }
 
@@ -29,6 +32,7 @@ export interface MockSession {
 export type RefreshAnswer =
     | { kind: 'ok'; token: string }
     | { kind: 'invalid' }
+    /** The first refresh answers 401 AUTH_REFRESH_RACE, the next one `then` */
     | { kind: 'race'; then: RefreshAnswer }
     | { kind: 'unavailable' };
 
@@ -46,6 +50,8 @@ export interface AuthState {
     code: string;
     /** Makes every call with this token answer 401 AUTH_SESSION_REVOKED (a device signed out elsewhere) */
     revokedTokens: Set<string>;
+    /** The second step answers that its challenge has expired, whatever the code (AUTH_2FA_CHALLENGE_EXPIRED) */
+    challengeExpired: boolean;
     /** The token stops working right after `/auth/me` has answered, as one that expires while the page loads */
     expireAfterMe: boolean;
 }
@@ -53,6 +59,8 @@ export interface AuthState {
 export const chromeMac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 export const iphoneSafari = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 export const firefoxLinux = 'Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0';
+
+export const REFRESH_COOKIE = 'refreshToken';
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
@@ -76,6 +84,7 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
         code: '123456',
         revokedTokens: new Set(),
         expireAfterMe: false,
+        challengeExpired: false,
         ...overrides,
     };
     const seen: SeenRequest[] = [];
@@ -87,7 +96,10 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
             state.valid.add(answer.token);
             return void (await json(route, { success: true, token: answer.token, refreshToken: 'r', expiresIn: 900 }));
         }
-        if (answer.kind === 'race') return answerRefresh(route, answer.then);
+        if (answer.kind === 'race') {
+            state.refresh = answer.then;
+            return void (await failure(route, 401, 'AUTH_REFRESH_RACE', 'Another request just refreshed this session'));
+        }
         if (answer.kind === 'unavailable') return void (await json(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'Try later' } }, 503));
         return void (await failure(route, 401, 'AUTH_TOKEN_INVALID', 'Invalid or expired refresh token'));
     };
@@ -101,7 +113,8 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
         const token = bearer(route);
         let body: Record<string, unknown> | null = null;
         try { body = request.postDataJSON(); } catch { /* no body */ }
-        seen.push({ method, path, token, body, credentials: path.startsWith('/api/auth/') });
+        const cookie = (await request.allHeaders())['cookie'] ?? null;
+        seen.push({ method, path, token, body, cookie, credentials: !!cookie && cookie.includes(`${REFRESH_COOKIE}=`) });
 
         // Public routes first
         if (path === '/api/auth/refresh') {
@@ -114,6 +127,7 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
             return json(route, { success: true, token: 'login-token', refreshToken: 'r', expiresIn: 900, data: state.user });
         }
         if (path === '/api/auth/2fa/verify') {
+            if (state.challengeExpired) return failure(route, 401, 'AUTH_2FA_CHALLENGE_EXPIRED', 'Session expired, sign in again');
             if (body?.code !== state.code) return failure(route, 401, 'AUTH_TOKEN_INVALID', 'Invalid 2FA code');
             state.valid.add('login-token');
             return json(route, { success: true, token: 'login-token', refreshToken: 'r', expiresIn: 900, data: state.user });
@@ -149,7 +163,11 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
             state.sessions = state.sessions.filter((s) => s.id !== found.id);
             return json(route, { success: true, message: 'Session revoked', data: { id: found.id, current: found.current } });
         }
-        if (path === '/api/auth/password' && method === 'PUT') return json(route, { success: true, token, revokedSessions: 2 });
+        if (path === '/api/auth/password' && method === 'PUT') {
+            // The change ends the other sessions and answers a new access token for this one
+            state.valid.add('password-token');
+            return json(route, { success: true, token: 'password-token', revokedSessions: 2 });
+        }
 
         // Anything else the page asks for: an empty list
         return json(route, { success: true, data: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 1, hasMore: false } });
@@ -160,6 +178,11 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
         seen,
         calls: (path: string, method?: string) => seen.filter((r) => r.path === path && (!method || r.method === method)),
     };
+}
+
+/** Gives the browser the httpOnly refresh cookie a sign-in would have set, for the path the API serves it on. */
+export async function storeRefreshCookie(page: Page) {
+    await page.context().addCookies([{ name: REFRESH_COOKIE, value: 'cookie-refresh', domain: 'localhost', path: '/api/auth', httpOnly: true, secure: false, sameSite: 'Lax' }]);
 }
 
 /** Starts the browser with a stored access token, as a returning visitor has. */
