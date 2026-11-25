@@ -150,7 +150,7 @@ describe('fetchApi', () => {
         )
     })
 
-    it('attempts token refresh on 401 response', async () => {
+    it('renews the token on a 401 AUTH_TOKEN_INVALID and sends the request again', async () => {
         tokenStore.set('expired-token')
         localStorage.setItem('refreshToken', 'valid-refresh')
 
@@ -172,7 +172,7 @@ describe('fetchApi', () => {
                 return Promise.resolve({
                     ok: false,
                     status: 401,
-                    json: () => Promise.resolve({ message: 'Unauthorized' }),
+                    json: () => Promise.resolve({ success: false, error: { code: 'AUTH_TOKEN_INVALID', message: 'Invalid or expired token' } }),
                 })
             }
             return Promise.resolve({
@@ -185,6 +185,10 @@ describe('fetchApi', () => {
         const result = await fetchApi('/api/protected')
         expect(result).toEqual({ data: 'success' })
         expect(tokenStore.get()).toBe('new-access-token')
+        // The old fallback token was sent once, and the cookie carries the session from now on
+        const refreshCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find((call: unknown[]) => String(call[0]).includes('/auth/refresh'))
+        expect(refreshCall?.[1]).toMatchObject({ body: JSON.stringify({ refreshToken: 'valid-refresh' }) })
+        expect(localStorage.getItem('refreshToken')).toBeNull()
     })
 
     it('refreshes with only the cookie when no refresh token is stored locally', async () => {
@@ -202,7 +206,7 @@ describe('fetchApi', () => {
             }
             callCount++
             if (callCount === 1) {
-                return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) })
+                return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({ success: false, error: { code: 'AUTH_TOKEN_INVALID', message: 'Invalid' } }) })
             }
             return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data: 'ok' }) })
         })
