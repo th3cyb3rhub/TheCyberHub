@@ -56,6 +56,7 @@ export const queryKeys = {
     // account's cached profile is never served to another.
     auth: {
         me: (userId: string | null) => ['auth', 'me', userId ?? 'unknown'] as const,
+        sessions: (userId: string | null) => ['auth', 'sessions', userId ?? 'unknown'] as const,
     },
     
     // Users

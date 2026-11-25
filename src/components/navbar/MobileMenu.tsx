@@ -9,6 +9,7 @@ import {
     Building2,
     Trophy,
     MessageCircle,
+    KeyRound,
 } from 'lucide-react';
 export interface NavDropdownItem {
     title: string;
@@ -119,6 +120,10 @@ export const MobileMenu = ({
                                     {user.name.charAt(0).toUpperCase()}
                                 </div>
                                 Profile
+                            </Link>
+
+                            <Link href="/profile/sessions" onClick={close} className="flex items-center gap-3 p-4 rounded-lg text-gray-700 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/5 transition-colors">
+                                <KeyRound className="w-4 h-4" /> Active sessions
                             </Link>
 
                             {(user.role === 'admin' || user.role === 'owner' || user.role === 'moderator') && (

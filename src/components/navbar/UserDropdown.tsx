@@ -11,6 +11,7 @@ import {
     Ticket,
     GraduationCap,
     Building2,
+    KeyRound,
 } from 'lucide-react';
 
 interface UserDropdownProps {
@@ -49,6 +50,9 @@ export const UserDropdown = ({
                         </Link>
                         <Link href="/profile" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 transition-all">
                             <User className="w-4 h-4" /> Profile
+                        </Link>
+                        <Link href="/profile/sessions" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 transition-all">
+                            <KeyRound className="w-4 h-4" /> Active sessions
                         </Link>
                         {(user.role === 'admin' || user.role === 'owner' || user.role === 'moderator') && (
                             <Link href="/admin" className="flex items-center gap-3 px-4 py-3 text-sm text-orange-700 hover:text-orange-800 hover:bg-gray-100 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-white/5 transition-all">

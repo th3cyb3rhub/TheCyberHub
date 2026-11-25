@@ -53,3 +53,17 @@ export interface AuthUser {
         skippedAt: string | null;
     };
 }
+
+/** One signed-in device of the account, as `GET /auth/sessions` lists it */
+export interface AccountSession {
+    /** The session id (use it to end this session) */
+    id: string;
+    /** True for the session this request was made with */
+    current: boolean;
+    userAgent: string | null;
+    ipAddress: string | null;
+    /** The last sign-in or refresh, an ISO instant */
+    lastUsedAt: string;
+    /** When the session began, an ISO instant */
+    createdAt: string;
+}
