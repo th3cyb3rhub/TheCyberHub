@@ -90,13 +90,17 @@ describe('pages that decide the HTTP status', () => {
         })
     }
 
-    it('the job page redirects an old address with permanentRedirect (HTTP 308)', () => {
-        expect(readFileSync(join(APP, 'jobs/[slug]/page.tsx'), 'utf8')).toMatch(/permanentRedirect\(`\/jobs\/\$\{canonical\}`\)/)
+    it('the job page moves an old address with permanentRedirect (HTTP 308), through the validating helper', () => {
+        const source = readFileSync(join(APP, 'jobs/[slug]/page.tsx'), 'utf8')
+        expect(source).toMatch(/permanentRedirect\(moved\)/)
+        expect(source).toMatch(/jobMoveTarget\(/)
+        expect(source).not.toMatch(/permanentRedirect\(`/)
     })
 
     it('a page moved between roadmaps and learning paths is a permanent redirect', () => {
         const source = readFileSync(join(APP, '../components/learning/PathPage.tsx'), 'utf8')
-        expect(source).toMatch(/permanentRedirect\(/)
+        expect(source).toMatch(/permanentRedirect\(moved\)/)
+        expect(source).toMatch(/pathMoveTarget\(/)
         expect(source).not.toMatch(/\bredirect\(/)
     })
 

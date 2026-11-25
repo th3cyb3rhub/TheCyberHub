@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { permanentRedirect } from 'next/navigation';
 import StructuredData from '@/components/StructuredData';
 import { pathHref } from '@/lib/learning/display';
+import { pathMoveTarget } from '@/lib/learning/redirect';
 import { fetchPublicPath, pathDescription, pathJsonLd, SITE_URL } from '@/lib/learning/server';
 import type { PathKind } from '@/types/learning';
 import { LearningPathView } from './LearningPathView';
@@ -34,7 +35,9 @@ export async function PathPage({ kind, slug }: { kind: PathKind; slug: string })
     const result = await fetchPublicPath(slug);
     const path = result.state === 'ok' ? result.data : null;
     // A roadmap opened under the learning-paths address (or the other way round) moves to its own page
-    if (path?.kind && path.kind !== kind) permanentRedirect(pathHref(path.kind, path.slug));
+    // (only to a well formed address of the other kind, never to the one that was asked for)
+    const moved = path ? pathMoveTarget(kind, slug, path) : null;
+    if (moved) permanentRedirect(moved);
     return (
         <>
             {path && <StructuredData data={JSON.parse(JSON.stringify(pathJsonLd(path)))} />}

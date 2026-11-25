@@ -5,6 +5,7 @@ import { JobActions, SidebarApply } from '@/components/jobs/JobActions';
 import { JobClientView } from '@/components/jobs/JobClientView';
 import { JobDetailContent } from '@/components/jobs/JobDetailContent';
 import { JobViewerBanner } from '@/components/jobs/JobViewerBanner';
+import { jobMoveTarget, jobReference } from '@/lib/jobs/canonical';
 import { jobMetadata, jobPostingJsonLd } from '@/lib/jobs/metadata';
 import { fetchPublicJob } from '@/lib/jobs/server';
 
@@ -33,8 +34,11 @@ export default async function JobPage({ params }: PageProps) {
 
     const { job, meta, fetchedAt } = result;
     // An old address, an id or another spelling lands on the one canonical address
-    const canonical = meta.canonicalSlug ?? job.slug;
-    if (canonical && canonical !== slug) permanentRedirect(`/jobs/${canonical}`);
+    // (the reference comes from the API: only a well formed one is followed, encoded, and never to the same address)
+    const candidate = meta.canonicalSlug ?? job.slug;
+    const moved = jobMoveTarget(slug, candidate);
+    if (moved) permanentRedirect(moved);
+    const canonical = jobReference(slug, candidate);
 
     return (
         <>
