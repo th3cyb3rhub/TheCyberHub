@@ -4,6 +4,7 @@ import { SITE_URL } from '@/lib/events/site';
 import { isLabSlug } from './slug';
 import { labCardSchema, labDetailSchema, labFacetsSchema } from './schemas';
 import type { LabCard, LabDetail, LabFacets, Page } from '@/types/lab';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 export { isLabSlug };
@@ -28,7 +29,7 @@ export const fetchPublicLab = cache(async (slug: string): Promise<ServerLab> => 
     if (!isLabSlug(slug)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/labs/${encodeURIComponent(slug.toLowerCase())}`, {
-            next: { revalidate: 60, tags: ['labs'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['labs'] },
             // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });

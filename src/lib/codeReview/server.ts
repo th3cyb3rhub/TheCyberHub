@@ -5,6 +5,7 @@ import { CODE_REVIEW_CACHE_TAG } from './constants';
 import { isSnippetRef } from './slug';
 import { cardSchema, detailSchema, paginationSchema, statsSchema } from './schemas';
 import type { CrCard, CrDetail, CrPage, CrStats } from '@/types/codeReview';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 export { isSnippetRef };
@@ -34,7 +35,7 @@ const get = (path: string, revalidate: number) => fetch(`${API_URL}${path}`, {
 export const fetchPublicSnippet = cache(async (slug: string): Promise<ServerSnippet> => {
     if (!isSnippetRef(slug)) return { state: 'invalid' };
     try {
-        const res = await get(`/api/code-review/${encodeURIComponent(slug.toLowerCase())}`, 300);
+        const res = await get(`/api/code-review/${encodeURIComponent(slug.toLowerCase())}`, PUBLIC_ITEM_REVALIDATE_SECONDS);
         if (res.status === 404 || res.status === 400) return { state: 'missing' };
         if (!res.ok) return { state: 'error' };
         const body = await res.json();

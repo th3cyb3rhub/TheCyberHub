@@ -58,6 +58,8 @@ The root layout renders real HTML on the server (there is no "mounted" gate). Th
 
 **Who asks the API again.** A job, lab, exercise, competition, results page or program that is not public can still be read by its poster, a reviewer or staff. Their `not-found.tsx` renders the server's notice, and an island (`JobNotFound`, `LabRecovery`, `ExerciseRecovery`, `CompetitionRecovery`, `ResultsRecovery`, `CohortRecovery`) swaps in the real page only when `useHasStoredToken()` is true and the address is well formed. A visitor with no token never makes the extra request.
 
+**How long an unpublished page keeps answering 200.** A detail page answers from the public copy its server fetch cached (`PUBLIC_ITEM_REVALIDATE_SECONDS`, 60 s, in `src/lib/server/cacheTimes.ts`), so an item that was unpublished keeps answering 200 for up to about a minute, plus the refresh the next visit triggers. This holds for events, programs, roadmaps and learning paths, resources, companies, mentors, jobs, labs, competitions and exercises, and `src/lib/server/__tests__/cacheTimes.test.ts` keeps it that way. Labs, jobs, competitions and code review also have an admin-only purge route (`/api/revalidate/*`, built on `purgeTagForStaff`) that the admin screens call after a save, which drops the copy at once. The other areas do not have one: their admin screens write through many separate calls, and a minute is short enough without a purge route to wire into all of them. Lists keep their longer windows (labs and code review lists are rebuilt every five minutes).
+
 Key routes: `/auth`, `/blog`, `/forums`, `/feed`, `/ctf`, `/challenges`, `/events`, `/jobs`, `/mentorship`, `/labs`, `/code-review`, `/tools`, `/cheatsheets`, `/admin`.
 
 ### Data Flow

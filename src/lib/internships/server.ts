@@ -3,6 +3,7 @@ import { API_URL } from '@/lib/api';
 import type { CohortDetail } from '@/types/internship';
 import { SITE_URL } from '@/lib/events/site';
 import { isCohortId } from './id';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 export { isCohortId };
@@ -26,7 +27,7 @@ export const fetchPublicCohort = cache(async (id: string): Promise<ServerCohort>
     if (!isCohortId(id)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/internships/${id}`, {
-            next: { revalidate: 60, tags: ['internships'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['internships'] },
             // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
             signal: AbortSignal.timeout(5000),
         });

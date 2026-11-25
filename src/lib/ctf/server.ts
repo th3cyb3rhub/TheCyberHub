@@ -5,6 +5,7 @@ import type { CtfCompetition, CtfCompetitionCard, CtfListFilter, CtfPage, CtfRes
 import { CTF_CACHE_TAG, LIST_FILTER_QUERY } from './constants';
 import { isCtfSlug } from './slug';
 import { ctfCardSchema, ctfDetailSchema, ctfResultsSchema } from './schemas';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 export { isCtfSlug };
@@ -40,7 +41,7 @@ export const fetchPublicCompetition = cache(async (slug: string): Promise<Server
     if (!isCtfSlug(slug)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/ctf-competitions/${encodeURIComponent(slug.toLowerCase())}`, {
-            next: { revalidate: 60, tags: [CTF_CACHE_TAG] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: [CTF_CACHE_TAG] },
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         if (res.status === 404 || res.status === 400) return { state: 'missing' };
@@ -64,7 +65,7 @@ export const fetchCompetitionsPage = cache(async (filter: CtfListFilter = 'all',
         if (status) qs.set('status', status);
         if (page > 1) qs.set('page', String(page));
         const res = await fetch(`${API_URL}/api/ctf-competitions?${qs.toString()}`, {
-            next: { revalidate: 60, tags: [CTF_CACHE_TAG] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: [CTF_CACHE_TAG] },
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         if (!res.ok) return null;
@@ -105,7 +106,7 @@ export const fetchPublicResults = cache(async (slug: string): Promise<ServerResu
     if (!isCtfSlug(slug)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/ctf-competitions/${encodeURIComponent(slug.toLowerCase())}/results`, {
-            next: { revalidate: 60, tags: [CTF_CACHE_TAG] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: [CTF_CACHE_TAG] },
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });
         if (res.status === 409) return { state: 'not-ready' };

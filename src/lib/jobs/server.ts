@@ -5,6 +5,7 @@ import type { Company, Job, JobCard, JobListFilters, JobMeta, JobsPage } from '@
 import { JOBS_CACHE_TAG, JOB_LIMITS } from './constants';
 import { jobsApiQuery } from './query';
 import { companySchema, jobCardSchema, jobDetailSchema, paginationSchema } from './schemas';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 
@@ -33,7 +34,7 @@ export function fetchedAtOf(res: Pick<Response, 'headers'>): number {
 }
 
 const get = (path: string) => fetch(`${API_URL}${path}`, {
-    next: { revalidate: 60, tags: [JOBS_CACHE_TAG] },
+    next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: [JOBS_CACHE_TAG] },
     signal: AbortSignal.timeout(TIMEOUT_MS),
 });
 
