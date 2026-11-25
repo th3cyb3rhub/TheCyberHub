@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, LogIn, Send, Trash2 } from 'lucide-react';
 import { btnPrimary, btnSecondary, cardPad, input, muted } from '@/components/events/styles';
-import { CR_CATEGORIES } from '@/types/codeReview';
-import { CR_LIMITS, categoryLabel } from '@/lib/codeReview/constants';
+import { CR_FINDING_TYPES } from '@/types/codeReview';
+import { CR_LIMITS, findingTypeLabel, type MarkLimits } from '@/lib/codeReview/constants';
 import { waitText } from '@/lib/codeReview/errors';
-import { describeRange, removeMarkAt, setMarkType, type MarkDraft } from '@/lib/codeReview/selection';
+import { describeRange, markedLines, removeMarkAt, setMarkType, type MarkDraft } from '@/lib/codeReview/selection';
 
 /** Seconds left until `until` (a browser clock instant), ticking once a second. Null once it has passed. */
 export function useCountdown(until: number | null): number | null {
@@ -23,6 +23,24 @@ export function useCountdown(until: number | null): number | null {
     return left > 0 ? left : null;
 }
 
+/**
+ * What a screen reader hears while a wait runs: once at the start, then every 10 seconds, and when
+ * it is over. The visible countdown ticks every second but is not a live region.
+ */
+export function useWaitAnnouncement(seconds: number | null): string {
+    const [text, setText] = useState('');
+    const running = useRef(false);
+    useEffect(() => {
+        if (seconds === null) {
+            if (running.current) { running.current = false; setText('You can submit again now.'); }
+            return;
+        }
+        if (!running.current || seconds % 10 === 0) setText(`You can submit again in ${waitText(seconds)}.`);
+        running.current = true;
+    }, [seconds]);
+    return text;
+}
+
 export type SubmitBlock =
     | { kind: 'signed-out'; href: string }
     | { kind: 'loading' }
@@ -30,7 +48,7 @@ export type SubmitBlock =
     | { kind: 'not-gradable' };
 
 /** The marks the member has put on the list, with a type for each, and the button that sends them */
-export function MarksPanel({ marks, onMarksChange, onSubmit, submitting, block, error, waitSeconds, attemptsLeft, hasResult }: {
+export function MarksPanel({ marks, onMarksChange, onSubmit, submitting, block, error, waitSeconds, attemptsLeft, hasResult, limits }: {
     marks: MarkDraft[];
     onMarksChange: (marks: MarkDraft[]) => void;
     onSubmit: () => void;
@@ -41,20 +59,29 @@ export function MarksPanel({ marks, onMarksChange, onSubmit, submitting, block, 
     waitSeconds: number | null;
     attemptsLeft: number | null;
     hasResult: boolean;
+    /** What an attempt may hold: shown as the marks and lines used so far */
+    limits?: MarkLimits;
 }) {
     const waiting = waitSeconds !== null;
-    const disabled = marks.length === 0 || submitting || waiting || (block !== null && block.kind !== 'signed-out');
+    const announcement = useWaitAnnouncement(waitSeconds);
+    const maxMarks = limits?.maxMarks ?? CR_LIMITS.marks;
+    const lineTotal = markedLines(marks);
+    const over = marks.length > maxMarks || (!!limits && lineTotal > limits.maxLines);
+    const disabled = marks.length === 0 || over || submitting || waiting || (block !== null && block.kind !== 'signed-out');
     return (
         <section aria-labelledby="cr-marks" className={cardPad} data-testid="marks-panel">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 id="cr-marks" className="text-xl font-semibold text-gray-900 dark:text-white">Your marks</h2>
-                <p className={`text-sm ${muted}`} data-testid="marks-count">{marks.length} of {CR_LIMITS.marks} marks</p>
+                <p className={`text-sm ${over ? 'font-medium text-red-800 dark:text-red-300' : muted}`} data-testid="marks-count">
+                    {marks.length} of {maxMarks} marks{limits ? `, ${lineTotal} of ${limits.maxLines} lines` : ''}
+                </p>
             </div>
 
             {marks.length === 0 ? (
                 <p className={`mb-4 text-sm ${muted}`} data-testid="no-marks">
                     You have not marked anything yet. Select the lines you think are vulnerable in the code above, then press &ldquo;Mark selection&rdquo;.
                     Marking the whole file earns nothing: each mark has to be close to one issue.
+                    {limits && <> An answer can hold at most {limits.maxMarks} marks covering at most {limits.maxLines} lines.</>}
                 </p>
             ) : (
                 <ul className="mb-4 space-y-2" aria-label="Marked lines">
@@ -67,7 +94,7 @@ export function MarksPanel({ marks, onMarksChange, onSubmit, submitting, block, 
                                     <label htmlFor={`mark-type-${i}`} className="sr-only">Vulnerability type for {text}</label>
                                     <select id={`mark-type-${i}`} value={m.vulnerabilityType ?? ''} onChange={(e) => onMarksChange(setMarkType(marks, i, e.target.value || undefined))} className={`${input} !py-2`}>
                                         <option value="">No type</option>
-                                        {CR_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                                        {CR_FINDING_TYPES.map((c) => <option key={c} value={c}>{findingTypeLabel(c)}</option>)}
                                     </select>
                                 </div>
                                 <button type="button" className={`${btnSecondary} !px-3 !py-2`} onClick={() => onMarksChange(removeMarkAt(marks, i))} aria-label={`Remove mark on ${text}`}>
@@ -95,9 +122,15 @@ export function MarksPanel({ marks, onMarksChange, onSubmit, submitting, block, 
                     This exercise has no findings to grade yet, so it cannot be attempted. An administrator has to add them.
                 </p>
             )}
+            <p role="status" className="sr-only" data-testid="wait-announce">{announcement}</p>
             {waiting && (
-                <p role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="wait-notice">
+                <p aria-hidden="true" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100" data-testid="wait-notice">
                     Too many attempts too quickly. You can submit again in {waitText(waitSeconds)}.
+                </p>
+            )}
+            {over && limits && (
+                <p role="alert" className="mb-4 text-sm text-red-800 dark:text-red-300" data-testid="over-limit">
+                    Too many marks or lines for one answer: at most {limits.maxMarks} marks covering at most {limits.maxLines} lines. Remove some before you submit.
                 </p>
             )}
             {error && <p role="alert" className="mb-4 text-sm text-red-800 dark:text-red-300" data-testid="submit-error">{error}</p>}

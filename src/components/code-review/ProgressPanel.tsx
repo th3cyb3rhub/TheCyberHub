@@ -19,9 +19,9 @@ export function ProgressPanel({ viewer, staff }: { viewer: CrViewer; staff: bool
                 <div><dt className={muted}>Best score</dt><dd className="font-semibold text-gray-900 dark:text-white">{viewer.attempts > 0 ? `${viewer.bestPercent}%` : 'No attempt yet'}</dd></div>
                 <div><dt className={muted}>Attempts</dt><dd className="font-semibold text-gray-900 dark:text-white">{viewer.attempts}</dd></div>
                 <div>
-                    <dt className={muted}>{viewer.passed ? 'Points earned' : 'A pass pays up to'}</dt>
+                    <dt className={muted}>{staff ? 'Points' : viewer.passed ? 'Points earned' : 'A pass pays up to'}</dt>
                     <dd className="font-semibold text-gray-900 dark:text-white" data-testid="points-value">
-                        {viewer.passed ? pointsText(viewer.pointsEarned) : pointsText(viewer.pointsAvailable)}
+                        {staff ? 'Not scored for staff' : viewer.passed ? pointsText(viewer.pointsEarned) : pointsText(viewer.pointsAvailable)}
                     </dd>
                 </div>
                 <div><dt className={muted}>Left today</dt><dd className="font-semibold text-gray-900 dark:text-white">{viewer.attemptsLeftToday} of {CR_LIMITS.attemptsPerDay}</dd></div>
@@ -29,6 +29,9 @@ export function ProgressPanel({ viewer, staff }: { viewer: CrViewer; staff: bool
             {viewer.hintCost > 0 && <p className={`mt-3 text-xs ${muted}`}>{plural(viewer.hintsUnlocked.length, 'hint')} opened: {pointsText(viewer.hintCost)} off the points.</p>}
             {staff && <p className={`mt-3 text-xs ${muted}`}>Staff accounts are graded but never earn points.</p>}
             {!staff && !viewer.passed && viewer.solutionViewed && <p className="mt-3 text-xs text-amber-900 dark:text-amber-300">You opened the solution, so a pass pays 0 points.</p>}
+            {!staff && !viewer.passed && viewer.pointsForfeited && !viewer.solutionViewed && (
+                <p className="mt-3 text-xs text-amber-900 dark:text-amber-300" data-testid="forfeited-note">An attempt had more wrong marks than this exercise has findings, so its points are gone. You can still pass it for the practice.</p>
+            )}
         </section>
     );
 }

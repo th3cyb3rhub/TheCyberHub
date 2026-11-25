@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff, KeyRound, Loader2, Lock } from 'lucide-react';
 import { btnSecondary, cardPad, muted } from '@/components/events/styles';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useSolution } from '@/hooks/queries/useCodeReview';
 import { crErrorMessage } from '@/lib/codeReview/errors';
+import { plural } from '@/lib/codeReview/display';
 import type { CrDetail, CrExploitExample, CrFinding, CrSolution } from '@/types/codeReview';
 import { CodeText } from './CodeLines';
 import { CrMarkdown } from './CrMarkdown';
@@ -86,12 +88,26 @@ function SolutionBody({ solution }: { solution: CrSolution }) {
  * it before passing makes the pass pay 0 points, so a dialog says so first. Every text of it is
  * shown as text.
  */
-export function SolutionPanel({ snippet, signedIn, staff, loading = false }: { snippet: CrDetail; signedIn: boolean; staff: boolean; loading?: boolean }) {
+export function SolutionPanel({ snippet, snippetRef, signedIn, staff, loading = false }: {
+    snippet: CrDetail;
+    /** The address the page was opened with: the reference every call and cache write uses (defaults to the slug) */
+    snippetRef?: string;
+    signedIn: boolean;
+    staff: boolean;
+    loading?: boolean;
+}) {
+    const { user } = useAuth();
+    const userId = user?.id ?? null;
     const viewer = snippet.viewer;
     const [wanted, setWanted] = useState(false);
     const [shown, setShown] = useState(true);
     const [confirming, setConfirming] = useState(false);
-    const solution = useSolution(snippet.slug, wanted);
+    const solution = useSolution(snippetRef ?? snippet.slug, wanted);
+
+    // Opening the solution is one account's choice: after a sign-out or a switch it has to be chosen again
+    useEffect(() => {
+        setWanted(false); setShown(true); setConfirming(false);
+    }, [userId]);
 
     const unlocked = staff || !!viewer?.solutionUnlocked;
     const forfeits = !staff && !!viewer && !viewer.passed && !viewer.solutionViewed;
@@ -145,7 +161,7 @@ export function SolutionPanel({ snippet, signedIn, staff, loading = false }: { s
                 open={confirming}
                 variant="warning"
                 title="Open the solution before passing?"
-                description="If you open the solution now and pass later, that pass pays 0 points. Points are paid once, on the first pass, so they cannot be earned afterwards. You can still pass for the practice. Open it only if you are done trying."
+                description={`If you open the solution now and pass later, that pass pays 0 points. Points are paid once, on the first pass, so they cannot be earned afterwards. You can still pass for the practice. Open it only if you are done trying. (Points are also lost, whatever you do with the solution, by an attempt with more wrong marks than the ${plural(snippet.findingCount, 'finding')} of this exercise.)`}
                 confirmText="Open the solution"
                 cancelText="Keep trying"
                 onCancel={() => setConfirming(false)}

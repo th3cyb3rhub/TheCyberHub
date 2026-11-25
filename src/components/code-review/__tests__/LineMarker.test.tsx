@@ -117,15 +117,70 @@ describe('picking lines with the pointer', () => {
         expect(line(2)).toHaveAttribute('data-tone', 'mark')
     })
 
-    it('refuses a 51st mark with a clear message', () => {
+    it('disables marking and says why at the 50 mark ceiling', () => {
         const many = Array.from({ length: 50 }, (_, i) => ({ lineStart: i * 3 + 1, lineEnd: i * 3 + 1 }))
         const lines = Array.from({ length: 200 }, (_, i) => `line ${i}`)
         const onChange = vi.fn()
         render(<LineMarker lines={lines} marks={many} onMarksChange={onChange} />)
         fireEvent.click(document.getElementById('cr-line-152') as HTMLElement)
-        fireEvent.click(screen.getByTestId('mark-selection'))
+        expect(screen.getByTestId('mark-selection')).toBeDisabled()
+        expect(screen.getByTestId('limit-note')).toHaveTextContent('at most 50 marks')
         expect(onChange).not.toHaveBeenCalled()
-        expect(screen.getByTestId('marker-note')).toHaveTextContent('at most 50 ranges')
+    })
+
+    it('disables marking beyond the marks of this exercise, and not inside a mark that exists', () => {
+        const lines = Array.from({ length: 30 }, (_, i) => `line ${i}`)
+        const marks = [{ lineStart: 2, lineEnd: 2 }, { lineStart: 5, lineEnd: 5 }, { lineStart: 9, lineEnd: 9 }]
+        render(<LineMarker lines={lines} marks={marks} onMarksChange={vi.fn()} limits={{ maxMarks: 3, maxLines: 12 }} />)
+        fireEvent.click(document.getElementById('cr-line-20') as HTMLElement)
+        expect(screen.getByTestId('mark-selection')).toBeDisabled()
+        expect(screen.getByTestId('limit-note')).toHaveTextContent('at most 3 marks')
+        // A line of a mark that exists is not "one more": it only says it is marked
+        fireEvent.click(document.getElementById('cr-line-5') as HTMLElement)
+        expect(screen.getByTestId('mark-selection')).not.toBeDisabled()
+        expect(screen.queryByTestId('limit-note')).not.toBeInTheDocument()
+    })
+
+    it('disables marking beyond the lines an answer may cover, counting lines once', () => {
+        const lines = Array.from({ length: 30 }, (_, i) => `line ${i}`)
+        const onChange = vi.fn()
+        render(<LineMarker lines={lines} marks={[{ lineStart: 1, lineEnd: 5 }]} onMarksChange={onChange} limits={{ maxMarks: 5, maxLines: 6 }} />)
+        fireEvent.click(document.getElementById('cr-line-10') as HTMLElement)
+        fireEvent.click(document.getElementById('cr-line-12') as HTMLElement, { shiftKey: true })
+        expect(screen.getByTestId('mark-selection')).toBeDisabled()
+        expect(screen.getByTestId('limit-note')).toHaveTextContent('at most 6 lines in all and 5 are used')
+        // One more line fits
+        fireEvent.click(document.getElementById('cr-line-10') as HTMLElement)
+        expect(screen.getByTestId('mark-selection')).not.toBeDisabled()
+        fireEvent.click(screen.getByTestId('mark-selection'))
+        expect(onChange).toHaveBeenCalledWith([{ lineStart: 1, lineEnd: 5 }, { lineStart: 10, lineEnd: 10 }])
+    })
+
+    it('says why when the keyboard cannot add a mark at the limit', () => {
+        const lines = Array.from({ length: 30 }, (_, i) => `line ${i}`)
+        const onChange = vi.fn()
+        render(<LineMarker lines={lines} marks={[{ lineStart: 1, lineEnd: 1 }]} onMarksChange={onChange} limits={{ maxMarks: 1, maxLines: 6 }} />)
+        const listbox = screen.getByRole('listbox')
+        fireEvent.keyDown(listbox, { key: 'End' })
+        fireEvent.keyDown(listbox, { key: ' ' })
+        expect(onChange).not.toHaveBeenCalled()
+        expect(screen.getByTestId('marker-note')).toHaveTextContent('at most 1 marks')
+    })
+
+    it('names a finding type of the 15, not a category, in the type chooser', () => {
+        render(<Harness />)
+        const select = screen.getByLabelText('Type for new marks (optional)')
+        const values = within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)
+        expect(values).toContain('sqli')
+        expect(values).toContain('race-condition')
+        expect(values).not.toContain('server-side')
+        expect(values).toHaveLength(16)
+    })
+
+    it('gives every line a spoken number and makes the selection status polite', () => {
+        render(<Harness />)
+        expect(document.getElementById('cr-line-3')).toHaveTextContent('Line 3:')
+        expect(screen.getByTestId('selection-status')).toHaveAttribute('aria-live', 'polite')
     })
 })
 

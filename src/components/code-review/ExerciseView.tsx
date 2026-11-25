@@ -7,9 +7,10 @@ import { btnSecondary, card, cardPad, chip, muted, pageBg } from '@/components/e
 import { useAuth } from '@/context/AuthContext';
 import { useCodeSnippet, useSubmitAttempt } from '@/hooks/queries/useCodeReview';
 import { ApiError } from '@/lib/api';
-import { crErrorMessage, isDailyLimit, isRateLimited, retryAfterSeconds } from '@/lib/codeReview/errors';
+import { crErrorMessage, isDailyLimit, isRateLimited, retryAfterSeconds, tooBroadLimits } from '@/lib/codeReview/errors';
+import { markLimits, type MarkLimits } from '@/lib/codeReview/constants';
 import { isCrReader, isCrWriter } from '@/lib/codeReview/roles';
-import { splitCode, toPayload, type MarkDraft } from '@/lib/codeReview/selection';
+import { markedLines, splitCode, toPayload, type MarkDraft } from '@/lib/codeReview/selection';
 import { plural, pointsText } from '@/lib/codeReview/display';
 import type { CrAttemptResult, CrDetail, CrMark } from '@/types/codeReview';
 import { CategoryChip, DifficultyBadge, LanguageChip, StatusBadge } from './Badges';
@@ -78,13 +79,33 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
     const [outcome, setOutcome] = useState<{ result: CrAttemptResult; marks: CrMark[] } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [waitUntil, setWaitUntil] = useState<number | null>(null);
+    /** The ceilings the API named in a CR_TOO_BROAD answer: they win over the preflight, which is a lower bound */
+    const [serverLimits, setServerLimits] = useState<MarkLimits | null>(null);
     const wait = useCountdown(waitUntil);
     const resultRef = useRef<HTMLDivElement>(null);
     const [focusResult, setFocusResult] = useState(false);
 
+    // Nothing of one account stays on screen for the next: the result and the marks go on sign-out or a switch
+    const userId = user?.id ?? null;
+    const lastUser = useRef(userId);
+    useEffect(() => {
+        if (lastUser.current !== null && lastUser.current !== userId) {
+            setOutcome(null); setMarks([]); setError(null); setWaitUntil(null); setServerLimits(null);
+        }
+        lastUser.current = userId;
+    }, [userId]);
+
     const code = snippet?.vulnerableCode ?? '';
     const lines = useMemo(() => splitCode(code), [code]);
-    const bands = useMemo<Band[]>(() => (outcome ? outcome.result.matched.map((m) => ({ start: m.lineStart, end: m.lineEnd, tone: 'match' as const })) : []), [outcome]);
+    // Once the details are revealed the green lines are the findings; before that they are the member's own marks that matched
+    const bands = useMemo<Band[]>(() => {
+        if (!outcome) return [];
+        if (outcome.result.detailsRevealed) return outcome.result.matched.map((m) => ({ start: m.lineStart, end: m.lineEnd, tone: 'match' as const }));
+        return outcome.result.marks
+            .filter((v) => v.result === 'matched' && outcome.marks[v.index])
+            .map((v) => ({ start: outcome.marks[v.index].lineStart, end: outcome.marks[v.index].lineEnd, tone: 'match' as const }));
+    }, [outcome]);
+    const limits = useMemo<MarkLimits>(() => serverLimits ?? markLimits(snippet?.findingCount ?? 0, lines.length), [serverLimits, snippet?.findingCount, lines.length]);
 
     // The result takes the focus once it is on the page, so a screen reader reads it and the page scrolls to it
     useEffect(() => {
@@ -131,7 +152,9 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
     const view: CrDetail = viewerKnown ? snippet : { ...snippet, viewer: null };
 
     let block: SubmitBlock | null = null;
-    if (!signedIn) block = { kind: 'signed-out', href: `/auth?redirect=${encodeURIComponent(`/code-review/${snippet.slug}`)}` };
+    // While the session is still being read nobody is asked to sign in (that would flash and vanish)
+    if (loading) block = { kind: 'loading' };
+    else if (!signedIn) block = { kind: 'signed-out', href: `/auth?redirect=${encodeURIComponent(`/code-review/${snippet.slug}`)}` };
     else if (!viewer) block = { kind: 'loading' };
     else if (snippet.findingCount === 0) block = { kind: 'not-gradable' };
     else if (viewer.attemptsToday > 0 && viewer.attemptsLeftToday <= 0) block = { kind: 'no-attempts' };
@@ -139,12 +162,19 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
     const send = () => {
         const sent = toPayload(marks);
         setError(null);
-        submit.mutate({ ref: snippet.slug, marks: sent }, {
+        // The same check the API makes, so a member rarely waits for a refusal
+        if (marks.length > limits.maxMarks || markedLines(marks) > limits.maxLines) {
+            setError(`Too many marks or too many lines marked. An answer can hold at most ${limits.maxMarks} marks covering at most ${limits.maxLines} lines. Remove some and send again.`);
+            return;
+        }
+        submit.mutate({ ref: slug, marks: sent }, {
             onSuccess: (result) => { setOutcome({ result, marks: sent }); setWaitUntil(null); setFocusResult(true); },
             onError: (err) => {
                 const seconds = retryAfterSeconds(err);
                 // The daily cap is a long wait the page states in words; a per-minute limit is a countdown
                 if (isRateLimited(err) && !isDailyLimit(err) && seconds) setWaitUntil(Date.now() + seconds * 1000);
+                const broad = tooBroadLimits(err);
+                if (broad) setServerLimits(broad);
                 setError(crErrorMessage(err));
             },
         });
@@ -181,12 +211,12 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
                         <h2 id="cr-code" className="mb-1 text-xl font-semibold text-gray-900 dark:text-white">Review the code</h2>
                         <p className={`mb-4 text-sm ${muted}`}>Find the lines that are vulnerable. {plural(lines.length, 'line')}, shown as text.</p>
                         {code.trim() ? (
-                            <LineMarker lines={lines} marks={marks} onMarksChange={setMarks} bands={bands} />
+                            <LineMarker lines={lines} marks={marks} onMarksChange={setMarks} bands={bands} limits={limits} />
                         ) : (
                             <p className={`text-sm ${muted}`}>This exercise has no code yet.</p>
                         )}
                         {outcome && bands.length > 0 && (
-                            <p className={`mt-3 text-xs ${muted}`} data-testid="legend">Green lines are the findings you found in your last attempt. Orange lines are your marks.</p>
+                            <p className={`mt-3 text-xs ${muted}`} data-testid="legend">Green lines are what you found in your last attempt. Orange lines are your marks.</p>
                         )}
                     </section>
 
@@ -200,6 +230,7 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
                         waitSeconds={wait}
                         attemptsLeft={attemptsLeft}
                         hasResult={!!outcome}
+                        limits={limits}
                     />
 
                     {outcome && (
@@ -214,10 +245,10 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
                     )}
                 </div>
 
-                {snippet.hints.length > 0 && <div className="lg:col-start-2"><HintsPanel snippet={view} signedIn={signedIn} staff={staff} loading={viewerLoading} /></div>}
-                <div className="lg:col-start-2"><SolutionPanel snippet={view} signedIn={signedIn} staff={staff} loading={viewerLoading} /></div>
-                {signedIn && !!viewer && viewer.attempts > 0 && <div className="lg:col-start-2"><AttemptHistory slug={snippet.slug} enabled /></div>}
-                <div className="lg:col-start-2"><RulesBox points={snippet.points} findingCount={snippet.findingCount} /></div>
+                {snippet.hints.length > 0 && <div className="lg:col-start-2"><HintsPanel snippet={view} snippetRef={slug} signedIn={signedIn} staff={staff} loading={viewerLoading} /></div>}
+                <div className="lg:col-start-2"><SolutionPanel snippet={view} snippetRef={slug} signedIn={signedIn} staff={staff} loading={viewerLoading} /></div>
+                {signedIn && !!viewer && viewer.attempts > 0 && <div className="lg:col-start-2"><AttemptHistory slug={slug} enabled /></div>}
+                <div className="lg:col-start-2"><RulesBox points={snippet.points} findingCount={snippet.findingCount} lineCount={lines.length} /></div>
             </div>
         </Shell>
     );

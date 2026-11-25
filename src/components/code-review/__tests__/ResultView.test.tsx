@@ -99,4 +99,55 @@ describe('ResultView', () => {
         expect(document.querySelector('script')).toBeNull()
         expect(screen.getByTestId('finding')).toHaveTextContent('<img src=x onerror=alert(1)>')
     })
+
+    describe('before a pass: counts and a verdict for each mark, no explanations', () => {
+        const hidden = (over = {}) => makeResult({ detailsRevealed: false, matchedCount: 1, matched: [], marks: [{ index: 0, result: 'matched' }, { index: 1, result: 'unmatched' }], duplicateCount: 0, ...over })
+
+        it('says "N of M found" from the count and shows no finding', () => {
+            view(hidden())
+            expect(screen.getByTestId('found-count')).toHaveTextContent('1 of 2 found')
+            expect(screen.queryAllByTestId('finding')).toHaveLength(0)
+            expect(screen.queryByText('Findings you found')).not.toBeInTheDocument()
+        })
+
+        it('explains that the details unlock on a pass or after opening the solution', () => {
+            view(hidden())
+            expect(screen.getByTestId('details-locked')).toHaveTextContent('unlock when you pass or after you open the solution')
+        })
+
+        it('does not say a mark cost points when a repeat may be among the unmatched', () => {
+            view(hidden())
+            const verdicts = screen.getByTestId('mark-verdicts').querySelectorAll('li')
+            expect(verdicts[0]).toHaveTextContent('Matched a finding')
+            expect(verdicts[1]).toHaveAttribute('data-verdict', 'unmatched')
+            expect(verdicts[1]).toHaveTextContent('Did not match a new finding')
+            expect(verdicts[1]).not.toHaveTextContent('costs')
+        })
+
+        it('says how much the wrong marks cost and that repeats are free', () => {
+            view(hidden({ falsePositives: 1, duplicateCount: 2 }))
+            expect(screen.getByTestId('false-cost')).toHaveTextContent('1 mark matched nothing and cost 3 points in total')
+            expect(screen.getByTestId('false-cost')).toHaveTextContent('2 repeats of a mark that already matched were free')
+        })
+
+        it('is not shown once the server reveals the details', () => {
+            view(makeResult())
+            expect(screen.queryByTestId('details-locked')).not.toBeInTheDocument()
+            expect(screen.getAllByTestId('finding')).toHaveLength(1)
+        })
+    })
+
+    it('says plainly when an attempt probed: more wrong marks than findings takes the points away', () => {
+        view(makeResult({ pointsForfeited: true, falsePositives: 3, pointsAvailable: 0 }))
+        const note = screen.getByTestId('forfeited')
+        expect(note).toHaveTextContent('3 wrong marks, more than the 2 findings of this exercise')
+        expect(note).toHaveTextContent('takes the points of the exercise away')
+        expect(note).toHaveTextContent('still pass it for the practice')
+    })
+
+    it('has no forfeit note for an ordinary attempt, and states the new decay', () => {
+        view(makeResult({ pointsAvailable: 22 }))
+        expect(screen.queryByTestId('forfeited')).not.toBeInTheDocument()
+        expect(screen.getByTestId('points-line')).toHaveTextContent('takes 25% off, up to 75%')
+    })
 })

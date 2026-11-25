@@ -52,6 +52,7 @@ const Line = memo(function Line({ id, n, text, width, tone, selected, cursor, in
                 className="sticky left-0 z-[1] shrink-0 select-none bg-inherit pr-3 text-right text-gray-600 dark:text-gray-400"
                 style={{ width: `${width + 2}ch`, paddingLeft: '0.5rem' }}
             >{n}</span>
+            <span className="sr-only">{`Line ${n}: `}</span>
             <span className="whitespace-pre pr-6 text-gray-900 dark:text-gray-100">{text === '' ? ' ' : text}</span>
             {tone && <span className="sr-only">{`(${TONE_WORD[tone]})`}</span>}
         </li>

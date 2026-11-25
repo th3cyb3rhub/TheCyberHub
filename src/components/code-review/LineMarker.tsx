@@ -3,16 +3,20 @@
 import { useMemo, useState } from 'react';
 import { Eraser, MousePointerClick, Plus, Rows3 } from 'lucide-react';
 import { btnPrimary, btnSecondary, input, muted } from '@/components/events/styles';
-import { CR_CATEGORIES } from '@/types/codeReview';
-import { CR_LIMITS, categoryLabel } from '@/lib/codeReview/constants';
+import { CR_FINDING_TYPES } from '@/types/codeReview';
+import { CR_LIMITS, findingTypeLabel, type MarkLimits } from '@/lib/codeReview/constants';
 import {
-    addMark, describeRange, extendSelection, moveSelection, rangeOf, selectLine, selectionFromNumbers, toggleMark, type MarkDraft, type Selection,
+    addMark, describeRange, extendSelection, markedLines, moveSelection, rangeOf, selectLine, selectionFromNumbers, toggleMark, type AddStatus,
+    type MarkDraft, type Selection,
 } from '@/lib/codeReview/selection';
 import { CodeLines, type Band } from './CodeLines';
 
-const MESSAGES = {
-    limit: `You can mark at most ${CR_LIMITS.marks} ranges. Remove one first.`,
-};
+/** Why a range cannot be added, in words, for the limits of this exercise */
+function limitMessage(status: AddStatus, limits: MarkLimits, used: number): string {
+    return status === 'lines'
+        ? `Your marks can cover at most ${limits.maxLines} lines in all and ${used} are used. Remove a mark, or mark fewer lines.`
+        : `An answer can hold at most ${limits.maxMarks} marks. Remove one first.`;
+}
 
 /**
  * The code with the tools to pick lines: click for a line, shift-click (or "Select a range" and a
@@ -20,15 +24,18 @@ const MESSAGES = {
  * the range, Space or Enter marks or unmarks, Escape clears). "Mark selection" and the two line
  * boxes do the same without any pointer. Nothing here needs a drag.
  */
-export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix = 'cr' }: {
+export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix = 'cr', limits }: {
     lines: string[];
     marks: MarkDraft[];
     onMarksChange: (marks: MarkDraft[]) => void;
+    /** What an attempt may hold; without it only the API's ceiling of marks applies */
+    limits?: MarkLimits;
     /** Lines to paint as found (the last result) */
     bands?: Band[];
     idPrefix?: string;
 }) {
     const lineCount = lines.length;
+    const capacity = useMemo<MarkLimits>(() => limits ?? { maxMarks: CR_LIMITS.marks, maxLines: Math.max(1, lines.length) }, [limits, lines.length]);
     const [sel, setSel] = useState<Selection | null>(null);
     const [rangeMode, setRangeMode] = useState(false);
     const [focused, setFocused] = useState(false);
@@ -40,6 +47,9 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
 
     const allBands = useMemo<Band[]>(() => [...marks.map((m) => ({ start: m.lineStart, end: m.lineEnd, tone: 'mark' as const })), ...bands], [marks, bands]);
     const range = sel ? rangeOf(sel) : null;
+    // Whether the selection could be added now: a range inside an existing mark can always be taken off again
+    const preview = range ? addMark(marks, range, undefined, capacity) : null;
+    const blocked = preview && (preview.status === 'limit' || preview.status === 'lines') ? preview.status : null;
 
     const choose = (next: Selection | null) => { setSel(next); if (next) { const r = rangeOf(next); setFrom(String(r.start)); setTo(String(r.end)); } setNumberError(null); };
 
@@ -51,8 +61,8 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
 
     const mark = () => {
         if (!range) return;
-        const out = addMark(marks, range, type || undefined, CR_LIMITS.marks);
-        if (out.status === 'limit') { setNote(MESSAGES.limit); return; }
+        const out = addMark(marks, range, type || undefined, capacity);
+        if (out.status === 'limit' || out.status === 'lines') { setNote(limitMessage(out.status, capacity, markedLines(marks))); return; }
         if (out.status === 'exists') { setNote(`${cap(describeRange(range))} is already marked.`); return; }
         onMarksChange(out.marks);
         setNote(out.status === 'merged' ? `Marked ${describeRange(range)}. It touched another mark, so they were joined.` : `Marked ${describeRange(range)}.`);
@@ -60,8 +70,8 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
 
     const toggle = () => {
         if (!range) return;
-        const out = toggleMark(marks, range, type || undefined, CR_LIMITS.marks);
-        if (out.status === 'limit') { setNote(MESSAGES.limit); return; }
+        const out = toggleMark(marks, range, type || undefined, capacity);
+        if (out.status === 'limit' || out.status === 'lines') { setNote(limitMessage(out.status, capacity, markedLines(marks))); return; }
         if (out.status === 'exists') { setNote(`${cap(describeRange(range))} is already marked.`); return; }
         onMarksChange(out.marks);
         if (out.status === 'removed' && out.removed) setNote(`Removed the mark on ${describeRange({ start: out.removed.lineStart, end: out.removed.lineEnd })}.`);
@@ -93,7 +103,7 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
     return (
         <div className="space-y-3">
             <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Line selection tools">
-                <button type="button" className={btnPrimary} onClick={mark} disabled={!range} data-testid="mark-selection">
+                <button type="button" className={btnPrimary} onClick={mark} disabled={!range || !!blocked} data-testid="mark-selection">
                     <Plus className="h-4 w-4" aria-hidden="true" /> Mark selection
                 </button>
                 <button type="button" className={btnSecondary} aria-pressed={rangeMode} onClick={() => setRangeMode((v) => !v)} disabled={!sel} data-testid="range-mode">
@@ -106,7 +116,7 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
                     <label htmlFor={`${idPrefix}-type`} className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Type for new marks (optional)</label>
                     <select id={`${idPrefix}-type`} value={type} onChange={(e) => setType(e.target.value)} className={`${input} !py-2`}>
                         <option value="">No type</option>
-                        {CR_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                        {CR_FINDING_TYPES.map((c) => <option key={c} value={c}>{findingTypeLabel(c)}</option>)}
                     </select>
                 </div>
             </div>
@@ -144,9 +154,12 @@ export function LineMarker({ lines, marks, onMarksChange, bands = [], idPrefix =
                 describedBy={`${idPrefix}-help`}
             />
 
-            <p className="text-sm text-gray-800 dark:text-gray-200" data-testid="selection-status">
+            <p className="text-sm text-gray-800 dark:text-gray-200" aria-live="polite" data-testid="selection-status">
                 {range ? <>Selected: <strong>{describeRange(range)}</strong>{range.end > range.start ? ` (${range.end - range.start + 1} lines)` : ''}</> : 'No lines selected.'}
             </p>
+            {blocked && range && (
+                <p className="text-sm text-amber-900 dark:text-amber-300" data-testid="limit-note">{limitMessage(blocked, capacity, markedLines(marks))}</p>
+            )}
             <p role="status" aria-live="polite" className="min-h-5 text-sm text-gray-800 dark:text-gray-200" data-testid="marker-note">{note}</p>
         </div>
     );

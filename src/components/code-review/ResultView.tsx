@@ -15,6 +15,9 @@ const VERDICT = {
     unmatched: { text: `Matched nothing (costs ${CR_RULES.falseMarkPenalty} points)`, icon: XCircle, className: 'text-red-800 dark:text-red-300' },
 } as const;
 
+/** Before a pass a repeat of a matched mark is counted with the unmatched ones, so this line cannot say which marks cost points */
+const HIDDEN_UNMATCHED = { text: 'Did not match a new finding', icon: XCircle, className: 'text-red-800 dark:text-red-300' } as const;
+
 /** Why a first pass paid nothing, in words. The API decides; this only explains the two cases it documents. */
 function zeroPointsReason({ solutionViewed, staff }: { solutionViewed: boolean; staff: boolean }): string {
     if (staff) return 'Staff accounts are graded like everybody else but never earn points.';
@@ -23,9 +26,10 @@ function zeroPointsReason({ solutionViewed, staff }: { solutionViewed: boolean; 
 }
 
 /**
- * What the server graded: the score and whether it passes, what was paid, the findings the member
- * found with their explanation, and how many were missed and how many marks were wrong. The missed
- * findings are never shown (only counted): they stay in the solution.
+ * What the server graded: the score and whether it passes, what was paid, and how many findings were
+ * found, missed and marked wrongly. The explanations of the findings found are only there once the
+ * server reveals the details (after a pass, after the solution was opened, and for staff); until
+ * then the member sees counts and a verdict for each mark. The missed findings are never shown.
  */
 export const ResultView = forwardRef<HTMLDivElement, {
     result: CrAttemptResult;
@@ -37,8 +41,10 @@ export const ResultView = forwardRef<HTMLDivElement, {
 }>(function ResultView({ result, marks, findingCount, staff, solutionViewed }, ref) {
     const passLine = Math.min(100, Math.max(0, result.passPercent));
     const percent = Math.min(100, Math.max(0, result.percent));
-    const found = result.matched.length;
+    const revealed = result.detailsRevealed;
+    const found = result.matchedCount;
     const total = findingCount || found + result.missedCount;
+    const falseCost = result.falsePositives * CR_RULES.falseMarkPenalty;
     return (
         <section aria-labelledby="cr-result" className={`${cardPad} outline-none`} tabIndex={-1} ref={ref} data-testid="result" data-passed={result.passed ? 'true' : 'false'}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -60,8 +66,8 @@ export const ResultView = forwardRef<HTMLDivElement, {
 
             <dl className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-3 text-sm sm:grid-cols-3">
                 <div className="rounded-xl bg-gray-50 p-3 dark:bg-neutral-800/60" data-testid="found-count">
-                    <dt className={muted}>Findings found</dt>
-                    <dd className="text-lg font-semibold text-gray-900 dark:text-white">{found} of {total}</dd>
+                    <dt className={muted}>Findings</dt>
+                    <dd className="text-lg font-semibold text-gray-900 dark:text-white">{found} of {total} found</dd>
                 </div>
                 <div className="rounded-xl bg-gray-50 p-3 dark:bg-neutral-800/60" data-testid="missed-count">
                     <dt className={muted}>Still hidden</dt>
@@ -74,6 +80,25 @@ export const ResultView = forwardRef<HTMLDivElement, {
             </dl>
             {result.missedCount > 0 && (
                 <p className={`mt-2 text-sm ${muted}`}>The findings you missed are not shown. Look at the code again, or open a hint.</p>
+            )}
+            {result.falsePositives > 0 && (
+                <p className={`mt-2 text-sm ${muted}`} data-testid="false-cost">
+                    {plural(result.falsePositives, 'mark')} matched nothing and cost {pointsText(falseCost)} in total.
+                    {result.duplicateCount > 0 && <> {plural(result.duplicateCount, 'repeat')} of a mark that already matched {result.duplicateCount === 1 ? 'was' : 'were'} free.</>}
+                </p>
+            )}
+            {result.falsePositives === 0 && result.duplicateCount > 0 && (
+                <p className={`mt-2 text-sm ${muted}`} data-testid="false-cost">{plural(result.duplicateCount, 'repeat')} of a mark that already matched {result.duplicateCount === 1 ? 'was' : 'were'} free.</p>
+            )}
+            {result.pointsForfeited && (
+                <p role="note" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200" data-testid="forfeited">
+                    This attempt had {plural(result.falsePositives, 'wrong mark')}, more than the {plural(total, 'finding')} of this exercise. Marking at random to find the answer takes the points of the exercise away, so a pass can no longer pay points. You can still pass it for the practice.
+                </p>
+            )}
+            {!revealed && (
+                <p className={`mt-3 text-sm ${muted}`} data-testid="details-locked">
+                    The details of the findings, and what each one is, unlock when you pass or after you open the solution.
+                </p>
             )}
 
             <div className="mt-5 rounded-xl border border-gray-200 p-4 text-sm dark:border-neutral-800" data-testid="points-line">
@@ -118,7 +143,7 @@ export const ResultView = forwardRef<HTMLDivElement, {
                     <ul className="space-y-1.5 text-sm" data-testid="mark-verdicts">
                         {marks.map((m, i) => {
                             const verdict = result.marks.find((v) => v.index === i)?.result ?? 'unmatched';
-                            const v = VERDICT[verdict];
+                            const v = !revealed && verdict === 'unmatched' ? HIDDEN_UNMATCHED : VERDICT[verdict];
                             const Icon = v.icon;
                             return (
                                 <li key={`${m.lineStart}-${m.lineEnd}-${i}`} className={`flex items-start gap-2 ${v.className}`} data-verdict={verdict}>
@@ -131,7 +156,7 @@ export const ResultView = forwardRef<HTMLDivElement, {
                 </div>
             )}
 
-            {result.matched.length > 0 && (
+            {revealed && result.matched.length > 0 && (
                 <div className="mt-5">
                     <h3 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">Findings you found</h3>
                     <ul className="space-y-3">

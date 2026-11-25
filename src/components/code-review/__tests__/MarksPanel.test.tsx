@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MarksPanel, useCountdown } from '../MarksPanel'
+import { MarksPanel, useCountdown, useWaitAnnouncement } from '../MarksPanel'
 
 const base = { onMarksChange: vi.fn(), onSubmit: vi.fn(), submitting: false, block: null, error: null, waitSeconds: null, attemptsLeft: 29, hasResult: false }
 const marks = [{ lineStart: 4, lineEnd: 5 }, { lineStart: 9, lineEnd: 9, vulnerabilityType: 'xss' }]
@@ -60,7 +60,29 @@ describe('MarksPanel', () => {
     it('shows the 429 wait and keeps submit off until it ends', () => {
         render(<MarksPanel {...base} marks={marks} waitSeconds={42} />)
         expect(screen.getByTestId('wait-notice')).toHaveTextContent('You can submit again in 42 seconds')
+        expect(screen.getByTestId('wait-announce')).toHaveTextContent('You can submit again in 42 seconds')
         expect(screen.getByTestId('submit-marks')).toBeDisabled()
+    })
+
+    it('shows the marks and the lines used against the limits of the exercise', () => {
+        render(<MarksPanel {...base} marks={marks} limits={{ maxMarks: 4, maxLines: 6 }} />)
+        expect(screen.getByTestId('marks-count')).toHaveTextContent('2 of 4 marks, 3 of 6 lines')
+        expect(screen.getByTestId('submit-marks')).not.toBeDisabled()
+        expect(screen.queryByTestId('over-limit')).not.toBeInTheDocument()
+    })
+
+    it('blocks a submit that is over the limits and says what the limits are', () => {
+        render(<MarksPanel {...base} marks={marks} limits={{ maxMarks: 4, maxLines: 2 }} />)
+        expect(screen.getByTestId('marks-count')).toHaveTextContent('2 of 4 marks, 3 of 2 lines')
+        expect(screen.getByTestId('submit-marks')).toBeDisabled()
+        expect(screen.getByTestId('over-limit')).toHaveTextContent('at most 4 marks covering at most 2 lines')
+    })
+
+    it('counts overlapping lines once and names the finding types, not the categories', () => {
+        render(<MarksPanel {...base} marks={[{ lineStart: 4, lineEnd: 5 }]} limits={{ maxMarks: 3, maxLines: 6 }} />)
+        const values = within(screen.getByLabelText('Vulnerability type for lines 4 to 5')).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)
+        expect(values).toContain('race-condition')
+        expect(values).not.toContain('access-control')
     })
 
     it('shows the error from the server and a busy submit', () => {
@@ -90,5 +112,26 @@ describe('useCountdown', () => {
 
     it('is null without a wait', () => {
         expect(renderHook(() => useCountdown(null)).result.current).toBeNull()
+    })
+})
+
+describe('useWaitAnnouncement', () => {
+    it('speaks at the start, every 10 seconds and at the end, not every second', () => {
+        const { result, rerender } = renderHook(({ s }: { s: number | null }) => useWaitAnnouncement(s), { initialProps: { s: null as number | null } })
+        expect(result.current).toBe('')
+        rerender({ s: 37 })
+        expect(result.current).toBe('You can submit again in 37 seconds.')
+        rerender({ s: 36 })
+        expect(result.current).toBe('You can submit again in 37 seconds.')
+        rerender({ s: 31 })
+        expect(result.current).toBe('You can submit again in 37 seconds.')
+        rerender({ s: 30 })
+        expect(result.current).toBe('You can submit again in 30 seconds.')
+        rerender({ s: 29 })
+        expect(result.current).toBe('You can submit again in 30 seconds.')
+        rerender({ s: 10 })
+        expect(result.current).toBe('You can submit again in 10 seconds.')
+        rerender({ s: null })
+        expect(result.current).toBe('You can submit again now.')
     })
 })

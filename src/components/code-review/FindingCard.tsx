@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { chip, muted } from '@/components/events/styles';
-import { categoryLabel } from '@/lib/codeReview/constants';
+import { findingTypeLabel } from '@/lib/codeReview/constants';
 import { cweHref } from '@/lib/codeReview/display';
 import { describeRange } from '@/lib/codeReview/selection';
 import { SeverityBadge } from './Badges';
@@ -28,7 +28,7 @@ export function FindingCard({ finding, index, children, note }: { finding: Detai
                     {finding.title || `Finding ${index + 1}`} <span className={`font-normal ${muted}`}>({range})</span>
                 </h4>
                 <SeverityBadge severity={finding.severity} />
-                <span className={`${chip} bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-gray-200`}>{categoryLabel(finding.vulnerabilityType)}</span>
+                <span className={`${chip} bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-gray-200`}>{findingTypeLabel(finding.vulnerabilityType)}</span>
                 {finding.cwe && (href
                     ? <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={`${chip} bg-gray-100 text-gray-900 underline dark:bg-neutral-800 dark:text-gray-100`}>{finding.cwe}<ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>
                     : <span className={`${chip} bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-gray-200`}>{finding.cwe}</span>)}

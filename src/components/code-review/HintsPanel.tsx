@@ -16,7 +16,14 @@ type Reason = 'signed-out' | 'loading' | null;
  * The hints. They open one at a time, in order, and each costs its points once: the cost is shown
  * before it is opened, and a dialog asks first. Staff read them for free (nothing is recorded).
  */
-export function HintsPanel({ snippet, signedIn, staff, loading = false }: { snippet: CrDetail; signedIn: boolean; staff: boolean; loading?: boolean }) {
+export function HintsPanel({ snippet, snippetRef, signedIn, staff, loading = false }: {
+    snippet: CrDetail;
+    /** The address the page was opened with: the reference every call and cache write uses (defaults to the slug) */
+    snippetRef?: string;
+    signedIn: boolean;
+    staff: boolean;
+    loading?: boolean;
+}) {
     const unlock = useUnlockHint();
     const [confirming, setConfirming] = useState<CrHintView | null>(null);
     const [error, setError] = useState<{ order: number; message: string } | null>(null);
@@ -45,7 +52,7 @@ export function HintsPanel({ snippet, signedIn, staff, loading = false }: { snip
         setConfirming(null);
         setError(null);
         setOpeningOrder(hint.order);
-        unlock.mutate({ ref: snippet.slug, order: hint.order }, {
+        unlock.mutate({ ref: snippetRef ?? snippet.slug, order: hint.order }, {
             onSuccess: () => {
                 setFocusOrder(hint.order);
                 setAnnouncement(`Hint ${hint.order} opened.${hint.cost === 0 ? '' : ` It took ${pointsText(hintPrice(available, hint.cost))} off what a pass pays.`}`);

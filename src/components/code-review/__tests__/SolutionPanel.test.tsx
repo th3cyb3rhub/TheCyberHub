@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { makeDetail, makeViewer } from '@/lib/codeReview/__tests__/fixtures'
 
+const auth = vi.hoisted(() => ({ current: { user: { id: 'u1' } as { id: string } | null } }))
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth.current }))
 const sol = vi.hoisted(() => ({ current: {} as Record<string, unknown>, enabled: [] as boolean[] }))
 vi.mock('@/hooks/queries/useCodeReview', () => ({ useSolution: (_ref: string, enabled: boolean) => { sol.enabled.push(enabled); return sol.current } }))
 
@@ -16,7 +18,7 @@ const solution = {
 }
 const unlocked = (over = {}) => makeDetail({ viewer: makeViewer({ solutionUnlocked: true, attempts: 1, status: 'in-progress', ...over }) })
 
-beforeEach(() => { sol.current = idle(); sol.enabled = [] })
+beforeEach(() => { sol.current = idle(); sol.enabled = []; auth.current = { user: { id: 'u1' } } })
 
 describe('SolutionPanel', () => {
     it('is locked for a visitor, with nothing fetched', () => {
@@ -101,5 +103,21 @@ describe('SolutionPanel', () => {
         expect(screen.getByTestId('solution-error')).toHaveTextContent('first graded attempt')
         fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
         expect(refetch).toHaveBeenCalled()
+    })
+
+    it('forgets that it was asked to open when another account signs in, so nothing is fetched for them', () => {
+        const panel = <SolutionPanel snippet={unlocked({ passed: true, status: 'passed' })} signedIn staff={false} />
+        const { rerender } = render(panel)
+        fireEvent.click(screen.getByRole('button', { name: /Show solution/ }))
+        expect(sol.enabled.at(-1)).toBe(true)
+        auth.current = { user: { id: 'u2' } }
+        rerender(<SolutionPanel snippet={unlocked({ passed: true, status: 'passed' })} signedIn staff={false} />)
+        expect(sol.enabled.at(-1)).toBe(false)
+    })
+
+    it('warns in the confirmation that random marking also takes the points away', () => {
+        render(<SolutionPanel snippet={unlocked()} signedIn staff={false} />)
+        fireEvent.click(screen.getByRole('button', { name: /Show solution/ }))
+        expect(within(screen.getByRole('dialog')).getByText(/more wrong marks than the 2 findings of this exercise/)).toBeInTheDocument()
     })
 })

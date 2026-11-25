@@ -4,7 +4,7 @@ import { ApiError } from '@/lib/api'
 import { makeDetail, makeResult, makeViewer } from '@/lib/codeReview/__tests__/fixtures'
 import type { CrDetail } from '@/types/codeReview'
 
-const auth = vi.hoisted(() => ({ current: { user: null as null | { role: string }, loading: false } }))
+const auth = vi.hoisted(() => ({ current: { user: null as null | { role: string; id?: string }, loading: false } }))
 const snip = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 const submit = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth.current }))
@@ -153,6 +153,89 @@ describe('ExerciseView, member', () => {
         auth.current = { user: { role: 'admin' }, loading: false }
         render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
         expect(screen.getByRole('link', { name: /Edit exercise/ }).getAttribute('href')).toBe('/admin/code-review/sql-injection-login/edit')
+    })
+})
+
+describe('ExerciseView, limits and results', () => {
+    it('shows the limits of the exercise live and stops adding at the marks limit', () => {
+        // 2 findings: 4 marks; 40% of 7 lines is 2, but never fewer than 6 lines
+        render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
+        expect(screen.getByTestId('marks-count')).toHaveTextContent('0 of 4 marks, 0 of 6 lines')
+        for (const n of [1, 3, 5, 7]) { mark(n); markSelection() }
+        expect(screen.getByTestId('marks-count')).toHaveTextContent('4 of 4 marks, 4 of 6 lines')
+        mark(2)
+        expect(screen.getByRole('button', { name: /Mark selection/ })).toBeDisabled()
+        expect(screen.getByTestId('limit-note')).toHaveTextContent('at most 4 marks')
+    })
+
+    it('follows the limits the API names when it refuses an answer as too broad', () => {
+        render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
+        mark(4)
+        markSelection()
+        fireEvent.click(screen.getByTestId('submit-marks'))
+        const handlers = submit.mutate.mock.calls[0][1] as Handlers
+        act(() => handlers.onError?.(new ApiError('broad', 400, 'CR_TOO_BROAD', undefined, { maxMarks: 3, maxLines: 5 })))
+        expect(screen.getByTestId('submit-error')).toHaveTextContent('at most 3 marks covering at most 5 lines')
+        expect(screen.getByTestId('marks-count')).toHaveTextContent('1 of 3 marks, 1 of 5 lines')
+        // Nothing was lost: the marks are still there
+        expect(screen.getAllByTestId('mark-item')).toHaveLength(1)
+    })
+
+    it('does not send an answer that is over the limits', () => {
+        // All 7 lines are over the 6 that an answer may cover
+        render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
+        mark(1)
+        fireEvent.click(line(7), { shiftKey: true })
+        expect(screen.getByRole('button', { name: /Mark selection/ })).toBeDisabled()
+        expect(submit.mutate).not.toHaveBeenCalled()
+    })
+
+    it('paints the member\'s own matching marks green before the details are revealed', () => {
+        render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
+        mark(4)
+        markSelection()
+        mark(7)
+        markSelection()
+        fireEvent.click(screen.getByTestId('submit-marks'))
+        const handlers = submit.mutate.mock.calls[0][1] as Handlers
+        act(() => handlers.onSuccess?.(makeResult({ detailsRevealed: false, matchedCount: 1, matched: [], marks: [{ index: 0, result: 'matched' }, { index: 1, result: 'unmatched' }] })))
+        expect(line(4)).toHaveAttribute('data-tone', 'match')
+        expect(line(7)).toHaveAttribute('data-tone', 'mark')
+        expect(screen.getByTestId('details-locked')).toBeInTheDocument()
+    })
+
+    it('does not offer a sign-in while the session is still being read', () => {
+        auth.current = { user: null, loading: true }
+        render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail({ viewer: null })} />)
+        expect(screen.queryByTestId('signin-prompt')).not.toBeInTheDocument()
+        expect(screen.getByTestId('submit-marks')).toBeDisabled()
+    })
+
+    it('clears the result and the marks when the member signs out or another account signs in', () => {
+        auth.current = { user: { role: 'member', id: 'u1' }, loading: false }
+        const { rerender } = render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail()} />)
+        mark(4)
+        markSelection()
+        fireEvent.click(screen.getByTestId('submit-marks'))
+        act(() => (submit.mutate.mock.calls[0][1] as Handlers).onSuccess?.(makeResult()))
+        expect(screen.getByTestId('result')).toBeInTheDocument()
+        auth.current = { user: null, loading: false }
+        snip.current = loaded(makeDetail({ viewer: null }))
+        rerender(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail({ viewer: null })} />)
+        expect(screen.queryByTestId('result')).not.toBeInTheDocument()
+        expect(screen.queryAllByTestId('mark-item')).toHaveLength(0)
+    })
+
+    it('keeps what a visitor marked when they sign in', () => {
+        auth.current = { user: null, loading: false }
+        snip.current = loaded(makeDetail({ viewer: null }))
+        const { rerender } = render(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail({ viewer: null })} />)
+        mark(4)
+        markSelection()
+        auth.current = { user: { role: 'member', id: 'u1' }, loading: false }
+        snip.current = loaded(makeDetail())
+        rerender(<ExerciseView slug="sql-injection-login" initialSnippet={makeDetail({ viewer: null })} />)
+        expect(screen.getAllByTestId('mark-item')).toHaveLength(1)
     })
 })
 
