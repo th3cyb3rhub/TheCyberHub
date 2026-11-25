@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { IntentLink } from '@/components/ui/IntentLink';
 import { Briefcase, Clock, MapPin, Sparkles, Wallet } from 'lucide-react';
 import { card, chip, focusRing, muted } from '@/components/events/styles';
 import { ViewerTime } from '@/components/internships/ViewerTime';
@@ -25,7 +25,7 @@ export function JobCard({ job, saveSlot }: { job: Card; saveSlot?: React.ReactNo
                         <span className={`${chip} ${employmentTone(job.employmentType)}`}>{employmentName(job.employmentType)}</span>
                     </div>
                     <h2 className="break-words pr-10 text-lg font-semibold text-gray-900 dark:text-white">
-                        <Link href={`/jobs/${job.slug || job._id}`} className={`rounded hover:underline ${focusRing}`}>{job.title}</Link>
+                        <IntentLink href={`/jobs/${job.slug || job._id}`} className={`rounded hover:underline ${focusRing}`}>{job.title}</IntentLink>
                     </h2>
                     <p className="text-sm text-gray-700 dark:text-gray-300">{name}</p>
                     <ul className={`mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm ${muted}`} aria-label="Job facts">

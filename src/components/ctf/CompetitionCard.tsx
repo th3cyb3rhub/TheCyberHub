@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { IntentLink } from '@/components/ui/IntentLink';
 import Image from 'next/image';
 import { Award, Gift, Layers, Star, Swords, Trophy, Users } from 'lucide-react';
 import { card, focusRing, muted } from '@/components/events/styles';
@@ -37,7 +37,7 @@ export function CompetitionCard({ competition, status, featured = false }: { com
                 </div>
                 <div className="min-w-0">
                     <h2 className={`break-words font-semibold leading-snug text-gray-900 dark:text-white ${featured ? 'text-xl' : 'text-base'}`}>
-                        <Link href={`/ctf/competitions/${competition.slug}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{competition.title}</Link>
+                        <IntentLink href={`/ctf/competitions/${competition.slug}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{competition.title}</IntentLink>
                     </h2>
                     <p className="mt-1 text-sm font-medium text-gray-800 dark:text-gray-200" data-testid="card-dates">{formatRange(competition, competition.timezone, { withYear: true })}</p>
                     <p className={`text-xs ${muted}`}>Time zone: {competition.timezone}</p>

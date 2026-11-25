@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { IntentLink } from '@/components/ui/IntentLink';
 import { Code2, Lightbulb, Search, Star, Users } from 'lucide-react';
 import { card, focusRing, muted } from '@/components/events/styles';
 import { languageLabel } from '@/lib/codeReview/constants';
@@ -26,7 +26,7 @@ export function SnippetCard({ snippet }: { snippet: CrCard }) {
             </div>
             <div className="min-w-0">
                 <h2 className="break-words text-base font-semibold leading-snug text-gray-900 dark:text-white">
-                    <Link href={`/code-review/${encodeURIComponent(snippet.slug)}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{snippet.title}</Link>
+                    <IntentLink href={`/code-review/${encodeURIComponent(snippet.slug)}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{snippet.title}</IntentLink>
                 </h2>
                 <p className="mt-2 flex flex-wrap items-center gap-1.5">
                     <CategoryChip category={snippet.category} />

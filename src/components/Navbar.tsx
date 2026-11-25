@@ -99,7 +99,7 @@ const Navbar = () => {
 
     // --- Hacker/Cyberpunk nav link with animated underline ---
     const navLink = (href: string, icon: React.ReactNode, label: string) => (
-        <Link key={href} href={href} className="group/navlink relative inline-flex items-center gap-1.5 h-10 px-3 text-[13px] font-medium tracking-wide uppercase transition-all duration-200">
+        <Link key={href} href={href} prefetch className="group/navlink relative inline-flex items-center gap-1.5 h-10 px-3 text-[13px] font-medium tracking-wide uppercase transition-all duration-200">
             <span className={isActive(href) ? 'text-orange-400' : 'text-gray-500 group-hover/navlink:text-orange-400 transition-colors duration-200'}>{icon}</span>
             <span className={isActive(href) ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 group-hover/navlink:text-gray-900 dark:group-hover/navlink:text-white transition-colors duration-200'}>{label}</span>
             {/* Animated underline */}
@@ -158,6 +158,7 @@ const Navbar = () => {
                         <Link
                             key={link.href}
                             href={link.href}
+                            prefetch
                             className={`group/item flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150 ${
                                 active
                                     ? 'bg-orange-50 dark:bg-orange-500/10'
