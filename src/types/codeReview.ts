@@ -4,11 +4,16 @@
  * and the key reaches a member only through the solution, after a graded attempt.
  */
 
-export const CR_CATEGORIES = [
+/** The broad topic areas of the list and the cards. A category is not the answer: the finding type is. */
+export const CR_CATEGORIES = ['injection', 'web', 'access-control', 'crypto', 'server-side', 'other'] as const;
+export type CrCategory = (typeof CR_CATEGORIES)[number];
+
+/** What kind of problem a finding is. A mark may name one. */
+export const CR_FINDING_TYPES = [
     'sqli', 'xss', 'ssrf', 'idor', 'auth', 'crypto', 'injection', 'xxe', 'deserialization',
     'redirect', 'traversal', 'rng', 'input-validation', 'race-condition', 'other',
 ] as const;
-export type CrCategory = (typeof CR_CATEGORIES)[number];
+export type CrFindingType = (typeof CR_FINDING_TYPES)[number];
 
 export const CR_LANGUAGES = [
     'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'c', 'cpp', 'csharp', 'php', 'ruby', 'sql', 'other',
@@ -80,6 +85,8 @@ export interface CrManageCard extends CrCard {
 }
 
 export interface CrHintView {
+    /** Stable for life; what a member opened is recorded by it */
+    id?: string;
     order: number;
     cost: number;
     unlocked: boolean;
@@ -96,6 +103,8 @@ export interface CrViewer extends CrProgress {
     pointsAvailable: number;
     solutionUnlocked: boolean;
     solutionViewed: boolean;
+    /** The points of this exercise are gone (the solution was opened or an attempt probed): a pass pays 0 */
+    pointsForfeited: boolean;
     attemptsToday: number;
     attemptsLeftToday: number;
 }
@@ -124,7 +133,7 @@ export interface CrFinding {
     fix: Partial<CrFix> | null;
 }
 
-export interface CrHintFull { order: number; text: string; cost: number }
+export interface CrHintFull { id?: string; order: number; text: string; cost: number }
 
 export interface CrExploitExample { title?: string; description?: string; payload?: string; result?: string }
 
@@ -175,10 +184,18 @@ export interface CrAttemptResult {
     percent: number;
     passPercent: number;
     passed: boolean;
+    /** False before a pass (unless the member passed before, opened the solution, or is staff): then `matched` is empty and only the counts are known */
+    detailsRevealed: boolean;
+    matchedCount: number;
+    /** The findings and what was found: only when `detailsRevealed` */
     matched: CrMatched[];
     marks: { index: number; result: CrMarkVerdict }[];
     missedCount: number;
     falsePositives: number;
+    /** Extra marks on a finding that was already matched: free */
+    duplicateCount: number;
+    /** This attempt took the points of the exercise away (more false marks than findings) */
+    pointsForfeited: boolean;
     firstPass: boolean;
     pointsAwarded: number;
     pointsAvailable: number;
@@ -299,11 +316,14 @@ export interface CrSnippetPayload {
     tags?: string[];
     vulnerableCode?: string;
     findings?: CrFindingInput[];
-    hints?: { text: string; cost: number }[];
+    /** An edited hint sends its id back so it keeps it; a new one has none */
+    hints?: { id?: string; text: string; cost: number }[];
     explanation?: string;
     fixedCode?: string;
     exploitedCode?: string;
     fixedExploitedCode?: string;
     exploitExample?: CrExploitExample;
     isPublished?: boolean;
+    /** Sent again after the API said members solved the exercise and the key is about to change */
+    confirmKeyChange?: boolean;
 }

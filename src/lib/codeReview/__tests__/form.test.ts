@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
     buildPayload, byteLength, countLines, emptySnippet, findingBands, findingProblems, fromSnippet, newFinding, newHint, normaliseCode, overlapBands, parseTags,
-    slugProblem, validateSnippet, wouldBeStripped, type CrFormValues,
+    sanitisedFieldsStripped, slugProblem, validateSnippet, wouldBeStripped, type CrFormValues,
 } from '../form'
 import { CODE, makeAdminSnippet } from './fixtures'
 
@@ -138,6 +138,48 @@ describe('validation', () => {
         expect(wouldBeStripped('<img src=x onerror="a()">')).toBe(true)
         expect(wouldBeStripped('x = a if b else c')).toBe(false)
         expect(wouldBeStripped('')).toBe(false)
+        // The server's patterns: an unclosed tag stays, but any word that starts with "on" before "=" goes
+        expect(wouldBeStripped('a <script> with no end')).toBe(false)
+        expect(wouldBeStripped('The once=True flag')).toBe(true)
+        expect(wouldBeStripped('A phone = number')).toBe(false)
+        expect(wouldBeStripped('this.onclick = x')).toBe(true)
+    })
+
+    it('ignores script-like text inside backticks, like the server', () => {
+        expect(wouldBeStripped('Payload: `<script>alert(1)</script>` runs')).toBe(false)
+        expect(wouldBeStripped('```\n<img onerror=x()>\n```')).toBe(false)
+        expect(wouldBeStripped('`ok` and <script>x</script>')).toBe(true)
+    })
+
+    it('only checks the fields that are still sanitised, never the code or the answer text', () => {
+        const base = valid()
+        const code = { ...base, vulnerableCode: 'a = 1\nonce = 2 <script>x</script>', explanation: 'onclick = 1 <script>x</script>' }
+        expect(sanitisedFieldsStripped(code)).toBe(false)
+        expect(sanitisedFieldsStripped({ ...base, title: 'Hello <script>x</script>' })).toBe(true)
+        expect(sanitisedFieldsStripped({ ...base, tags: 'a, <img onerror=1>' })).toBe(true)
+        expect(sanitisedFieldsStripped({ ...base, findings: [{ ...newFinding(), owasp: 'A1 <script>x</script>' }] })).toBe(true)
+        expect(sanitisedFieldsStripped({ ...base, findings: [{ ...newFinding(), explanation: '<script>x</script>' }] })).toBe(false)
+    })
+})
+
+describe('hint ids and blank code', () => {
+    it('keeps the id of an existing hint through the form and into the payload, and sends none for a new one', () => {
+        const v = fromSnippet(makeAdminSnippet())
+        expect(v.hints[0].id).toBeTruthy()
+        const payload = buildPayload({ ...v, hints: [...v.hints, newHint()] }, 'edit')
+        expect(payload.hints?.[0]).toMatchObject({ id: v.hints[0].id })
+        expect(payload.hints?.[payload.hints.length - 1]).not.toHaveProperty('id')
+    })
+
+    it('starts a new exercise on a valid broad category', () => {
+        expect(emptySnippet().category).toBe('injection')
+    })
+
+    it('rejects blank space as fixed or exploit code, but accepts none', () => {
+        const e = validateSnippet(valid({ fixedCode: '   \n ', exploitedCode: '\n\n', fixedExploitedCode: '' }), { mode: 'create' })
+        expect(e.fixedCode).toMatch(/blank space/)
+        expect(e.exploitedCode).toMatch(/blank space/)
+        expect(e.fixedExploitedCode).toBeUndefined()
     })
 })
 

@@ -140,6 +140,34 @@ describe('what a member sends', () => {
         expect(r.matched[0].typeCorrect).toBeNull()
     })
 
+    it('reads an attempt before a pass: counts and a verdict per mark, no findings', async () => {
+        fetchApi.mockResolvedValue({ data: {
+            attemptId: 'a1', score: 7, maxScore: 20, percent: 35, passPercent: 70, passed: false, detailsRevealed: false, matchedCount: 1, missedCount: 1, falsePositives: 1, duplicateCount: 2,
+            pointsForfeited: false, firstPass: false, pointsAwarded: 0, pointsAvailable: 25, hintsUsed: 0, attempts: 1, attemptsLeftToday: 29, bestPercent: 35, solutionUnlocked: true, newBadges: [],
+            marks: [{ index: 0, result: 'matched' }, { index: 1, result: 'unmatched' }, { index: 2, result: 'unmatched' }, { index: 3, result: 'unmatched' }],
+        } })
+        const r = await cr.submitAttempt('s', [{ lineStart: 1, lineEnd: 1 }])
+        expect(r).toMatchObject({ detailsRevealed: false, matchedCount: 1, matched: [], duplicateCount: 2, pointsForfeited: false })
+        expect(r.marks).toHaveLength(4)
+    })
+
+    it('reads a revealed attempt with its findings, duplicates and a forfeit', async () => {
+        const body = makeResult()
+        fetchApi.mockResolvedValue({ data: { ...body, detailsRevealed: true, matchedCount: 1, duplicateCount: 1, pointsForfeited: true, marks: [{ index: 0, result: 'matched' }, { index: 1, result: 'duplicate' }] } })
+        const r = await cr.submitAttempt('s', [{ lineStart: 1, lineEnd: 1 }])
+        expect(r).toMatchObject({ detailsRevealed: true, matchedCount: 1, duplicateCount: 1, pointsForfeited: true })
+        expect(r.marks[1].result).toBe('duplicate')
+        expect(r.matched).toHaveLength(1)
+    })
+
+    it('reads an older answer without the new fields: what was matched is the count, and it is revealed', async () => {
+        const { detailsRevealed: _a, matchedCount: _b, duplicateCount: _c, pointsForfeited: _d, ...older } = makeResult()
+        void _a; void _b; void _c; void _d
+        fetchApi.mockResolvedValue({ data: older })
+        const r = await cr.submitAttempt('s', [{ lineStart: 1, lineEnd: 1 }])
+        expect(r).toMatchObject({ detailsRevealed: true, matchedCount: 1, duplicateCount: 0, pointsForfeited: false })
+    })
+
     it('lists my attempts', async () => {
         fetchApi.mockResolvedValue({ data: [{ attemptId: 'a', score: 5, maxScore: 20, percent: 25, passed: false, matchedCount: 1, falsePositives: 0, hintsUsed: 1, marks: [{ lineStart: 1, lineEnd: 2 }], createdAt: '2026-01-01T00:00:00Z' }] })
         const rows = await cr.listAttempts('s')
@@ -153,6 +181,22 @@ describe('what a member sends', () => {
         expect(url()).toBe('/api/code-review/s/hints/2')
         expect(init()?.method).toBe('POST')
         expect(r).toMatchObject({ hint: { order: 2, text: 'Look.' }, pointsAvailable: 17 })
+    })
+
+    it('keeps the id of a hint in the solution and in the hint answer', async () => {
+        fetchApi.mockResolvedValue({ data: { hint: { id: 'h9', order: 2, text: 'Look.', cost: 5 }, alreadyUnlocked: false, recorded: true, hintsUsed: 2, hintCost: 8, pointsAvailable: 17 } })
+        expect((await cr.unlockHint('s', 2)).hint.id).toBe('h9')
+        fetchApi.mockResolvedValue({ data: { _id: '1', slug: 's', title: 'T', findings: [], explanation: '', fixedCode: '', exploitedCode: '', fixedExploitedCode: '', exploitExample: null, hints: [{ id: 'h1', order: 1, text: 't', cost: 3 }], viewer: null } })
+        expect((await cr.getSolution('s')).hints[0].id).toBe('h1')
+    })
+
+    it('reads the viewer\'s forfeit, false when the API does not say', async () => {
+        fetchApi.mockResolvedValue({ data: makeDetail({ viewer: { ...makeViewer(), pointsForfeited: true } }) })
+        expect((await cr.getSnippet('s')).viewer?.pointsForfeited).toBe(true)
+        const { pointsForfeited: _p, ...old } = makeViewer()
+        void _p
+        fetchApi.mockResolvedValue({ data: makeDetail({ viewer: old as never }) })
+        expect((await cr.getSnippet('s')).viewer?.pointsForfeited).toBe(false)
     })
 
     it('reads the solution, never from a cache', async () => {

@@ -23,11 +23,16 @@ const chipClass = (active: boolean) => `rounded-full border px-3.5 py-1.5 text-s
     ? 'border-orange-700 bg-orange-700 text-white'
     : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-gray-200 dark:hover:bg-neutral-800'}`;
 
-/** The options of a filter: what the API lists first (with counts), then the rest of the known values, then the value in the address */
+/**
+ * The options of a filter: what the API counts (from the totals), or the known values before they
+ * arrive. Only values the list accepts are offered: an old value in the totals would be an option
+ * that filters nothing.
+ */
 function options(known: readonly string[], counted: { id: string; count: number }[] | undefined, current: string, label: (id: string) => string) {
-    const counts = new Map((counted ?? []).map((c) => [c.id, c.count]));
-    const ids = counted ? counted.map((c) => c.id) : [...known];
-    if (current && !ids.includes(current)) ids.push(current);
+    const usable = counted?.filter((c) => known.includes(c.id));
+    const counts = new Map((usable ?? []).map((c) => [c.id, c.count]));
+    const ids = usable ? usable.map((c) => c.id) : [...known];
+    if (current && !ids.includes(current) && known.includes(current)) ids.push(current);
     return ids.map((id) => ({ id, label: counts.has(id) ? `${label(id)} (${counts.get(id)})` : label(id) }));
 }
 

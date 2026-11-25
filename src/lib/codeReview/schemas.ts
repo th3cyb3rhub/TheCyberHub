@@ -33,6 +33,7 @@ export const viewerSchema = progressSchema.extend({
     pointsAvailable: n,
     solutionUnlocked: z.boolean().default(false),
     solutionViewed: z.boolean().default(false),
+    pointsForfeited: z.boolean().default(false),
     attemptsToday: n,
     attemptsLeftToday: n,
 });
@@ -80,6 +81,7 @@ export const cardPageSchema = pageOf(cardSchema);
 export const manageCardPageSchema = pageOf(manageCardSchema);
 
 export const hintViewSchema = z.object({
+    id: z.string().optional(),
     order: z.number(),
     cost: n,
     unlocked: z.boolean().default(false),
@@ -110,7 +112,7 @@ export const findingSchema = z.object({
     fix: fixSchema.nullish().transform((v) => v ?? null),
 });
 
-export const hintFullSchema = z.object({ order: z.number(), text: s, cost: n });
+export const hintFullSchema = z.object({ id: z.string().optional(), order: z.number(), text: s, cost: n });
 
 const exploitExampleSchema = z.object({
     title: z.string().optional(), description: z.string().optional(), payload: z.string().optional(), result: z.string().optional(),
@@ -167,10 +169,15 @@ export const attemptResultSchema = z.object({
     percent: n,
     passPercent: z.number().default(70),
     passed: z.boolean().default(false),
+    // Before a pass the answer has counts and a verdict per mark, and no `matched`
+    detailsRevealed: z.boolean().optional(),
+    matchedCount: z.number().optional(),
     matched: z.array(matchedSchema).default([]),
     marks: z.array(z.object({ index: z.number(), result: verdict })).default([]),
     missedCount: n,
     falsePositives: n,
+    duplicateCount: n,
+    pointsForfeited: z.boolean().default(false),
     firstPass: z.boolean().default(false),
     pointsAwarded: n,
     pointsAvailable: n,
@@ -182,7 +189,12 @@ export const attemptResultSchema = z.object({
     newBadges: z.array(z.object({
         code: s, name: s, icon: nullableText, rarity: nullableText,
     })).default([]),
-});
+}).transform((r) => ({
+    ...r,
+    // An older answer without the count: what was matched is what the list holds
+    matchedCount: r.matchedCount ?? r.matched.length,
+    detailsRevealed: r.detailsRevealed ?? r.matched.length > 0,
+}));
 
 const markSchema = z.object({
     lineStart: z.number(),

@@ -24,7 +24,7 @@ import { SnippetsExplorer } from '../SnippetsExplorer'
 const page = (cards: CrCard[], total = cards.length) => ({ pages: [{ data: cards, pagination: { page: 1, limit: 12, total, pages: 1, hasMore: false } }] })
 const ok = (cards: CrCard[], over = {}) => ({ data: page(cards), isLoading: false, isError: false, error: null, isPlaceholderData: false, hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(), ...over })
 const stats = (viewer: null | { attempted: number; passed: number; points: number } = null) => ({
-    data: { total: 8, viewer, facets: { categories: [{ category: 'sqli', count: 3 }, { category: 'xss', count: 2 }], difficulties: [{ difficulty: 'easy', count: 4 }], languages: [{ language: 'python', count: 5 }] } },
+    data: { total: 8, viewer, facets: { categories: [{ category: 'injection', count: 3 }, { category: 'web', count: 2 }, { category: 'sqli', count: 1 }], difficulties: [{ difficulty: 'easy', count: 4 }], languages: [{ language: 'python', count: 5 }] } },
 })
 const initial = { data: [], count: 0, pagination: { page: 1, limit: 12, total: 0, pages: 0, hasMore: false } }
 
@@ -69,11 +69,11 @@ describe('SnippetsExplorer', () => {
 
     it('sends the status filter for a member and skips the server copy', () => {
         auth.current = { user: { role: 'member' }, loading: false }
-        nav.search = 'status=passed&category=sqli'
+        nav.search = 'status=passed&category=injection'
         render(<SnippetsExplorer initialPage={initial} initialStats={null} />)
         const sent = list.filters.at(-1) as { filters: CrFilters; initial: unknown }
         expect(sent.filters.status).toBe('passed')
-        expect(sent.filters.category).toBe('sqli')
+        expect(sent.filters.category).toBe('injection')
         expect(sent.initial).toBeNull()
     })
 
@@ -88,8 +88,8 @@ describe('SnippetsExplorer', () => {
     it('puts a filter in the address and clears them all', () => {
         nav.search = 'difficulty=easy'
         render(<SnippetsExplorer initialPage={initial} initialStats={null} />)
-        fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'sqli' } })
-        expect(nav.replace).toHaveBeenLastCalledWith('/code-review?difficulty=easy&category=sqli', { scroll: false })
+        fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'injection' } })
+        expect(nav.replace).toHaveBeenLastCalledWith('/code-review?difficulty=easy&category=injection', { scroll: false })
         expect(screen.getByRole('button', { name: /Easy/ })).toHaveAttribute('aria-pressed', 'true')
         fireEvent.click(screen.getByRole('button', { name: /Clear filters/ }))
         expect(nav.replace).toHaveBeenLastCalledWith('/code-review', { scroll: false })
@@ -97,7 +97,10 @@ describe('SnippetsExplorer', () => {
 
     it('offers the facet counts from the stats', () => {
         render(<SnippetsExplorer initialPage={initial} initialStats={null} />)
-        expect(screen.getByRole('option', { name: 'SQL injection (3)' })).toBeInTheDocument()
+        expect(screen.getByRole('option', { name: 'Injection (3)' })).toBeInTheDocument()
+        expect(screen.getByRole('option', { name: 'Web (2)' })).toBeInTheDocument()
+        // A value of the old category list in the totals would filter nothing, so it is not offered
+        expect(screen.queryByRole('option', { name: /SQL injection/ })).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Easy (4)' })).toBeInTheDocument()
     })
 
@@ -122,7 +125,7 @@ describe('SnippetsExplorer', () => {
         const { unmount } = render(<SnippetsExplorer initialPage={initial} initialStats={null} />)
         expect(screen.getByText('No exercises are published yet')).toBeInTheDocument()
         unmount()
-        nav.search = 'category=xss'
+        nav.search = 'category=web'
         render(<SnippetsExplorer initialPage={initial} initialStats={null} />)
         expect(screen.getByText('No exercises match these filters')).toBeInTheDocument()
         fireEvent.click(screen.getAllByRole('button', { name: 'Clear filters' }).at(-1) as HTMLElement)

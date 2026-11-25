@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
     CR_NOT_READY: 'An exercise needs at least one finding before it can be published. Add one and try again.',
     CR_NOT_GRADABLE: 'This exercise has no findings to grade yet, so it cannot be attempted. An administrator has to add them.',
     CR_HAS_PROGRESS: 'Members have already passed this exercise, so it cannot be deleted. Unpublish it instead: their progress and points stay.',
+    CR_KEY_CHANGE_UNCONFIRMED: 'Members have already solved this exercise. Confirm the change to save it.',
     BAD_RESPONSE: 'The server answered in a way this page does not understand. Please try again later.',
 };
 
@@ -46,6 +47,23 @@ export function nextHintOrder(err: unknown): number | null {
     return typeof next === 'number' && Number.isInteger(next) && next > 0 ? next : null;
 }
 
+/** The ceilings the API names in CR_TOO_BROAD (`meta { maxMarks, maxLines }`), or null */
+export function tooBroadLimits(err: unknown): { maxMarks: number; maxLines: number } | null {
+    if (!(err instanceof ApiError) || err.code !== 'CR_TOO_BROAD') return null;
+    const { maxMarks, maxLines } = err.meta ?? {};
+    return typeof maxMarks === 'number' && typeof maxLines === 'number' ? { maxMarks, maxLines } : null;
+}
+
+export interface KeyChange { solveCount: number; oldFindingCount: number; newFindingCount: number; oldHintCount: number; newHintCount: number }
+
+/** The numbers of CR_KEY_CHANGE_UNCONFIRMED, or null when it is another error. Missing numbers are 0. */
+export function keyChangeInfo(err: unknown): KeyChange | null {
+    if (!(err instanceof ApiError) || err.code !== 'CR_KEY_CHANGE_UNCONFIRMED') return null;
+    const m = err.meta ?? {};
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+    return { solveCount: num(m.solveCount), oldFindingCount: num(m.oldFindingCount), newFindingCount: num(m.newFindingCount), oldHintCount: num(m.oldHintCount), newHintCount: num(m.newHintCount) };
+}
+
 export const isDailyLimit = (err: unknown): boolean => err instanceof ApiError && err.code === 'CR_ATTEMPT_LIMIT';
 export const isRateLimited = (err: unknown): boolean => err instanceof ApiError && err.status === 429;
 
@@ -66,6 +84,12 @@ export function crErrorMessage(err: unknown, fallback = 'Something went wrong. P
             return seconds
                 ? `You have used all ${limit} graded attempts on this exercise for today. You can try again in about ${waitText(seconds)}.`
                 : `You have used all ${limit} graded attempts on this exercise for today. Try again later.`;
+        }
+        if (err.code === 'CR_TOO_BROAD') {
+            const l = tooBroadLimits(err);
+            return l
+                ? `Too many marks or too many lines marked. An answer can hold at most ${l.maxMarks} marks covering at most ${l.maxLines} lines. Narrow your marks and send them again.`
+                : 'Too many marks or too many lines marked. Narrow your marks and send them again.';
         }
         if (err.code === 'CR_HINT_OUT_OF_ORDER') {
             const next = nextHintOrder(err);

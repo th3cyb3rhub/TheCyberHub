@@ -13,14 +13,14 @@ export const CODE = [
 ].join('\n');
 
 export const makeCard = (over: Partial<CrCard> = {}): CrCard => ({
-    _id: 'c1', slug: SLUG, title: 'Login check', summary: 'A login function.', language: 'python', category: 'sqli', difficulty: 'easy',
+    _id: 'c1', slug: SLUG, title: 'Login check', summary: 'A login function.', language: 'python', category: 'injection', difficulty: 'easy',
     difficultyRank: 1, points: 25, tags: ['sqli', 'python'], findingCount: 2, hintCount: 2, lineCount: 7, solveCount: 4,
     createdAt: '2026-01-01T00:00:00.000Z', ...over,
 });
 
 export const makeViewer = (over: Partial<CrViewer> = {}): CrViewer => ({
     status: 'not-started', attempts: 0, bestScore: 0, maxScore: 0, bestPercent: 0, passed: false, pointsEarned: 0, passedAt: null,
-    hintsUnlocked: [], hintCost: 0, pointsAvailable: 25, solutionUnlocked: false, solutionViewed: false, attemptsToday: 0, attemptsLeftToday: 30, ...over,
+    hintsUnlocked: [], hintCost: 0, pointsAvailable: 25, solutionUnlocked: false, solutionViewed: false, pointsForfeited: false, attemptsToday: 0, attemptsLeftToday: 30, ...over,
 });
 
 export const makeDetail = (over: Partial<CrDetail> = {}): CrDetail => ({
@@ -28,8 +28,8 @@ export const makeDetail = (over: Partial<CrDetail> = {}): CrDetail => ({
     description: 'Review this login function for security problems.',
     vulnerableCode: CODE,
     hints: [
-        { order: 1, cost: 3, unlocked: false },
-        { order: 2, cost: 5, unlocked: false },
+        { id: 'h1', order: 1, cost: 3, unlocked: false },
+        { id: 'h2', order: 2, cost: 5, unlocked: false },
     ],
     updatedAt: '2026-01-02T00:00:00.000Z',
     viewer: makeViewer(),
@@ -48,13 +48,13 @@ export const makeAdminSnippet = (over: Partial<CrAdminSnippet> = {}): CrAdminSni
     findings: [
         { lineStart: 4, lineEnd: 5, title: 'SQL injection', vulnerabilityType: 'sqli', severity: 'critical', cwe: 'CWE-89', owasp: 'A03:2021 - Injection', explanation: 'The name is concatenated into the query.', exploit: null, fix: null },
     ],
-    hints: [{ order: 1, text: 'Look at the query.', cost: 3 }],
+    hints: [{ id: 'h1', order: 1, text: 'Look at the query.', cost: 3 }],
     explanation: '', fixedCode: '', exploitedCode: '', fixedExploitedCode: '', exploitExample: null,
     ...over,
 });
 
 export const makeResult = (over: Partial<CrAttemptResult> = {}): CrAttemptResult => ({
-    attemptId: 'a1', score: 7, maxScore: 20, percent: 35, passPercent: 70, passed: false,
+    attemptId: 'a1', score: 7, maxScore: 20, percent: 35, passPercent: 70, passed: false, detailsRevealed: true, matchedCount: 1, duplicateCount: 0, pointsForfeited: false,
     matched: [{
         markIndex: 0, findingIndex: 0, lineStart: 4, lineEnd: 5, title: 'SQL injection', vulnerabilityType: 'sqli', severity: 'critical',
         cwe: 'CWE-89', owasp: 'A03:2021 - Injection', explanation: 'The name is concatenated into the query.', typeCorrect: false, points: 7,

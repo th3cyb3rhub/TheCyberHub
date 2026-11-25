@@ -1,4 +1,4 @@
-import { CR_SEVERITIES, type CrAdminSnippet, type CrDifficulty, type CrExploitExample, type CrFindingInput, type CrSeverity, type CrSnippetPayload } from '@/types/codeReview';
+import { CR_CATEGORIES, CR_SEVERITIES, type CrAdminSnippet, type CrDifficulty, type CrExploitExample, type CrFindingInput, type CrSeverity, type CrSnippetPayload } from '@/types/codeReview';
 import { CR_LIMITS, CR_RESERVED_SLUGS } from './constants';
 
 /**
@@ -31,7 +31,8 @@ export interface FindingRow {
     fixDescription: string;
     fixCode: string;
 }
-export interface HintRow { key: string; text: string; cost: string }
+/** `id` is the server's id of a hint that exists; a new hint has none and the server makes one */
+export interface HintRow { key: string; id?: string; text: string; cost: string }
 
 export interface CrFormValues {
     title: string;
@@ -68,7 +69,7 @@ export const newFinding = (range?: { start: number; end: number }): FindingRow =
 export const newHint = (): HintRow => ({ key: rowKey(), text: '', cost: String(CR_LIMITS.hintCostDefault) });
 
 export const emptySnippet = (): CrFormValues => ({
-    title: '', slug: '', description: '', language: 'python', category: 'sqli', difficulty: 'easy', points: '0', tags: '',
+    title: '', slug: '', description: '', language: 'python', category: 'injection', difficulty: 'easy', points: '0', tags: '',
     vulnerableCode: '', findings: [], hints: [], explanation: '', fixedCode: '', exploitedCode: '', fixedExploitedCode: '',
     exploitTitle: '', exploitDescription: '', exploitPayload: '', exploitResult: '', isPublished: false,
 });
@@ -150,7 +151,7 @@ export function fromSnippet(s: CrAdminSnippet): CrFormValues {
             exploitDescription: f.exploit?.description ?? '', exploitPayload: f.exploit?.payload ?? '', exploitResult: f.exploit?.result ?? '',
             fixDescription: f.fix?.description ?? '', fixCode: f.fix?.code ?? '',
         })),
-        hints: [...s.hints].sort((a, b) => a.order - b.order).map((h) => ({ key: rowKey(), text: h.text, cost: String(h.cost) })),
+        hints: [...s.hints].sort((a, b) => a.order - b.order).map((h) => ({ key: rowKey(), ...(h.id ? { id: h.id } : {}), text: h.text, cost: String(h.cost) })),
         explanation: s.explanation,
         fixedCode: s.fixedCode,
         exploitedCode: s.exploitedCode,
@@ -217,7 +218,7 @@ export function buildPayload(v: CrFormValues, mode: 'create' | 'edit'): CrSnippe
         tags: parseTags(v.tags),
         vulnerableCode: v.vulnerableCode,
         findings: v.findings.map(toFinding),
-        hints: v.hints.map((h) => ({ text: trimmed(h.text), cost: h.cost.trim() === '' ? NaN : Number(h.cost) })),
+        hints: v.hints.map((h) => ({ ...(h.id ? { id: h.id } : {}), text: trimmed(h.text), cost: h.cost.trim() === '' ? NaN : Number(h.cost) })),
         explanation: v.explanation,
         fixedCode: v.fixedCode,
         exploitedCode: v.exploitedCode,
@@ -252,6 +253,7 @@ export function validateSnippet(v: CrFormValues, opts: { mode: 'create' | 'edit'
     const title = v.title.trim();
     if (title.length < CR_LIMITS.titleMin || title.length > CR_LIMITS.title) e.title = `The title has ${CR_LIMITS.titleMin} to ${CR_LIMITS.title} characters`;
     if (opts.mode === 'create') { const p = slugProblem(v.slug); if (p) e.slug = p; }
+    if (!(CR_CATEGORIES as readonly string[]).includes(v.category)) e.category = 'Choose a category';
     const description = v.description.trim();
     if (description.length < CR_LIMITS.descriptionMin || description.length > CR_LIMITS.description) e.description = `The description has ${CR_LIMITS.descriptionMin} to ${CR_LIMITS.description} characters`;
 
@@ -292,15 +294,32 @@ export function validateSnippet(v: CrFormValues, opts: { mode: 'create' | 'edit'
 
     if (v.explanation.length > CR_LIMITS.overview) e.explanation = `At most ${CR_LIMITS.overview} characters`;
     for (const field of ['fixedCode', 'exploitedCode', 'fixedExploitedCode'] as const) {
-        if (byteLength(normaliseCode(v[field])) > CR_LIMITS.extraCodeBytes) e[field] = `At most ${CR_LIMITS.extraCodeBytes / 1024} KB`;
+        // Like the API: empty is fine, but text that is only blank space is not (it would be stored as nothing)
+        if (v[field] !== '' && normaliseCode(v[field]) === '') e[field] = 'Write the code, or clear the box: blank space alone is not accepted';
+        else if (byteLength(normaliseCode(v[field])) > CR_LIMITS.extraCodeBytes) e[field] = `At most ${CR_LIMITS.extraCodeBytes / 1024} KB`;
     }
     if (v.isPublished && v.findings.length === 0) e.findings = 'Add at least one finding before you publish, or save it as a draft';
     return e;
 }
 
-/** Code that the global input sanitiser of the API would change: `<script>` blocks and `on...=` attributes in a body are stripped */
+// The server's own patterns (and its exemption for markdown code spans), so the warning matches what happens
+const SCRIPT_BLOCK = /<script\b[^>]*>[\s\S]*?<\/script>/i;
+const EVENT_ATTRIBUTE = /\bon\w+\s*=/i;
+const CODE_SPANS = /(```[\s\S]*?```|`[^`\n]+`)/g;
+
+/**
+ * Whether the API would remove something from a text that it still sanitises (titles, descriptions,
+ * tags, finding titles and OWASP names): `<script>` blocks and `on...=` attributes outside backticks.
+ * Code and answer text are stored as written, so they are not checked.
+ */
 export function wouldBeStripped(text: string): boolean {
-    return /<\s*script\b/i.test(text) || /\son[a-z]+\s*=/i.test(text);
+    const outside = String(text).split(CODE_SPANS).filter((_, i) => i % 2 === 0).join(' ');
+    return SCRIPT_BLOCK.test(outside) || EVENT_ATTRIBUTE.test(outside);
+}
+
+/** Whether any of the still-sanitised fields of the form has script-like text */
+export function sanitisedFieldsStripped(v: Pick<CrFormValues, 'title' | 'description' | 'tags' | 'findings'>): boolean {
+    return [v.title, v.description, v.tags, ...v.findings.flatMap((f) => [f.title, f.owasp])].some(wouldBeStripped);
 }
 
 /** The lines two or more findings share, for painting a conflict in the preview */

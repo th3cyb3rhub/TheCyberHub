@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
 import {
-    crErrorMessage, fieldErrors, isDailyLimit, isRateLimited, isStaleState, nextHintOrder, retryAfterSeconds, unattachedDetails, waitText,
+    crErrorMessage, fieldErrors, isDailyLimit, isRateLimited, isStaleState, keyChangeInfo, nextHintOrder, retryAfterSeconds, tooBroadLimits, unattachedDetails, waitText,
 } from '../errors'
 
 const err = (status: number, code?: string, message = 'server says', details?: { field?: string; message: string }[], meta?: Record<string, unknown>) =>
@@ -45,6 +45,23 @@ describe('code review error messages', () => {
         expect(crErrorMessage(err(429))).toMatch(/Wait a moment/)
         expect(retryAfterSeconds(err(429))).toBeNull()
         expect(retryAfterSeconds(new Error('x'))).toBeNull()
+    })
+
+    it('says too many marks or lines were sent, with the limits the API names', () => {
+        const e = err(400, 'CR_TOO_BROAD', 'x', undefined, { maxMarks: 4, maxLines: 6 })
+        expect(crErrorMessage(e)).toBe('Too many marks or too many lines marked. An answer can hold at most 4 marks covering at most 6 lines. Narrow your marks and send them again.')
+        expect(tooBroadLimits(e)).toEqual({ maxMarks: 4, maxLines: 6 })
+        expect(crErrorMessage(err(400, 'CR_TOO_BROAD'))).toMatch(/Narrow your marks/)
+        expect(tooBroadLimits(err(400, 'CR_TOO_BROAD', 'x', undefined, { maxMarks: 'x' }))).toBeNull()
+        expect(tooBroadLimits(err(400, 'OTHER', 'x', undefined, { maxMarks: 4, maxLines: 6 }))).toBeNull()
+    })
+
+    it('reads the numbers of an unconfirmed key change, and says what it is', () => {
+        const meta = { solveCount: 3, oldFindingCount: 2, newFindingCount: 1, oldHintCount: 3, newHintCount: 0 }
+        expect(keyChangeInfo(err(409, 'CR_KEY_CHANGE_UNCONFIRMED', 'x', undefined, meta))).toEqual(meta)
+        expect(keyChangeInfo(err(409, 'CR_KEY_CHANGE_UNCONFIRMED'))).toEqual({ solveCount: 0, oldFindingCount: 0, newFindingCount: 0, oldHintCount: 0, newHintCount: 0 })
+        expect(keyChangeInfo(err(409, 'CR_HAS_PROGRESS', 'x', undefined, meta))).toBeNull()
+        expect(crErrorMessage(err(409, 'CR_KEY_CHANGE_UNCONFIRMED'))).toMatch(/solved/i)
     })
 
     it('has a message for sign-in, permission and an unknown 404', () => {

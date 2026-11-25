@@ -1,4 +1,5 @@
 import type { CrMark } from '@/types/codeReview';
+import type { MarkLimits } from './constants';
 
 /**
  * The line marking logic, free of React so it can be tested on its own. Lines are 1 based, exactly
@@ -83,16 +84,28 @@ const contains = (a: MarkDraft, r: LineRange) => a.lineStart <= r.start && a.lin
 
 export const isMarked = (marks: MarkDraft[], line: number): boolean => marks.some((m) => m.lineStart <= line && m.lineEnd >= line);
 
-export type AddStatus = 'added' | 'merged' | 'exists' | 'limit';
+/** How many lines the marks cover; the list never holds overlapping marks, so each line is counted once */
+export function markedLines(marks: MarkDraft[]): number {
+    const lines = new Set<number>();
+    for (const m of marks) for (let n = m.lineStart; n <= m.lineEnd; n += 1) lines.add(n);
+    return lines.size;
+}
+
+/** `limit` is the number of marks, `lines` the number of marked lines */
+export type AddStatus = 'added' | 'merged' | 'exists' | 'limit' | 'lines';
 
 /**
  * Put a range on the list. A range that is already inside a mark changes nothing (`exists`). A
  * range that touches other marks is merged with them into one mark that covers all of it
  * (`merged`), so the list never holds two marks over the same lines; marks that only sit next to
  * each other stay separate, because they can be two findings. `type` is kept from the mark it
- * replaces unless a new one is given. At the limit nothing is added (`limit`).
+ * replaces unless a new one is given. At the limits nothing is added: `limit` for the number of
+ * marks, `lines` for the number of marked lines. `limits` is the marks and lines an attempt may
+ * hold, or just the number of marks.
  */
-export function addMark(marks: MarkDraft[], r: LineRange, type: string | undefined, max: number): { marks: MarkDraft[]; status: AddStatus } {
+export function addMark(marks: MarkDraft[], r: LineRange, type: string | undefined, limits: MarkLimits | number): { marks: MarkDraft[]; status: AddStatus } {
+    const max = typeof limits === 'number' ? limits : limits.maxMarks;
+    const maxLines = typeof limits === 'number' ? Infinity : limits.maxLines;
     if (marks.some((m) => contains(m, r))) return { marks, status: 'exists' };
     const touched = marks.filter((m) => overlap(m, r));
     const rest = marks.filter((m) => !overlap(m, r));
@@ -102,6 +115,7 @@ export function addMark(marks: MarkDraft[], r: LineRange, type: string | undefin
     const merged: MarkDraft = { lineStart: start, lineEnd: end, ...(kept ? { vulnerabilityType: kept } : {}) };
     const next = sortMarks([...rest, merged]);
     if (next.length > max) return { marks, status: 'limit' };
+    if (markedLines(next) > maxLines) return { marks, status: 'lines' };
     return { marks: next, status: touched.length > 0 ? 'merged' : 'added' };
 }
 
@@ -115,10 +129,10 @@ export type ToggleStatus = AddStatus | 'removed';
  * Space or Enter on a selection: a selection inside an existing mark takes that mark off the list
  * (the whole mark), anything else is added like `addMark`.
  */
-export function toggleMark(marks: MarkDraft[], r: LineRange, type: string | undefined, max: number): { marks: MarkDraft[]; status: ToggleStatus; removed?: MarkDraft } {
+export function toggleMark(marks: MarkDraft[], r: LineRange, type: string | undefined, limits: MarkLimits | number): { marks: MarkDraft[]; status: ToggleStatus; removed?: MarkDraft } {
     const index = marks.findIndex((m) => contains(m, r));
     if (index >= 0) return { marks: removeMarkAt(marks, index), status: 'removed', removed: marks[index] };
-    return addMark(marks, r, type, max);
+    return addMark(marks, r, type, limits);
 }
 
 export function setMarkType(marks: MarkDraft[], index: number, type: string | undefined): MarkDraft[] {

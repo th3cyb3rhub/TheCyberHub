@@ -1,4 +1,4 @@
-import { CR_DIFFICULTIES, CR_VIEWER_STATUSES, type CrFilters, type CrViewerStatus } from '@/types/codeReview';
+import { CR_CATEGORIES, CR_DIFFICULTIES, CR_LANGUAGES, CR_VIEWER_STATUSES, type CrFilters, type CrViewerStatus } from '@/types/codeReview';
 import { CR_LIMITS, SORT_CHOICES, isIn } from './constants';
 
 /** The API takes a search of any length up to 100; one letter matches too much to be useful */
@@ -7,8 +7,6 @@ export const SEARCH_MAX = CR_LIMITS.search;
 export const SEARCH_DEBOUNCE_MS = 300;
 export const DEFAULT_SORT = 'newest';
 const SORT_IDS = SORT_CHOICES.map((s) => s.id);
-/** A word of the lists: lower case letters, digits and hyphens. Anything else cannot be a value of the API. */
-const WORD = /^[a-z0-9-]{1,30}$/;
 
 /** What the address holds: every value is already checked, anything else is dropped */
 export interface UrlFilters {
@@ -23,14 +21,16 @@ export interface UrlFilters {
 export const emptyFilters = (): UrlFilters => ({ category: '', difficulty: '', language: '', status: '', q: '', sort: DEFAULT_SORT });
 
 export function filtersFromParams(params: URLSearchParams): UrlFilters {
-    const word = (name: string) => { const v = params.get(name); return v && WORD.test(v) ? v : ''; };
+    // The API refuses a value outside its lists, so an address with an old or made-up one (`?category=sqli` from the first release) is "no filter", not an error
+    const category = params.get('category');
+    const language = params.get('language');
     const difficulty = params.get('difficulty');
     const status = params.get('status');
     const sort = params.get('sort');
     return {
-        category: word('category'),
+        category: isIn(CR_CATEGORIES, category) ? category : '',
         difficulty: isIn(CR_DIFFICULTIES, difficulty) ? difficulty : '',
-        language: word('language'),
+        language: isIn(CR_LANGUAGES, language) ? language : '',
         status: isIn(CR_VIEWER_STATUSES, status) ? status : '',
         q: (params.get('q') ?? '').slice(0, SEARCH_MAX),
         sort: sort && SORT_IDS.includes(sort) ? sort : DEFAULT_SORT,

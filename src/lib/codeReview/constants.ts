@@ -41,9 +41,28 @@ export const CR_RULES = {
     falseMarkPenalty: 3,
     wrongTypeFactor: 70,
     passPercent: 70,
-    attemptDecayPercent: 10,
-    attemptDecayMaxPercent: 50,
+    attemptDecayPercent: 25,
+    attemptDecayMaxPercent: 75,
+    /** A mark list may hold this many more marks than the exercise has findings */
+    extraMarks: 2,
+    /** ...and cover at most this share of the lines (never fewer than `minMarkedLines`) */
+    maxMarkedLinesPercent: 40,
+    minMarkedLines: 6,
 } as const;
+
+export interface MarkLimits { maxMarks: number; maxLines: number }
+
+/**
+ * What an attempt may hold, from the numbers on every card: `findingCount + 2` marks over at most 40%
+ * of the lines (never fewer than 6). The API checks the same and says `CR_TOO_BROAD`; this is the
+ * preflight, so a member rarely meets it. The API may allow more for an exercise whose findings are
+ * long (it never allows fewer), so its answer wins when the two differ.
+ */
+export function markLimits(findingCount: number, lineCount: number): MarkLimits {
+    const marks = Math.max(1, Math.min(CR_LIMITS.marks, Math.max(0, Math.trunc(findingCount)) + CR_RULES.extraMarks));
+    const lines = Math.max(CR_RULES.minMarkedLines, Math.floor((Math.max(0, lineCount) * CR_RULES.maxMarkedLinesPercent) / 100));
+    return { maxMarks: marks, maxLines: Math.min(lines, Math.max(1, lineCount)) };
+}
 
 /** Slugs that would shadow a fixed route of the API */
 export const CR_RESERVED_SLUGS = ['manage', 'stats', 'progress', 'attempts'] as const;
@@ -62,6 +81,15 @@ export const SORT_CHOICES: { id: string; sortBy: CrSort; sortOrder: 'asc' | 'des
 ];
 
 const CATEGORY_NAMES: Record<string, string> = {
+    injection: 'Injection',
+    web: 'Web',
+    'access-control': 'Access control',
+    crypto: 'Cryptography',
+    'server-side': 'Server side',
+    other: 'Other',
+};
+
+const FINDING_TYPE_NAMES: Record<string, string> = {
     sqli: 'SQL injection',
     xss: 'Cross-site scripting',
     ssrf: 'SSRF',
@@ -89,8 +117,10 @@ const words = (value: string) => {
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
 };
 
-/** `sqli` as "SQL injection". A value this client does not know is still readable. */
+/** `server-side` as "Server side". A value this client does not know is still readable. */
 export const categoryLabel = (category: string): string => CATEGORY_NAMES[category] ?? words(category);
+/** `sqli` as "SQL injection" (the type of a finding or of a mark) */
+export const findingTypeLabel = (type: string): string => FINDING_TYPE_NAMES[type] ?? words(type);
 export const languageLabel = (language: string): string => LANGUAGE_NAMES[language] ?? words(language);
 
 const isIn = <T extends string>(list: readonly T[], value: unknown): value is T => typeof value === 'string' && (list as readonly string[]).includes(value);

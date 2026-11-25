@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-    addMark, clampLine, describeRange, extendSelection, isMarked, marksFit, moveSelection, rangeOf, removeMarkAt, selectLine, selectionFromNumbers,
+    addMark, clampLine, describeRange, extendSelection, isMarked, markedLines, marksFit, moveSelection, rangeOf, removeMarkAt, selectLine, selectionFromNumbers,
     setMarkType, splitCode, toPayload, toggleMark,
 } from '../selection'
 
@@ -124,6 +124,24 @@ describe('the list of marks', () => {
         const full = Array.from({ length: 50 }, (_, i) => M(i * 3 + 1, i * 3 + 1))
         expect(addMark(full, { start: 500, end: 500 }, undefined, 50).status).toBe('limit')
         expect(addMark(full, { start: 1, end: 4 }, undefined, 50).status).toBe('merged')
+    })
+
+    it('refuses a mark that would cover more lines than allowed, counting overlapping lines once', () => {
+        const limits = { maxMarks: 5, maxLines: 6 }
+        const a = addMark([], { start: 1, end: 4 }, undefined, limits)
+        expect(a.status).toBe('added')
+        expect(addMark(a.marks, { start: 10, end: 12 }, undefined, limits).status).toBe('lines')
+        expect(addMark(a.marks, { start: 10, end: 11 }, undefined, limits).status).toBe('added')
+        // extending the same mark by two lines stays inside the six lines
+        const merged = addMark(a.marks, { start: 3, end: 6 }, undefined, limits)
+        expect(merged.status).toBe('merged')
+        expect(markedLines(merged.marks)).toBe(6)
+        expect(addMark(merged.marks, { start: 6, end: 7 }, undefined, limits).status).toBe('lines')
+    })
+
+    it('counts the marked lines once', () => {
+        expect(markedLines([M(1, 3), M(5, 5)])).toBe(4)
+        expect(markedLines([])).toBe(0)
     })
 
     it('toggle takes off the mark that holds the selection, and adds otherwise', () => {

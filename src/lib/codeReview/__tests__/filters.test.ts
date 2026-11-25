@@ -4,9 +4,14 @@ import { apiFilters, effectiveQuery, emptyFilters, filtersFromParams, hasActiveF
 const parse = (q: string) => filtersFromParams(new URLSearchParams(q))
 
 describe('filters in the address', () => {
+    it('treats an old category value in the address as no filter, not as an error', () => {
+        for (const old of ['sqli', 'xss', 'idor', 'traversal']) expect(parse(`category=${old}`).category).toBe('')
+        expect(parse('category=web').category).toBe('web')
+    })
+
     it('reads known values and drops everything else', () => {
-        expect(parse('category=sqli&difficulty=hard&language=python&status=passed&q=login&sort=easiest')).toEqual({
-            category: 'sqli', difficulty: 'hard', language: 'python', status: 'passed', q: 'login', sort: 'easiest',
+        expect(parse('category=injection&difficulty=hard&language=python&status=passed&q=login&sort=easiest')).toEqual({
+            category: 'injection', difficulty: 'hard', language: 'python', status: 'passed', q: 'login', sort: 'easiest',
         })
         expect(parse('difficulty=nope&status=x&sort=zzz&category=SQL%20Injection&language=<script>')).toEqual(emptyFilters())
     })
@@ -16,18 +21,18 @@ describe('filters in the address', () => {
     })
 
     it('builds the address query and leaves out empty values and the default sort', () => {
-        const start = new URLSearchParams('category=sqli&sort=title')
-        expect(paramsWithChanges(start, { difficulty: 'easy' })).toBe('category=sqli&sort=title&difficulty=easy')
+        const start = new URLSearchParams('category=injection&sort=title')
+        expect(paramsWithChanges(start, { difficulty: 'easy' })).toBe('category=injection&sort=title&difficulty=easy')
         expect(paramsWithChanges(start, { category: null, sort: 'newest' })).toBe('')
-        expect(paramsWithChanges(start, { q: '' })).toBe('category=sqli&sort=title')
+        expect(paramsWithChanges(start, { q: '' })).toBe('category=injection&sort=title')
     })
 })
 
 describe('filters sent to the API', () => {
     it('sends the sort as the API names it, and nothing for an empty filter', () => {
         expect(apiFilters(emptyFilters(), false)).toEqual({ category: undefined, difficulty: undefined, language: undefined, status: '', search: undefined, sortBy: 'createdAt', sortOrder: 'desc' })
-        const f = apiFilters({ ...emptyFilters(), sort: 'hardest', category: 'xss', q: ' login  form ' }, false)
-        expect(f).toMatchObject({ sortBy: 'difficulty', sortOrder: 'desc', category: 'xss', search: 'login form' })
+        const f = apiFilters({ ...emptyFilters(), sort: 'hardest', category: 'web', q: ' login  form ' }, false)
+        expect(f).toMatchObject({ sortBy: 'difficulty', sortOrder: 'desc', category: 'web', search: 'login form' })
     })
 
     it('sends the status only when signed in: it is the member\'s own state', () => {
