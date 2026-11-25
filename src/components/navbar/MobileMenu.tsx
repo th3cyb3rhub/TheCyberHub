@@ -25,7 +25,6 @@ interface MobileMenuProps {
     learnLinks: NavDropdownItem[];
     communityLinks: NavDropdownItem[];
     resourceLinks: NavDropdownItem[];
-    theme: string;
 }
 
 export const MobileMenu = ({
@@ -36,12 +35,11 @@ export const MobileMenu = ({
     learnLinks,
     communityLinks,
     resourceLinks,
-    theme,
 }: MobileMenuProps) => {
     if (!isOpen) return null;
 
     return (
-        <div className={`md:hidden fixed inset-0 top-16 ${theme === 'dark' ? 'bg-black' : 'bg-white'} z-40 overflow-y-auto`}>
+        <div className="md:hidden fixed inset-0 top-16 bg-white dark:bg-black z-40 overflow-y-auto">
             <div className="p-6 space-y-1">
                 {/* Play Section */}
                 <div className="pb-3 mb-3 border-b border-white/10">

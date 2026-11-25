@@ -49,7 +49,7 @@ import { MobileMenu } from '@/components/navbar/MobileMenu';
 
 const Navbar = () => {
     const { user, loading, logout } = useAuth();
-    const { theme, toggleTheme } = useTheme();
+    const { toggleTheme } = useTheme();
     const pathname = usePathname();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -124,32 +124,26 @@ const Navbar = () => {
 
     // --- Hacker-style dropdown panel ---
     const renderDropdown = (links: NavDropdownItem[], featured?: { label: string; href: string; desc: string }) => (
-        <div className={`w-[460px] ${theme === 'dark'
-            ? 'bg-[#0d1117] border border-white/[0.08] text-white'
-            : 'bg-white border border-gray-200 text-gray-900'
-        } rounded-xl shadow-2xl shadow-black/40`}>
+        <div className="w-[460px] bg-white border border-gray-200 text-gray-900 dark:bg-[#0d1117] dark:border-white/[0.08] dark:text-white rounded-xl shadow-2xl shadow-black/40">
 
             {/* Terminal-style header */}
-            <div className={`flex items-center gap-2 px-4 py-2 border-b ${theme === 'dark' ? 'border-white/[0.06] bg-white/[0.02]' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 bg-gray-50 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <div className="flex gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
                     <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
                     <span className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
                 </div>
-                <span className={`text-[11px] font-mono ${theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}`}>~/thecyberhub</span>
+                <span className="text-[11px] font-mono text-gray-400 dark:text-gray-600">~/thecyberhub</span>
             </div>
 
             {/* Featured CTA */}
             {featured && (
-                <Link href={featured.href} className={`flex items-center justify-between mx-3 mt-3 px-3 py-2.5 rounded-lg group transition-all duration-200 ${theme === 'dark'
-                    ? 'bg-orange-500/[0.08] border border-orange-500/20 hover:bg-orange-500/[0.12] hover:border-orange-500/30'
-                    : 'bg-orange-50 border border-orange-200 hover:bg-orange-100'
-                }`}>
+                <Link href={featured.href} className="flex items-center justify-between mx-3 mt-3 px-3 py-2.5 rounded-lg group transition-all duration-200 bg-orange-50 border border-orange-200 hover:bg-orange-100 dark:bg-orange-500/[0.08] dark:border-orange-500/20 dark:hover:bg-orange-500/[0.12] dark:hover:border-orange-500/30">
                     <div className="flex items-center gap-2.5">
                         <Zap className="w-4 h-4 text-orange-500" />
                         <div>
                             <div className="text-[13px] font-semibold text-orange-500">{featured.label}</div>
-                            <div className={`text-[11px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>{featured.desc}</div>
+                            <div className="text-[11px] text-gray-500">{featured.desc}</div>
                         </div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-orange-500/50 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
@@ -166,24 +160,22 @@ const Navbar = () => {
                             href={link.href}
                             className={`group/item flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150 ${
                                 active
-                                    ? theme === 'dark' ? 'bg-orange-500/10' : 'bg-orange-50'
-                                    : theme === 'dark' ? 'hover:bg-white/[0.04]' : 'hover:bg-gray-50'
+                                    ? 'bg-orange-50 dark:bg-orange-500/10'
+                                    : 'hover:bg-gray-50 dark:hover:bg-white/[0.04]'
                             }`}
                         >
                             <div className={`p-2 rounded-lg shrink-0 transition-colors duration-200 ${
                                 active
                                     ? 'bg-orange-500/20 text-orange-400'
-                                    : theme === 'dark'
-                                        ? 'bg-white/[0.04] text-gray-500 group-hover/item:text-orange-400 group-hover/item:bg-orange-500/10'
-                                        : 'bg-gray-100 text-gray-500 group-hover/item:text-orange-500 group-hover/item:bg-orange-50'
+                                    : 'bg-gray-100 text-gray-500 group-hover/item:text-orange-500 group-hover/item:bg-orange-50 dark:bg-white/[0.04] dark:group-hover/item:text-orange-400 dark:group-hover/item:bg-orange-500/10'
                             }`}>
                                 {link.icon}
                             </div>
                             <div className="flex-1">
-                                <div className={`text-[13px] font-semibold transition-colors ${active ? 'text-orange-400' : theme === 'dark' ? 'text-gray-200 group-hover/item:text-white' : 'text-gray-800'}`}>
+                                <div className={`text-[13px] font-semibold transition-colors ${active ? 'text-orange-400' : 'text-gray-800 dark:text-gray-200 dark:group-hover/item:text-white'}`}>
                                     {link.title}
                                 </div>
-                                <p className={`text-[11px] mt-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                                <p className="text-[11px] mt-0.5 text-gray-500">
                                     {link.description}
                                 </p>
                             </div>
@@ -198,9 +190,7 @@ const Navbar = () => {
     return (
         <div className={`fixed top-0 w-full z-50 transition-all duration-500 ${isScrolled ? 'pt-2 px-2 sm:px-4' : ''}`}>
             <nav aria-label="Main navigation" className={`mx-auto max-w-7xl transition-all duration-500 ${isScrolled
-                ? theme === 'dark'
-                    ? 'bg-[#0d1117]/90 backdrop-blur-xl border border-white/[0.06] shadow-2xl shadow-black/30 rounded-2xl'
-                    : 'bg-white/95 backdrop-blur-xl border border-gray-200/60 shadow-xl rounded-2xl'
+                ? 'bg-white/95 backdrop-blur-xl border border-gray-200/60 shadow-xl rounded-2xl dark:bg-[#0d1117]/90 dark:border-white/[0.06] dark:shadow-2xl dark:shadow-black/30'
                 : 'bg-transparent'
             }`}>
                 <div className="px-3 sm:px-6">
@@ -261,15 +251,12 @@ const Navbar = () => {
                             {/* Search */}
                             <button
                                 onClick={openSearch}
-                                className={`flex items-center gap-2 px-2.5 py-1.5 text-[12px] rounded-lg border transition-all duration-200 ${theme === 'dark'
-                                    ? 'text-gray-500 hover:text-orange-400 bg-white/[0.03] border-white/[0.06] hover:border-orange-500/30 hover:bg-orange-500/5'
-                                    : 'text-gray-500 hover:text-orange-500 bg-gray-50 border-gray-200 hover:border-orange-300'
-                                }`}
+                                className="flex items-center gap-2 px-2.5 py-1.5 text-[12px] rounded-lg border transition-all duration-200 text-gray-500 hover:text-orange-500 bg-gray-50 border-gray-200 hover:border-orange-300 dark:hover:text-orange-400 dark:bg-white/[0.03] dark:border-white/[0.06] dark:hover:border-orange-500/30 dark:hover:bg-orange-500/5"
                                 aria-label="Search"
                             >
                                 <Search className="w-3.5 h-3.5" />
                                 <span className="hidden lg:inline font-mono">search</span>
-                                <kbd className={`hidden md:flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono rounded ${theme === 'dark' ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-gray-100 border border-gray-200'}`}>
+                                <kbd className="hidden md:flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono rounded bg-gray-100 border border-gray-200 dark:bg-white/[0.04] dark:border-white/[0.06]">
                                     <Command className="w-2.5 h-2.5" />K
                                 </kbd>
                             </button>
@@ -291,22 +278,17 @@ const Navbar = () => {
                             </Link>
 
                             {/* Separator */}
-                            <div className={`hidden sm:block w-px h-5 mx-1 ${theme === 'dark' ? 'bg-white/[0.06]' : 'bg-gray-200'}`} />
+                            <div className="hidden sm:block w-px h-5 mx-1 bg-gray-200 dark:bg-white/[0.06]" />
 
                             {/* Theme Toggle */}
                             <button
                                 onClick={toggleTheme}
-                                className={`p-2 rounded-lg transition-all duration-300 ${theme === 'dark'
-                                    ? 'text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10'
-                                    : 'text-gray-400 hover:text-orange-500 hover:bg-orange-500/10'
-                                }`}
+                                className="p-2 rounded-lg transition-all duration-300 text-gray-400 hover:text-orange-500 hover:bg-orange-500/10 dark:text-gray-500 dark:hover:text-yellow-400 dark:hover:bg-yellow-500/10"
                                 aria-label="Toggle theme"
                             >
-                                {theme === 'dark' ? (
-                                    <Sun className="w-[18px] h-[18px] transition-transform duration-500 hover:rotate-180" />
-                                ) : (
-                                    <Moon className="w-[18px] h-[18px] transition-transform duration-500 hover:-rotate-12" />
-                                )}
+                                {/* Both icons are in the HTML and the theme class picks one, so the button is right before the page runs */}
+                                <Sun className="hidden dark:block w-[18px] h-[18px] transition-transform duration-500 hover:rotate-180" aria-hidden="true" />
+                                <Moon className="block dark:hidden w-[18px] h-[18px] transition-transform duration-500 hover:-rotate-12" aria-hidden="true" />
                             </button>
 
                             {/* Notifications */}
@@ -319,15 +301,16 @@ const Navbar = () => {
                                 />
                             )}
 
-                            {/* User / Sign In. While the session is checked the space stays reserved, so the links do not move when it answers. */}
+                            {/* User / Sign In. While the session is checked the space stays reserved, so the links do not move when it answers.
+                                The slot is as wide as a member's bell and avatar, which is a little wider than the Sign In button. */}
                             {loading && (
-                                <span aria-hidden="true" className="hidden sm:inline-flex invisible items-center gap-2 px-4 py-1.5 text-[13px] font-semibold font-mono uppercase tracking-wider">
+                                <span aria-hidden="true" className="hidden sm:inline-flex invisible min-w-[7.5rem] items-center gap-2 px-4 py-1.5 text-[13px] font-semibold font-mono uppercase tracking-wider">
                                     <Zap className="w-3.5 h-3.5" /> Sign In
                                 </span>
                             )}
                             {!loading && (
                                 user ? (
-                                    <UserDropdown user={user} logout={logout} theme={theme} />
+                                    <UserDropdown user={user} logout={logout} />
                                 ) : (
                                     <Link
                                         href="/auth"
@@ -360,7 +343,6 @@ const Navbar = () => {
                     learnLinks={learnLinks}
                     communityLinks={communityLinks}
                     resourceLinks={resourceLinks}
-                    theme={theme}
                 />
             </nav>
         </div>
