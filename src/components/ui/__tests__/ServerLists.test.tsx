@@ -36,6 +36,13 @@ describe('server lists', () => {
         expect(html).toContain('1 exercise')
     })
 
+    it('says how many exist when the first page is only part of them, as the interactive list does', () => {
+        expect(renderToString(<ServerLabList labs={[lab]} total={34} />)).toContain('Showing 1 of 34 labs')
+        expect(renderToString(<ServerSnippetList snippets={[snippet]} total={34} />)).toContain('Showing 1 of 34 exercises')
+        expect(renderToString(<ServerLabList labs={[lab]} total={1} />)).toContain('1 lab')
+        expect(renderToString(<ServerLabList labs={[lab]} total={null} />)).not.toContain('Showing')
+    })
+
     it('shows the skeleton cards under the toolbar when the API did not answer', () => {
         expect(renderToString(<ServerLabList labs={null} />)).toContain('Loading labs')
         expect(renderToString(<ServerSnippetList snippets={null} />)).toContain('list-toolbar-skeleton')

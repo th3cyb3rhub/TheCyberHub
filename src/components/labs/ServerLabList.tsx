@@ -9,7 +9,7 @@ import { GridSkeleton } from './ListStates';
  * What the server renders in place of the interactive list: the plain first page (so the titles are
  * in the HTML), or the skeleton when the API did not answer. The browser replaces it once it runs.
  */
-export function ServerLabList({ labs, facets = null }: { labs: LabCardData[] | null; facets?: LabFacets | null }) {
+export function ServerLabList({ labs, facets = null, total = null }: { labs: LabCardData[] | null; facets?: LabFacets | null; total?: number | null }) {
     // Same text as the real chips, counts included, so they wrap onto the same lines
     const counts = new Map((facets?.difficulties ?? []).map((d) => [d.difficulty, d.count]));
     return (
@@ -25,17 +25,17 @@ export function ServerLabList({ labs, facets = null }: { labs: LabCardData[] | n
                 selects={['All categories', 'Newest']}
                 levels={LAB_DIFFICULTIES.map((d) => `${DIFFICULTY_LABELS[d]}${counts.has(d) ? ` (${counts.get(d)})` : ''}`)}
             />
-            <Body labs={labs} />
+            <Body labs={labs} total={total} />
         </div>
     );
 }
 
-function Body({ labs }: { labs: LabCardData[] | null }) {
+function Body({ labs, total }: { labs: LabCardData[] | null; total: number | null }) {
     if (!labs) return <GridSkeleton />;
     if (labs.length === 0) return <p className={`py-10 text-center text-sm ${muted}`}>No labs are published yet.</p>;
     return (
         <div>
-            <p className={`mb-4 text-sm ${muted}`}>{`${labs.length} ${labs.length === 1 ? 'lab' : 'labs'}`}</p>
+            <p className={`mb-4 text-sm ${muted}`}>{total !== null && total > labs.length ? `Showing ${labs.length} of ${total} labs` : `${labs.length} ${labs.length === 1 ? 'lab' : 'labs'}`}</p>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-testid="lab-grid">
                 {labs.map((lab) => <LabCard key={lab._id} lab={lab} />)}
             </div>

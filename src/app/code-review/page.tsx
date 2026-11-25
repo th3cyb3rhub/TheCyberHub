@@ -21,7 +21,7 @@ export default async function CodeReviewPage() {
         <div className={pageBg}>
             <div className={pageWrap}>
                 <CrHero />
-                <Suspense fallback={<ServerSnippetList snippets={page ? page.data : null} stats={stats} />}>
+                <Suspense fallback={<ServerSnippetList snippets={page ? page.data : null} stats={stats} total={page?.pagination.total ?? null} />}>
                     <SnippetsExplorer initialPage={page} initialStats={stats} initialUpdatedAt={builtAt} />
                 </Suspense>
             </div>
