@@ -51,6 +51,8 @@ import {
     Bell
 } from 'lucide-react';
 import { API_URL, fetchApi, tokenStore } from '@/lib/api';
+import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
 import { profileSchema } from '@/lib/validations';
 type ProfileTab = 'stats' | 'profile' | 'security' | 'privacy' | 'notifications';
 const PROFILE_TABS: ProfileTab[] = ['stats', 'profile', 'security', 'privacy', 'notifications'];
@@ -323,12 +325,14 @@ const ProfilePage = () => {
         setPasswordLoading(true);
 
         try {
-            await updatePassword(currentPassword, newPassword);
+            const { revokedSessions } = await updatePassword(currentPassword, newPassword);
             setPasswordSuccess(true);
             addToast({
                 variant: 'success',
                 title: 'Password updated',
-                message: 'Your password has been changed successfully.',
+                message: revokedSessions > 0
+                    ? `Your password has been changed. ${revokedSessions} other ${revokedSessions === 1 ? 'device was' : 'devices were'} signed out.`
+                    : 'Your password has been changed successfully.',
             });
             setCurrentPassword('');
             setNewPassword('');
@@ -349,7 +353,7 @@ const ProfilePage = () => {
     const handleGenerate2FA = async () => {
         setTwoFactorLoading(true);
         try {
-            const res = await fetchApi('/api/auth/2fa/generate', { method: 'GET' });
+            const res = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_GENERATE, { method: 'GET' });
             if (res.success) {
                 setQrCodeData({ secret: res.data.secret, qr: res.data.qrCodeUrl });
                 setSetupStep('verify');
@@ -367,7 +371,7 @@ const ProfilePage = () => {
         if (setupCode.length !== 6) return;
         setTwoFactorLoading(true);
         try {
-            const res = await fetchApi('/api/auth/2fa/enable', {
+            const res = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_ENABLE, {
                 method: 'POST',
                 body: JSON.stringify({ token: setupCode }),
             });
@@ -389,7 +393,7 @@ const ProfilePage = () => {
         if (disableCode.length !== 6) return;
         setTwoFactorLoading(true);
         try {
-            const data = await fetchApi('/api/auth/2fa/disable', {
+            const data = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_DISABLE, {
                 method: 'POST',
                 body: JSON.stringify({ token: disableCode, password: disablePassword }),
             });
@@ -1063,11 +1067,13 @@ const ProfilePage = () => {
 
                             <form onSubmit={handlePasswordUpdate} className="space-y-6">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">Current Password</label>
+                                    <label htmlFor="current-password" className="block text-sm text-gray-400 mb-2">Current Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="current-password"
                                             type="password"
+                                            autoComplete="current-password"
                                             value={currentPassword}
                                             onChange={(e) => setCurrentPassword(e.target.value)}
                                             placeholder="••••••••"
@@ -1079,11 +1085,14 @@ const ProfilePage = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">New Password</label>
+                                    <label htmlFor="new-password" className="block text-sm text-gray-400 mb-2">New Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="new-password"
                                             type="password"
+                                            autoComplete="new-password"
+                                            aria-describedby={newPassword ? 'new-password-strength' : undefined}
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
                                             placeholder="••••••••"
@@ -1093,14 +1102,17 @@ const ProfilePage = () => {
                                             className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
                                         />
                                     </div>
+                                    {user.provider === 'local' && <PasswordStrength password={newPassword} id="new-password-strength" tone="dark" />}
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
+                                    <label htmlFor="confirm-new-password" className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="confirm-new-password"
                                             type="password"
+                                            autoComplete="new-password"
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="••••••••"

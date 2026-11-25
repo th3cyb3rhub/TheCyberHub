@@ -12,6 +12,9 @@ import { loginSchema, registerSchema } from '@/lib/validations';
 import { safeRedirectPath } from '@/lib/safeRedirect';
 import { landingPath } from '@/lib/landingPath';
 import { takePending2fa } from '@/lib/pending2fa';
+import { stashOAuthReturn } from '@/lib/oauthReturn';
+import { takeSessionNotice } from '@/lib/authSession';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
 
 type AuthMode = 'login' | 'register' | '2fa';
 
@@ -33,6 +36,8 @@ const AuthPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    // Why the member is here when they did not ask to be: their session ended
+    const [notice, setNotice] = useState<string | null>(null);
     const [tempToken, setTempToken] = useState<string | null>(null);
     const [twoFactorCode, setTwoFactorCode] = useState('');
 
@@ -101,22 +106,9 @@ const AuthPage = () => {
         setMode(newMode);
     };
 
-    // Password strength indicator
-    const getPasswordStrength = (password: string) => {
-        let strength = 0;
-        if (password.length >= 8) strength++;
-        if (/[A-Z]/.test(password)) strength++;
-        if (/[0-9]/.test(password)) strength++;
-        if (/[^A-Za-z0-9]/.test(password)) strength++;
-        return strength;
-    };
-
-    const passwordStrength = getPasswordStrength(formData.password);
-    const strengthLabels = ['Weak', 'Fair', 'Good', 'Strong'];
-    const strengthColors = ['bg-red-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
-
     // An OAuth sign-in for an account with 2FA lands here with the challenge stashed.
     useEffect(() => {
+        setNotice(takeSessionNotice());
         const pending = takePending2fa();
         if (pending) {
             setTempToken(pending);
@@ -231,14 +223,14 @@ const AuthPage = () => {
 
     if (authLoading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20 overflow-hidden">
+        <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center px-4 py-20 overflow-hidden">
             {/* Background elements */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-orange-500/8 rounded-full blur-[150px]" />
@@ -255,19 +247,19 @@ const AuthPage = () => {
                         <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 group-hover:shadow-orange-500/40 transition-shadow">
                             <Shield className="w-6 h-6 text-white" />
                         </div>
-                        <span className="text-2xl font-bold text-white">TheCyberHub</span>
+                        <span className="text-2xl font-bold text-gray-900 dark:text-white">TheCyberHub</span>
                     </Link>
-                    <h1 className="text-3xl font-bold text-white mb-3">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
                         {mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Join TheCyberHub' : 'Two-Factor Auth'}
                     </h1>
-                    <p className="text-gray-400">
+                    <p className="text-gray-600 dark:text-gray-400">
                         {mode === 'login'
                             ? 'Sign in to access your dashboard and tools'
                             : mode === 'register' ? 'Create your account and start learning' : 'Enter the code from your Authenticator app'}
                     </p>
                     {redirect !== '/profile' && (
-                        <p className="mt-1 text-xs text-gray-500 break-all">
-                            You need to sign in to continue to <span className="text-gray-300">{redirect}</span>.
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-500 break-all">
+                            You need to sign in to continue to <span className="text-gray-800 dark:text-gray-300">{redirect}</span>.
                         </p>
                     )}
                 </div>
@@ -276,7 +268,7 @@ const AuthPage = () => {
                 {mode === 'register' && (
                     <div className="flex justify-center gap-6 mb-8">
                         {features.map((feature, i) => (
-                            <div key={i} className="flex items-center gap-2 text-sm text-gray-400">
+                            <div key={i} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                                 <feature.icon className="w-4 h-4 text-orange-500" />
                                 <span className="hidden sm:inline">{feature.text}</span>
                             </div>
@@ -285,15 +277,15 @@ const AuthPage = () => {
                 )}
 
                 {/* Auth Card */}
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-sm p-8 shadow-2xl">
+                <div className="rounded-2xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/[0.02] backdrop-blur-sm p-8 shadow-2xl">
                     {/* Mode Toggle */}
                     {mode !== '2fa' && (
-                        <div className="flex gap-2 p-1 bg-white/5 rounded-lg mb-8">
+                        <div className="flex gap-2 p-1 bg-gray-100 dark:bg-white/5 rounded-lg mb-8">
                             <button
                                 onClick={() => switchMode('login')}
                                 className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${mode === 'login'
-                                    ? 'bg-orange-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                    ? 'bg-orange-700 text-white dark:bg-orange-500'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                             >
                                 Sign In
@@ -301,8 +293,8 @@ const AuthPage = () => {
                             <button
                                 onClick={() => switchMode('register')}
                                 className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${mode === 'register'
-                                    ? 'bg-orange-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                    ? 'bg-orange-700 text-white dark:bg-orange-500'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                             >
                                 Register
@@ -310,9 +302,16 @@ const AuthPage = () => {
                         </div>
                     )}
 
+                    {/* Why the member was sent here */}
+                    {notice && !success && (
+                        <div role="status" className="mb-6 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                            {notice}
+                        </div>
+                    )}
+
                     {/* Success Message */}
                     {success && (
-                        <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm flex items-center gap-3">
+                        <div role="status" className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-400 text-sm flex items-center gap-3">
                             <CheckCircle2 className="w-5 h-5 shrink-0" />
                             {success}
                         </div>
@@ -320,7 +319,7 @@ const AuthPage = () => {
 
                     {/* Error Message */}
                     {error && (
-                        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm animate-shake">
+                        <div role="alert" className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm animate-shake">
                             {error}
                         </div>
                     )}
@@ -329,17 +328,20 @@ const AuthPage = () => {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {mode === '2fa' && (
                             <div>
-                                <label className="block text-sm text-gray-400 mb-2">Authenticator Code</label>
+                                <label htmlFor="auth-2fa-code" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Authenticator Code</label>
                                 <div className="relative">
-                                    <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                    <Shield className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 dark:text-gray-500" />
                                     <input
+                                        id="auth-2fa-code"
                                         type="text"
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
                                         value={twoFactorCode}
                                         onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                                         placeholder="123456"
                                         required
                                         maxLength={6}
-                                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors tracking-[0.2em] font-mono text-center"
+                                        className="w-full pl-11 pr-4 py-3 bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors tracking-[0.2em] font-mono text-center"
                                     />
                                 </div>
                                 <button
@@ -349,7 +351,7 @@ const AuthPage = () => {
                                         setTempToken(null);
                                         setTwoFactorCode('');
                                     }}
-                                    className="text-sm text-gray-400 hover:text-white mt-4 block text-center w-full"
+                                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mt-4 block text-center w-full"
                                 >
                                     Back to Login
                                 </button>
@@ -360,11 +362,13 @@ const AuthPage = () => {
                         {mode === 'register' && (
                             <>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">Full Name</label>
+                                    <label htmlFor="auth-name" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Full Name</label>
                                     <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 dark:text-gray-500" />
                                         <input
+                                            id="auth-name"
                                             type="text"
+                                            autoComplete="name"
                                             name="name"
                                             value={formData.name}
                                             onChange={handleChange}
@@ -373,20 +377,22 @@ const AuthPage = () => {
                                             required
                                             aria-invalid={!!fieldErrors.name}
                                             aria-describedby={fieldErrors.name ? 'name-error' : undefined}
-                                            className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
+                                            className="w-full pl-11 pr-4 py-3 bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
                                         />
                                     </div>
-                                    {fieldErrors.name && <p id="name-error" className="text-red-400 text-xs mt-1">{fieldErrors.name}</p>}
+                                    {fieldErrors.name && <p id="name-error" className="text-red-700 dark:text-red-400 text-xs mt-1">{fieldErrors.name}</p>}
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
-                                        Username <span className="text-gray-600">(optional)</span>
+                                    <label htmlFor="auth-username" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                        Username <span className="text-gray-600 dark:text-gray-500">(optional)</span>
                                     </label>
                                     <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">@</span>
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-500">@</span>
                                         <input
+                                            id="auth-username"
                                             type="text"
+                                            autoComplete="username"
                                             name="username"
                                             value={formData.username || ''}
                                             onChange={(e) => setFormData(prev => ({
@@ -396,36 +402,36 @@ const AuthPage = () => {
                                             placeholder="johndoe"
                                             minLength={3}
                                             maxLength={30}
-                                            className={`w-full pl-11 pr-10 py-3 bg-white/5 border rounded-lg text-white placeholder:text-gray-500 focus:outline-none transition-colors ${
+                                            className={`w-full pl-11 pr-10 py-3 bg-white dark:bg-white/5 border rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none transition-colors ${
                                                 formData.username && formData.username.length >= 3
                                                     ? usernameAvailable === true ? 'border-green-500/50 focus:border-green-500'
                                                     : usernameAvailable === false ? 'border-red-500/50 focus:border-red-500'
-                                                    : 'border-white/10 focus:border-orange-500/50'
-                                                    : 'border-white/10 focus:border-orange-500/50'
+                                                    : 'border-gray-300 dark:border-white/10 focus:border-orange-500/50'
+                                                    : 'border-gray-300 dark:border-white/10 focus:border-orange-500/50'
                                             }`}
                                         />
                                         {formData.username && formData.username.length >= 3 && (
                                             <span className="absolute right-4 top-1/2 -translate-y-1/2">
                                                 {usernameChecking ? (
-                                                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                                                    <Loader2 className="w-4 h-4 text-gray-600 dark:text-gray-400 animate-spin" />
                                                 ) : usernameAvailable === true ? (
-                                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                                    <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-400" />
                                                 ) : usernameAvailable === false ? (
-                                                    <XCircle className="w-4 h-4 text-red-400" />
+                                                    <XCircle className="w-4 h-4 text-red-700 dark:text-red-400" />
                                                 ) : null}
                                             </span>
                                         )}
                                     </div>
                                     {usernameError && (
-                                        <p className="text-xs text-red-400 mt-1">{usernameError}</p>
+                                        <p className="text-xs text-red-700 dark:text-red-400 mt-1">{usernameError}</p>
                                     )}
                                     {usernameAvailable === true && formData.username.length >= 3 && (
-                                        <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                                        <p className="text-xs text-green-700 dark:text-green-400 mt-1 flex items-center gap-1">
                                             <CheckCircle2 className="w-3 h-3" /> Username is available
                                         </p>
                                     )}
                                     {!usernameError && usernameAvailable === null && (
-                                        <p className="text-xs text-gray-600 mt-1">Leave empty to auto-generate from email</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-500 mt-1">Leave empty to auto-generate from email</p>
                                     )}
                                 </div>
                             </>
@@ -433,11 +439,13 @@ const AuthPage = () => {
 
                         {/* Email */}
                         <div>
-                            <label className="block text-sm text-gray-400 mb-2">Email</label>
+                            <label htmlFor="auth-email" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Email</label>
                             <div className="relative">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 dark:text-gray-500" />
                                 <input
+                                    id="auth-email"
                                     type="email"
+                                    autoComplete="email"
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
@@ -446,26 +454,28 @@ const AuthPage = () => {
                                     required
                                     aria-invalid={!!fieldErrors.email}
                                     aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-                                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
+                                    className="w-full pl-11 pr-4 py-3 bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
                                 />
                             </div>
-                            {fieldErrors.email && <p id="email-error" className="text-red-400 text-xs mt-1">{fieldErrors.email}</p>}
+                            {fieldErrors.email && <p id="email-error" className="text-red-700 dark:text-red-400 text-xs mt-1">{fieldErrors.email}</p>}
                         </div>
 
                         {/* Password */}
                         <div>
                             <div className="flex justify-between mb-2">
-                                <label className="text-sm text-gray-400">Password</label>
+                                <label htmlFor="auth-password" className="text-sm text-gray-600 dark:text-gray-400">Password</label>
                                 {mode === 'login' && (
-                                    <Link href="/forgot-password" className="text-sm text-orange-400 hover:text-orange-300">
+                                    <Link href="/forgot-password" className="text-sm text-orange-700 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300">
                                         Forgot password?
                                     </Link>
                                 )}
                             </div>
                             <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 dark:text-gray-500" />
                                 <input
+                                    id="auth-password"
                                     type={showPassword ? 'text' : 'password'}
+                                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
@@ -474,70 +484,32 @@ const AuthPage = () => {
                                     required
                                     minLength={8}
                                     aria-invalid={!!fieldErrors.password}
-                                    aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-                                    className="w-full pl-11 pr-12 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
+                                    aria-describedby={[fieldErrors.password ? 'password-error' : '', mode === 'register' && formData.password ? 'password-strength' : ''].filter(Boolean).join(' ') || undefined}
+                                    className="w-full pl-11 pr-12 py-3 bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400 transition-colors"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-400 transition-colors"
                                     aria-label={showPassword ? "Hide password" : "Show password"}
                                 >
                                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
-                            {fieldErrors.password && <p id="password-error" className="text-red-400 text-xs mt-1">{fieldErrors.password}</p>}
-                            {/* Password Requirements Checklist */}
-                            {mode === 'register' && formData.password && (
-                                <div className="mt-3 space-y-1.5">
-                                    <div className="flex gap-1 mb-2">
-                                        {[0, 1, 2, 3].map((i) => (
-                                            <div
-                                                key={i}
-                                                className={`h-1 flex-1 rounded-full transition-all ${i < passwordStrength
-                                                    ? strengthColors[passwordStrength - 1]
-                                                    : 'bg-white/10'
-                                                    }`}
-                                            />
-                                        ))}
-                                    </div>
-                                    <p className={`text-xs mb-2 ${passwordStrength > 0 ? strengthColors[passwordStrength - 1].replace('bg-', 'text-') : 'text-gray-500'}`}>
-                                        {passwordStrength > 0 ? strengthLabels[passwordStrength - 1] : 'Enter a password'}
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-1 text-xs">
-                                        <div className={`flex items-center gap-1.5 ${formData.password.length >= 8 ? 'text-green-400' : 'text-gray-500'}`}>
-                                            {formData.password.length >= 8 ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">✕</span>}
-                                            8+ characters
-                                        </div>
-                                        <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
-                                            {/[A-Z]/.test(formData.password) ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">✕</span>}
-                                            Uppercase
-                                        </div>
-                                        <div className={`flex items-center gap-1.5 ${/[a-z]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
-                                            {/[a-z]/.test(formData.password) ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">✕</span>}
-                                            Lowercase
-                                        </div>
-                                        <div className={`flex items-center gap-1.5 ${/[0-9]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
-                                            {/[0-9]/.test(formData.password) ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">✕</span>}
-                                            Number
-                                        </div>
-                                        <div className={`flex items-center gap-1.5 ${/[^A-Za-z0-9]/.test(formData.password) ? 'text-green-400' : 'text-gray-500'}`}>
-                                            {/[^A-Za-z0-9]/.test(formData.password) ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current flex items-center justify-center text-[8px]">✕</span>}
-                                            Special char
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            {fieldErrors.password && <p id="password-error" className="text-red-700 dark:text-red-400 text-xs mt-1">{fieldErrors.password}</p>}
+                            {mode === 'register' && <PasswordStrength password={formData.password} id="password-strength" />}
                         </div>
 
                         {/* Confirm Password (Register only) */}
                         {mode === 'register' && (
                             <div>
-                                <label className="block text-sm text-gray-400 mb-2">Confirm Password</label>
+                                <label htmlFor="auth-confirm-password" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Confirm Password</label>
                                 <div className="relative">
-                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 dark:text-gray-500" />
                                     <input
+                                        id="auth-confirm-password"
                                         type={showConfirmPassword ? 'text' : 'password'}
+                                        autoComplete="new-password"
                                         name="confirmPassword"
                                         value={formData.confirmPassword}
                                         onChange={handleChange}
@@ -547,31 +519,31 @@ const AuthPage = () => {
                                         minLength={8}
                                         aria-invalid={!!fieldErrors.confirmPassword}
                                         aria-describedby={fieldErrors.confirmPassword ? 'confirmPassword-error' : undefined}
-                                        className={`w-full pl-11 pr-12 py-3 bg-white/5 border rounded-lg text-white placeholder:text-gray-500 focus:outline-none transition-colors ${formData.confirmPassword
+                                        className={`w-full pl-11 pr-12 py-3 bg-white dark:bg-white/5 border rounded-lg text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none transition-colors ${formData.confirmPassword
                                             ? formData.password === formData.confirmPassword
                                                 ? 'border-green-500/50 focus:border-green-500'
                                                 : 'border-red-500/50 focus:border-red-500'
-                                            : 'border-white/10 focus:border-orange-500/50'
+                                            : 'border-gray-300 dark:border-white/10 focus:border-orange-500/50'
                                             }`}
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400 transition-colors"
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-400 transition-colors"
                                         aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                                     >
                                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
                                 </div>
                                 {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                                    <p className="text-xs text-red-400 mt-1">Passwords do not match</p>
+                                    <p className="text-xs text-red-700 dark:text-red-400 mt-1">Passwords do not match</p>
                                 )}
                                 {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                                    <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                                    <p className="text-xs text-green-700 dark:text-green-400 mt-1 flex items-center gap-1">
                                         <CheckCircle2 className="w-3 h-3" /> Passwords match
                                     </p>
                                 )}
-                                {fieldErrors.confirmPassword && <p id="confirmPassword-error" className="text-red-400 text-xs mt-1">{fieldErrors.confirmPassword}</p>}
+                                {fieldErrors.confirmPassword && <p id="confirmPassword-error" className="text-red-700 dark:text-red-400 text-xs mt-1">{fieldErrors.confirmPassword}</p>}
                             </div>
                         )}
 
@@ -579,7 +551,7 @@ const AuthPage = () => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full flex items-center justify-center gap-2 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 btn-press"
+                            className="w-full flex items-center justify-center gap-2 py-3.5 bg-orange-700 hover:bg-orange-800 dark:bg-orange-500 dark:hover:bg-orange-600 disabled:bg-orange-700/60 text-white font-medium rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 btn-press"
                         >
                             {loading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -597,10 +569,10 @@ const AuthPage = () => {
                         <>
                             <div className="relative my-8">
                                 <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-white/10" />
+                                    <div className="w-full border-t border-gray-300 dark:border-white/10" />
                                 </div>
                                 <div className="relative flex justify-center text-sm">
-                                    <span className="px-4 bg-black text-gray-500">or continue with</span>
+                                    <span className="px-4 bg-white dark:bg-black text-gray-600 dark:text-gray-500">or continue with</span>
                                 </div>
                             </div>
 
@@ -614,10 +586,11 @@ const AuthPage = () => {
                                             setError('GitHub login not configured');
                                             return;
                                         }
+                                        stashOAuthReturn(explicitRedirect);
                                         const redirectUri = `${window.location.origin}/auth/callback/github`;
                                         window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`;
                                     }}
-                                    className="group flex items-center justify-center gap-2 py-3 border border-white/10 rounded-xl text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-300"
+                                    className="group flex items-center justify-center gap-2 py-3 border border-gray-300 dark:border-white/10 rounded-xl text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-300"
                                 >
                                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -632,10 +605,11 @@ const AuthPage = () => {
                                             setError('Google login not configured');
                                             return;
                                         }
+                                        stashOAuthReturn(explicitRedirect);
                                         const redirectUri = `${window.location.origin}/auth/callback/google`;
                                         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=openid%20email%20profile&nonce=${Date.now()}`;
                                     }}
-                                    className="group flex items-center justify-center gap-2 py-3 border border-white/10 rounded-xl text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all duration-300"
+                                    className="group flex items-center justify-center gap-2 py-3 border border-gray-300 dark:border-white/10 rounded-xl text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-white/20 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-300"
                                 >
                                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -651,11 +625,11 @@ const AuthPage = () => {
                 </div>
 
                 {/* Terms */}
-                <p className="text-center text-xs text-gray-500 mt-8">
+                <p className="text-center text-xs text-gray-600 dark:text-gray-500 mt-8">
                     By continuing, you agree to our{' '}
-                    <Link href="/terms" className="text-gray-400 hover:text-white">Terms of Service</Link>
+                    <Link href="/terms" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Terms of Service</Link>
                     {' '}and{' '}
-                    <Link href="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link>
+                    <Link href="/privacy" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Privacy Policy</Link>
                 </p>
             </div>
         </div >
