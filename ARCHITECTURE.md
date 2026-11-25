@@ -103,7 +103,7 @@ TanStack React Query caches client-side
 ### State Management
 
 - **React Context** providers for global state:
-  - `AuthContext` -- user session, login/logout
+  - `AuthContext` -- the signed-in user (a React Query `useMe` query), sign-in, sign-out (see "Auth client flow")
   - `ThemeContext` -- dark/light mode
   - `NotificationProvider` -- Socket.IO real-time notifications
   - `ToastContext` -- ephemeral toast messages
@@ -231,7 +231,7 @@ thecyberhub-core/src/
        v
    Server validates credentials (bcrypt, 12 rounds)
        |
-       +-- If 2FA enabled: returns tempToken, client must POST /api/auth/verify-2fa
+       +-- If 2FA enabled: returns tempToken, client must POST /api/auth/2fa/verify
        |
        +-- If no 2FA: returns accessToken (short-lived) + sets httpOnly refresh cookie
        |
@@ -258,8 +258,9 @@ thecyberhub-core/src/
      - Rotates refresh token (old one invalidated)
        |
        v
-4. Client-side auto-refresh
-   fetchApi() detects 401 -> calls tryRefreshToken() -> retries original request
+4. Client-side renewal
+   fetchApi() sees 401 AUTH_TOKEN_INVALID -> one shared refresh -> retries the request once
+   (details in "Auth client flow" below)
 ```
 
 ### Google OAuth
@@ -268,7 +269,7 @@ thecyberhub-core/src/
 Client obtains Google ID token
     |
     v
-POST /api/auth/google { idToken }
+POST /api/auth/oauth/google { idToken }   (GitHub: POST /api/auth/oauth/github { code })
     |
     v
 Server verifies with Google's tokeninfo endpoint
@@ -281,9 +282,38 @@ Creates or links User account -> issues JWT pair
 
 - TOTP-based (time-based one-time password)
 - Separate `JWT_2FA_SECRET` for temporary tokens during 2FA verification
-- Enable: `POST /api/auth/enable-2fa` (returns QR code secret)
-- Verify on login: `POST /api/auth/verify-2fa` (validates 6-digit code)
+- Enable: `GET /api/auth/2fa/generate` (returns the QR code secret), then `POST /api/auth/2fa/enable`; disable with `POST /api/auth/2fa/disable`
+- Verify on login: `POST /api/auth/2fa/verify` with `{ tempToken, code }` (validates the 6-digit code)
 - Rate limited: 5 attempts per 15 minutes
+
+### Auth client flow
+
+What the browser does with the API's auth contract. The pieces: `src/lib/tokenStore.ts` (the access token), `src/lib/api.ts` (`fetchApi`), `src/lib/authRefresh.ts` (the single-flight refresh), `src/lib/authSession.ts` (session-ended events), `src/lib/authErrors.ts` (error codes), `src/context/AuthContext.tsx` and `src/hooks/queries/useMe.ts`. Endpoint paths live in one place, `API_ENDPOINTS.AUTH` in `src/lib/constants/api-endpoints.ts`.
+
+**Tokens.** Every sign-in answers `{ token, refreshToken, expiresIn, data? }` and sets an httpOnly refresh cookie (path `/api/auth`, 7 days). The browser keeps only the access token (`localStorage`, through `tokenStore`, which also tells React when it changes, here or in another tab). The refresh token is the cookie: calls under `/api/auth/` are sent with `credentials: 'include'`. A refresh token an older version of the site kept in `localStorage` is sent once in the body as a fallback, then dropped.
+
+**Which 401 means what.** Only a 401 with code `AUTH_TOKEN_INVALID` on a call that carried the access token starts a renewal. Everything else is an error to show:
+
+| Answer | Client does |
+|---|---|
+| 401 `AUTH_TOKEN_INVALID` on a bearer call | refresh once (shared), send the request again once |
+| 401 on `/auth/login`, `/auth/2fa/verify`, other calls without the token | show the message; never refresh, never sign out |
+| 401 without a code | show the error |
+| 401 `AUTH_SESSION_REVOKED` or `AUTH_LEGACY_TOKEN_REFUSED`, 403 `AUTH_ACCOUNT_DISABLED` | clear the sign-in and go to `/auth?redirect=<current page>` with a note |
+| 400 `AUTH_PASSWORD_INCORRECT`, 400 `AUTH_2FA_CODE_INVALID` | form errors |
+| 429 `RATE_LIMIT_EXCEEDED` | show the message with the wait (`Retry-After`, `error.meta.retryAfter`) |
+
+**Single flight.** While a refresh runs, every request that fails with `AUTH_TOKEN_INVALID` waits for it and shares its outcome. A request that fails after the refresh finished, with the token it replaced, just retries. Across tabs, the refresh runs under a Web Lock, and a tab that finds a newer token in storage uses it. The refresh outcome is one of: renewed (retry), ended (401 or 400 from `/auth/refresh`: clear and announce the sign-out), or unavailable (network, 5xx, 429: keep the session, throw the original error). `401 AUTH_REFRESH_RACE` means another request of this browser just rotated the token: wait a moment, use the token it stored or ask once more with the cookie as it is now, and never sign out.
+
+**The signed-in user.** `AuthContext` keeps no user state of its own. `useMe(token)` reads `GET /api/auth/me` under the key `['auth', 'me', <account id from the token>]`, so one account's cached data is never shown to another. Sign-in seeds that entry from the answer. `useAuth()` exposes `user`, `token`, `loading` and the actions (`login`, `verify2faLogin`, `register`, `logout`, `refreshUser`, `updateProfile`, `updatePassword`, OAuth, reset and verification).
+
+**Signing out.** `logout()` calls `POST /api/auth/logout` (with `{ allDevices: true }` for every device), then clears the token, the query cache and any pending 2FA hand-off. For one device the clean-up always happens, even if the server cannot be reached or the session is already gone. "Everywhere" only completes when the server confirms. A change of password answers a new access token for the same session (`PUT /api/auth/password`); the client stores it and the other devices are signed out.
+
+**Sessions.** `GET /api/auth/sessions` lists `{ id, current, userAgent, ipAddress, lastUsedAt, createdAt }`; `DELETE /api/auth/sessions/:id` ends one, `DELETE /api/auth/sessions/others` ends the others. The page is `/profile/sessions`.
+
+**Redirects.** `?redirect=` goes through `safeRedirectPath` (`src/lib/safeRedirect.ts`): one same-site path only. Absolute URLs, `//host`, backslashes, control characters, encoded forms of those and the sign-in pages themselves are refused and the member lands on their default page. The sign-in page, the second factor step and the Google and GitHub callbacks all use it; a callback reads the page the member was heading for from `sessionStorage`, written (after the same check) before leaving for the provider.
+
+**Tests.** Unit: `src/lib/__tests__/authRefresh.test.ts`, `fetchApiAuth.test.ts`, `authErrors.test.ts`, `safeRedirect.test.ts`, `src/context/__tests__/AuthContext.test.tsx`. End to end with `page.route` mocks: `e2e/auth-session.spec.ts` (the mock API is `e2e/auth-mocks.ts`).
 
 ### Authorization
 

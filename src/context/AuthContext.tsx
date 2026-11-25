@@ -194,7 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // about other devices, so it is only kept when the server confirmed it.
                 if (allDevices) {
                     signingOut.current = false;
-                    throw withMessage(err, 'Could not sign out of all devices. Please try again.');
+                    throw err instanceof ApiError ? withMessage(err, 'Could not sign out of all devices.') : new Error('Could not sign out of all devices. Check your connection and try again.');
                 }
             } finally {
                 clearTimeout(timer);
