@@ -9,6 +9,7 @@ import { NotificationProvider } from "@/context/NotificationProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/context/ThemeContext";
 import Navbar from "@/components/Navbar";
+import { NavigationProgress } from "@/components/NavigationProgress";
 const GlobalSearch = lazy(() => import("@/components/GlobalSearch"));
 import { SystemAlertNotice } from "@/components/ui/SystemAlertNotice";
 import { EmailVerificationBanner } from "@/components/ui/EmailVerificationBanner";
@@ -29,6 +30,9 @@ export default function ClientProviders({ children }: { children: React.ReactNod
                             <NotificationProvider>
                                 <SystemAlertNotice />
                                 <EmailVerificationBanner />
+                                <Suspense fallback={null}>
+                                    <NavigationProgress />
+                                </Suspense>
                                 <Navbar />
                                 <Suspense fallback={null}>
                                     <GlobalSearch />

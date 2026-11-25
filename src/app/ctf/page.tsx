@@ -2,7 +2,7 @@
 // app/ctf/page.tsx
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Flag, Trophy, Target, Users, Star, ChevronRight, ChevronLeft, Lock, Search, Filter, X, Loader2, CheckCircle, Bookmark } from 'lucide-react';
 import Link from 'next/link';
@@ -37,7 +37,7 @@ interface PaginationMeta {
 
 const PAGE_SIZES = [10, 20, 50];
 
-const CTFPage = () => {
+const CTFPageContent = () => {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
@@ -243,49 +243,19 @@ const handlePageSizeChange = (newSize: number) => {
 };
 
 return (
-    <div className="min-h-screen bg-black">
-        {/* Hero Section */}
-        <section className="relative pt-32 pb-16 px-4 sm:px-6 border-b border-white/5">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
-
-            <div className="relative max-w-5xl mx-auto text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/5">
-                    <Flag className="w-4 h-4 text-orange-500" />
-                    <span className="text-sm text-gray-400">CTF Challenges</span>
-                </div>
-
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Capture The <span className="gradient-text">Flag</span>
-                </h1>
-                <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-8">
-                    Test your skills with real-world cybersecurity challenges. From web exploitation to cryptography, sharpen your hacking abilities.
-                </p>
-
-                <div className="flex flex-wrap justify-center gap-4">
-                    <Link
-                        href="/ctf/leaderboard"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white transition-colors"
-                    >
-                        <Trophy className="w-4 h-4" />
-                        Leaderboard
-                    </Link>
-                    <Link
-                        href="/ctf/competitions"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg text-orange-400 transition-colors"
-                    >
-                        <Flag className="w-4 h-4" />
-                        Competitions
-                    </Link>
-                    <div className="inline-flex items-center gap-4 px-6 py-3 bg-white/5 border border-white/10 rounded-lg">
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-orange-500">{pagination.total || challenges.length}</div>
-                            <div className="text-xs text-gray-400">Challenges</div>
-                        </div>
-                        <div className="w-px h-8 bg-white/10"></div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-white">{challenges.reduce((sum, c) => sum + c.solveCount, 0)}</div>
-                            <div className="text-xs text-gray-400">Solves</div>
-                        </div>
+    <>
+        {/* The numbers of the hero: they need the list, so they stay with it */}
+        <section className="relative px-4 pb-16 sm:px-6 border-b border-white/5">
+            <div className="flex justify-center">
+                <div className="inline-flex items-center gap-4 px-6 py-3 bg-white/5 border border-white/10 rounded-lg">
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-orange-500">{pagination.total || challenges.length}</div>
+                        <div className="text-xs text-gray-400">Challenges</div>
+                    </div>
+                    <div className="w-px h-8 bg-white/10"></div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-white">{challenges.reduce((sum, c) => sum + c.solveCount, 0)}</div>
+                        <div className="text-xs text-gray-400">Solves</div>
                     </div>
                 </div>
             </div>
@@ -555,10 +525,61 @@ return (
             )}
             </div>
         </section>
+    </>
+    );
+};
+
+// The hero and the footer are plain markup, so they are outside the boundary: `useSearchParams` needs
+// one of its own (a page that reads the address with none would hand the whole page to the browser, and
+// fail the build, now that no app wide loading screen sits above it), and the heading is in the HTML
+// of the page instead of behind a spinner
+const CTFPage = () => (
+    <div className="min-h-screen bg-black">
+        <section className="relative pt-32 pb-8 px-4 sm:px-6">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="relative max-w-5xl mx-auto text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full border border-white/10 bg-white/5">
+                    <Flag className="w-4 h-4 text-orange-500" />
+                    <span className="text-sm text-gray-400">CTF Challenges</span>
+                </div>
+
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    Capture The <span className="gradient-text">Flag</span>
+                </h1>
+                <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-8">
+                    Test your skills with real-world cybersecurity challenges. From web exploitation to cryptography, sharpen your hacking abilities.
+                </p>
+
+                <div className="flex flex-wrap justify-center gap-4">
+                    <Link
+                        href="/ctf/leaderboard"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white transition-colors"
+                    >
+                        <Trophy className="w-4 h-4" />
+                        Leaderboard
+                    </Link>
+                    <Link
+                        href="/ctf/competitions"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded-lg text-orange-400 transition-colors"
+                    >
+                        <Flag className="w-4 h-4" />
+                        Competitions
+                    </Link>
+                </div>
+            </div>
+        </section>
+
+        <Suspense fallback={(
+            <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
+                <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        )}>
+            <CTFPageContent />
+        </Suspense>
 
         <Footer />
     </div>
-    );
-};
+);
 
 export default CTFPage;

@@ -17,7 +17,7 @@ export default async function LabsPage() {
         <div className={pageBg}>
             <div className={pageWrap}>
                 <LabsHero />
-                <Suspense fallback={<ServerLabList labs={page ? page.data : null} />}>
+                <Suspense fallback={<ServerLabList labs={page ? page.data : null} facets={facets} total={page?.pagination.total ?? null} />}>
                     <LabsExplorer initialPage={page} initialFacets={facets} initialUpdatedAt={builtAt} />
                 </Suspense>
             </div>

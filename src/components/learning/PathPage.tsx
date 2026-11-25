@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 import StructuredData from '@/components/StructuredData';
 import { pathHref } from '@/lib/learning/display';
+import { pathMoveTarget } from '@/lib/learning/redirect';
 import { fetchPublicPath, pathDescription, pathJsonLd, SITE_URL } from '@/lib/learning/server';
 import type { PathKind } from '@/types/learning';
 import { LearningPathView } from './LearningPathView';
@@ -13,8 +14,10 @@ import { LearningPathView } from './LearningPathView';
 export async function pathMetadata(kind: PathKind, slug: string): Promise<Metadata> {
     const result = await fetchPublicPath(slug);
     if (result.state !== 'ok') {
-        // Drafts, unknown slugs and API errors: nothing to describe or index
-        return { title: kind === 'roadmap' ? 'Roadmap' : 'Learning path', robots: { index: false, follow: false } };
+        const title = kind === 'roadmap' ? 'Roadmap' : 'Learning path';
+        // A failing API says nothing about the path: no robots rule, so an outage cannot drop a good page.
+        // Drafts and unknown slugs: nothing to describe or index.
+        return result.state === 'error' ? { title } : { title, robots: { index: false, follow: false } };
     }
     const path = result.data;
     const url = `${SITE_URL}${pathHref(path.kind, path.slug)}`;
@@ -32,7 +35,9 @@ export async function PathPage({ kind, slug }: { kind: PathKind; slug: string })
     const result = await fetchPublicPath(slug);
     const path = result.state === 'ok' ? result.data : null;
     // A roadmap opened under the learning-paths address (or the other way round) moves to its own page
-    if (path && path.kind !== kind) redirect(pathHref(path.kind, path.slug));
+    // (only to a well formed address of the other kind, never to the one that was asked for)
+    const moved = path ? pathMoveTarget(kind, slug, path) : null;
+    if (moved) permanentRedirect(moved);
     return (
         <>
             {path && <StructuredData data={JSON.parse(JSON.stringify(pathJsonLd(path)))} />}

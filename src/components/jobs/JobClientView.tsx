@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { Briefcase } from 'lucide-react';
-import { btnSecondary, muted, pageBg } from '@/components/events/styles';
+import { pageBg } from '@/components/events/styles';
+import { MissingPage } from '@/components/ui/MissingNotice';
 import { useJob } from '@/hooks/queries/useJobs';
 import { ApiError } from '@/lib/api';
 import { JobActions, SidebarApply } from './JobActions';
@@ -11,16 +10,7 @@ import { JobViewerBanner } from './JobViewerBanner';
 import { DetailSkeleton, ErrorState } from './ListStates';
 
 export function JobMissing() {
-    return (
-        <div className={pageBg}>
-            <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6">
-                <Briefcase className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-                <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This job is not available</h1>
-                <p className={`mb-6 text-sm ${muted}`}>It may have been closed, ended or removed, or it is still waiting for review.</p>
-                <Link href="/jobs" className={btnSecondary}>Browse jobs</Link>
-            </div>
-        </div>
-    );
+    return <MissingPage kind="job" />;
 }
 
 /**

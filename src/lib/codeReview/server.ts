@@ -2,25 +2,13 @@ import { cache } from 'react';
 import { API_URL } from '@/lib/api';
 import { SITE_URL } from '@/lib/events/site';
 import { CODE_REVIEW_CACHE_TAG } from './constants';
+import { isSnippetRef } from './slug';
 import { cardSchema, detailSchema, paginationSchema, statsSchema } from './schemas';
 import type { CrCard, CrDetail, CrPage, CrStats } from '@/types/codeReview';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
-
-/** Slugs that would shadow a fixed API route: they can never be an exercise */
-const RESERVED = new Set(['manage', 'stats', 'progress', 'attempts']);
-/**
- * What the API accepts when it reads an exercise: 1 to 80 characters of a to z, 0 to 9 and hyphens
- * (a slug as written by the author), or a 24 character hex id. The stricter rule for new slugs
- * belongs to the editor only: exercises saved before it must stay reachable.
- */
-const READ_REF = /^[a-z0-9-]{1,80}$/;
-
-/** Whether a path segment can address an exercise: anything else is a real 404 without asking the API */
-export function isSnippetRef(value: string): boolean {
-    const ref = value.toLowerCase();
-    return READ_REF.test(ref) && !RESERVED.has(ref);
-}
+export { isSnippetRef };
 
 export type ServerSnippet =
     | { state: 'ok'; snippet: CrDetail }
@@ -47,7 +35,7 @@ const get = (path: string, revalidate: number) => fetch(`${API_URL}${path}`, {
 export const fetchPublicSnippet = cache(async (slug: string): Promise<ServerSnippet> => {
     if (!isSnippetRef(slug)) return { state: 'invalid' };
     try {
-        const res = await get(`/api/code-review/${encodeURIComponent(slug.toLowerCase())}`, 300);
+        const res = await get(`/api/code-review/${encodeURIComponent(slug.toLowerCase())}`, PUBLIC_ITEM_REVALIDATE_SECONDS);
         if (res.status === 404 || res.status === 400) return { state: 'missing' };
         if (!res.ok) return { state: 'error' };
         const body = await res.json();

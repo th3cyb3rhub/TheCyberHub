@@ -172,9 +172,10 @@ npm run lint         # ESLint
 npx tsc --noEmit     # Type check
 npm test             # Vitest unit tests (watch mode); use `npm run test:ci` for a single run
 npm run test:e2e     # Playwright E2E
+npm run test:e2e:ssr # Server rendered shell spec against a stand-in API (builds the app, starts it, runs, stops it)
 ```
 
-The e2e suite needs no backend: `e2e/helpers.ts` answers API calls with canned JSON via `page.route`, so run it against a running `npm run dev` or `npm run start`. Only the pages in `e2e/` are covered, and a spec that needs data should call `mockEmptyApi(page)` or `signInAs(page)` first.
+The e2e suite needs no backend: `e2e/helpers.ts` answers API calls with canned JSON via `page.route`, so run it against a running `npm run dev` or `npm run start`. The one exception is `e2e/ssr-shell.spec.ts`: its server-data checks need the app to be built against a stand-in API, which `npm run test:e2e:ssr` sets up (without it those checks are skipped). Only the pages in `e2e/` are covered, and a spec that needs data should call `mockEmptyApi(page)` or `signInAs(page)` first.
 
 `npm install` also enables a `pre-push` git hook (`.githooks/pre-push`) that runs lint, the type check and unit tests before every push, the same checks as the PR workflow. Skip it once with `SKIP_HOOKS=1 git push`.
 

@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { API_URL } from '@/lib/api';
 import type { Mentor } from '@/types/mentorship';
 import { displayName } from './display';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://thecyberhub.org').replace(/\/$/, '');
 
@@ -19,7 +20,7 @@ export const fetchPublicMentor = cache(async (id: string): Promise<ServerMentor>
     if (!/^[0-9a-fA-F]{24}$/.test(id)) return { state: 'missing' };
     try {
         const res = await fetch(`${API_URL}/api/mentors/${encodeURIComponent(id)}`, {
-            next: { revalidate: 60, tags: ['mentors'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['mentors'] },
             signal: AbortSignal.timeout(5000),
         });
         if (res.status === 404) return { state: 'missing' };

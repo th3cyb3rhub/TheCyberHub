@@ -8,8 +8,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Award, Calendar, Snowflake, Star, Swords, Trophy, Users } from 'lucide-react';
 import { card, muted, pageBg } from '@/components/events/styles';
 import { TabBar } from '@/components/events/TabBar';
-import { btnSecondary } from '@/components/events/styles';
 import { useAuth } from '@/context/AuthContext';
+import { MissingBody, MissingPage } from '@/components/ui/MissingNotice';
 import { refreshCompetition, useCtfClockSync, useCtfCompetition, useCtfMe } from '@/hooks/queries/useCtf';
 import { ApiError } from '@/lib/api';
 import { participantsText, safeHref } from '@/lib/ctf/display';
@@ -109,6 +109,16 @@ interface Props {
  * (staff see drafts and more). The header, the banners and the tab bar are the shell; the four
  * panels load next to it.
  */
+/** What a competition that is not there (or not published, for this viewer) says */
+export function CompetitionMissingBody() {
+    return <MissingBody kind="competition" />;
+}
+
+/** The page for an address that cannot be a competition */
+export function CompetitionMissing() {
+    return <MissingPage kind="competition" />;
+}
+
 export function CompetitionView({ slug, initialCompetition, initialUpdatedAt, initialTab }: Props) {
     const { user, loading } = useAuth();
     const qc = useQueryClient();
@@ -163,12 +173,7 @@ export function CompetitionView({ slug, initialCompetition, initialUpdatedAt, in
             <div className={pageBg}>
                 <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6">
                     {missing ? (
-                        <>
-                            <Trophy className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-                            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This competition is not available</h1>
-                            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
-                            <Link href="/ctf/competitions" className={btnSecondary}>All competitions</Link>
-                        </>
+                        <CompetitionMissingBody />
                     ) : (
                         <ErrorState error={query.error} onRetry={() => void query.refetch()} title="Could not load this competition" />
                     )}

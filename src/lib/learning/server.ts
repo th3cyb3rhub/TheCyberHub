@@ -3,6 +3,7 @@ import { API_URL } from '@/lib/api';
 import type { Certificate, LearningDetail, LearningCard } from '@/types/learning';
 import type { Resource } from '@/types/resource';
 import { safeHref } from './display';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://thecyberhub.org').replace(/\/$/, '');
 
@@ -16,7 +17,7 @@ export type ServerResult<T> =
 async function fetchPublic<T extends { slug?: string }>(path: string, tag: string): Promise<ServerResult<T>> {
     try {
         const res = await fetch(`${API_URL}${path}`, {
-            next: { revalidate: 60, tags: [tag] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: [tag] },
             // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
             signal: AbortSignal.timeout(5000),
         });
@@ -140,7 +141,7 @@ export async function fetchSitemapRows(path: string, { max = 5000, budgetMs = 15
 /** The first page of the public catalogue for one kind, for the ItemList of a catalogue page */
 export async function fetchPublicList(kind: 'roadmap' | 'path'): Promise<LearningCard[]> {
     try {
-        const res = await fetch(`${API_URL}/api/learning-paths?kind=${kind}&limit=50`, { next: { revalidate: 60, tags: ['learning-paths'] }, signal: AbortSignal.timeout(5000) });
+        const res = await fetch(`${API_URL}/api/learning-paths?kind=${kind}&limit=50`, { next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['learning-paths'] }, signal: AbortSignal.timeout(5000) });
         if (!res.ok) return [];
         const body = await res.json();
         return Array.isArray(body?.data) ? body.data : [];

@@ -4,6 +4,8 @@ const baseURL = process.env.BASE_URL || 'http://localhost:3000';
 
 export default defineConfig({
     testDir: './e2e',
+    // With E2E_MOCK_API_PORT set, a stand-in API starts for the specs that read what the server renders
+    globalSetup: process.env.E2E_MOCK_API_PORT ? './e2e/support/global-setup.ts' : undefined,
     fullyParallel: true,
     timeout: 60 * 1000,
     expect: {
@@ -42,7 +44,7 @@ export default defineConfig({
     ],
     webServer: process.env.CI ? undefined : {
         command: 'npm run dev',
-        url: 'http://localhost:3000',
+        url: baseURL,
         reuseExistingServer: true,
     },
 });

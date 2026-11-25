@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import DOMPurify from 'dompurify';
+import { useSanitizer } from '@/hooks/useSanitizer';
 import CodeBlock from './CodeBlock';
 import { renderMarkdownSegments } from '@/lib/markdown';
 
@@ -13,6 +13,7 @@ interface MarkdownContentProps {
 // Prose is escaped by the renderer and sanitised again here; fenced code goes to CodeBlock, which
 // renders it as React text (never as HTML).
 export default function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
+    const sanitizeHtml = useSanitizer();
     const segments = useMemo(() => renderMarkdownSegments(content), [content]);
 
     return (
@@ -24,7 +25,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
                     <div
                         key={i}
                         dangerouslySetInnerHTML={{
-                            __html: DOMPurify.sanitize(segment.html, { ADD_ATTR: ['target'] }),
+                            __html: sanitizeHtml(segment.html, { ADD_ATTR: ['target'] }),
                         }}
                     />
                 )

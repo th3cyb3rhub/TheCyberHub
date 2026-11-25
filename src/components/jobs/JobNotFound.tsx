@@ -1,25 +1,20 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { pageBg } from '@/components/events/styles';
-import { useAuth } from '@/context/AuthContext';
+import type { ReactNode } from 'react';
+import { useHasStoredToken } from '@/hooks/useHasStoredToken';
+import { useRouteSegment } from '@/hooks/useRouteSegment';
 import { isJobRef } from '@/lib/jobs/server';
-import { JobClientView, JobMissing } from './JobClientView';
-import { DetailSkeleton } from './ListStates';
+import { JobClientView } from './JobClientView';
 
 /**
  * What a job page shows when the server could not find the job for a visitor. The answer is a real
- * 404 for search engines and anonymous visitors. A job that is a draft, waiting for review, rejected,
- * closed or ended is still readable by its poster and by the reviewers, so a signed-in visitor is
- * asked again with their own token and sees the job, with its status, instead of this page.
+ * 404 for search engines and anonymous visitors, and the server's "not available" notice stays for
+ * them, with no further request. A job that is a draft, waiting for review, rejected, closed or ended
+ * is still readable by its poster and by the reviewers, so a viewer with a token is asked again with it
+ * and sees the job, with its status, instead of the notice.
  */
-export function JobNotFound() {
-    const params = useParams<{ slug?: string | string[] }>();
-    const raw = Array.isArray(params?.slug) ? params.slug[0] : params?.slug;
-    const { user, loading } = useAuth();
-    const slug = raw && isJobRef(raw) ? raw : '';
-
-    if (loading) return <div className={pageBg}><div className="mx-auto max-w-5xl px-4 pb-16 pt-24 sm:px-6"><DetailSkeleton /></div></div>;
-    if (!user || !slug) return <JobMissing />;
-    return <JobClientView slug={slug} />;
+export function JobNotFound({ missing }: { missing: ReactNode }) {
+    const slug = useRouteSegment('slug');
+    const signedIn = useHasStoredToken();
+    return signedIn && isJobRef(slug) ? <JobClientView slug={slug} /> : <>{missing}</>;
 }

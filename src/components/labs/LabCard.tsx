@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { IntentLink } from '@/components/ui/IntentLink';
 import { Clock, FileText, Lightbulb, Star, Users } from 'lucide-react';
 import { card, focusRing, muted } from '@/components/events/styles';
 import { categoryLabel, minutesLabel } from '@/lib/labs/display';
@@ -17,7 +17,7 @@ export function LabCard({ lab }: { lab: LabCardData }) {
             </div>
             <div className="min-w-0">
                 <h2 className="break-words text-base font-semibold leading-snug text-gray-900 dark:text-white">
-                    <Link href={`/labs/${lab.slug}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{lab.title}</Link>
+                    <IntentLink href={`/labs/${lab.slug}`} className={`rounded after:absolute after:inset-0 after:rounded-2xl ${focusRing} focus-visible:ring-0 focus-visible:ring-offset-0`}>{lab.title}</IntentLink>
                 </h2>
                 <p className={`mt-1 text-xs ${muted}`}>
                     {categoryLabel(lab.category)}

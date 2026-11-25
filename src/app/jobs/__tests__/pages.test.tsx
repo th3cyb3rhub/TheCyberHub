@@ -68,6 +68,24 @@ describe('job page', () => {
         expect((error as Error).message).toBe('NEXT_REDIRECT:/jobs/senior-pentester-abc123')
     })
 
+    it.each([
+        ['a canonical slug with a path in it', '../admin'],
+        ['a canonical slug with a scheme', 'https://evil.example/x'],
+        ['a canonical slug with spaces', 'a b'],
+        ['an empty canonical slug', ''],
+    ])('does not follow %s: it renders the page where it is (no redirect)', async (_name, bad) => {
+        server.fetchPublicJob.mockResolvedValue(ok(job({ slug: 'senior-pentester-abc123' }), { canonicalSlug: bad }))
+        const html = renderToStaticMarkup(await JobPage(params('old-slug')) as React.ReactElement)
+        expect(nav.permanentRedirect).not.toHaveBeenCalled()
+        expect(html).toContain('Senior Pentester')
+    })
+
+    it('never redirects to the address that was asked for', async () => {
+        server.fetchPublicJob.mockResolvedValue(ok(job({ slug: 'senior-pentester-abc123' }), { canonicalSlug: 'senior-pentester-abc123' }))
+        await JobPage(params('senior-pentester-abc123'))
+        expect(nav.permanentRedirect).not.toHaveBeenCalled()
+    })
+
     it('is a real 404 for a missing job and for a reference that cannot be one', async () => {
         server.fetchPublicJob.mockResolvedValue({ state: 'missing' })
         expect(((await attempt(() => JobPage(params('gone-1')))) as Error).message).toBe('NEXT_NOT_FOUND')
@@ -141,6 +159,9 @@ describe('company page', () => {
         server.fetchCompany.mockResolvedValue({ state: 'error' })
         const html = renderToStaticMarkup(await CompanyPage({ ...params('acme-security'), searchParams: Promise.resolve({}) }) as React.ReactElement)
         expect(html).toContain('Try again')
-        expect((await companyMetadata(params('acme-security'))).robots).toEqual({ index: false, follow: false })
+        // The API did not answer: nothing is known about the company, so no robots rule
+        expect((await companyMetadata(params('acme-security'))).robots).toBeUndefined()
+        server.fetchCompany.mockResolvedValue({ state: 'missing' })
+        expect((await companyMetadata(params('gone'))).robots).toEqual({ index: false, follow: false })
     })
 })

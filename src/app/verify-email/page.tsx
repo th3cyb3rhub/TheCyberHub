@@ -1,12 +1,20 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Shield, CheckCircle, XCircle, Loader2, ArrowRight, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-export default function VerifyEmailPage() {
+const Verifying = () => (
+    <>
+        <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-5" />
+        <h1 className="text-xl font-semibold text-white mb-2">Verifying your email...</h1>
+        <p className="text-gray-400 text-sm">Just a moment.</p>
+    </>
+);
+
+function VerifyEmailContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get('token') || '';
     const { verifyEmail, user, requestVerification } = useAuth();
@@ -43,6 +51,79 @@ export default function VerifyEmailPage() {
     };
 
     return (
+        <>
+            {status === 'verifying' && <Verifying />}
+
+            {status === 'success' && (
+                <>
+                    <div className="w-16 h-16 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                        <CheckCircle className="w-8 h-8 text-green-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">Email verified!</h1>
+                    <p className="text-gray-400 text-sm mb-8">
+                        Your email address has been verified. Your account is now fully active.
+                    </p>
+                    <Link
+                        href={user ? '/profile' : '/auth'}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all hover:shadow-lg hover:shadow-orange-500/25"
+                    >
+                        {user ? 'Go to Profile' : 'Sign In'}
+                        <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </>
+            )}
+
+            {status === 'error' && (
+                <>
+                    <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                        <XCircle className="w-8 h-8 text-red-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">Link expired or invalid</h1>
+                    <p className="text-gray-400 text-sm mb-6">{errorMessage}</p>
+
+                    {user && !user.isVerified ? (
+                        <button
+                            onClick={handleResend}
+                            disabled={resendLoading}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-xl transition-all"
+                        >
+                            {resendLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                            Resend Verification Email
+                        </button>
+                    ) : (
+                        <Link
+                            href="/auth"
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all"
+                        >
+                            Back to Login
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    )}
+                </>
+            )}
+
+            {status === 'resent' && (
+                <>
+                    <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                        <Mail className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">New link sent!</h1>
+                    <p className="text-gray-400 text-sm mb-6">
+                        We&apos;ve sent a new verification email to your address. Check your inbox and spam folder.
+                    </p>
+                    <Link href="/profile" className="text-orange-400 hover:text-orange-300 text-sm">
+                        Go to Profile →
+                    </Link>
+                </>
+            )}
+        </>
+    );
+}
+
+// The frame (logo, card) is plain markup, outside the boundary: `useSearchParams` needs one of its own, and
+// what shows until the address is read is the same "verifying" text the content starts with
+export default function VerifyEmailPage() {
+    return (
         <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20 overflow-hidden">
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-orange-500/8 rounded-full blur-[150px]" />
@@ -59,76 +140,9 @@ export default function VerifyEmailPage() {
                 </Link>
 
                 <div className="rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-sm p-10 shadow-2xl">
-                    {status === 'verifying' && (
-                        <>
-                            <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-5" />
-                            <h1 className="text-xl font-semibold text-white mb-2">Verifying your email...</h1>
-                            <p className="text-gray-400 text-sm">Just a moment.</p>
-                        </>
-                    )}
-
-                    {status === 'success' && (
-                        <>
-                            <div className="w-16 h-16 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                                <CheckCircle className="w-8 h-8 text-green-400" />
-                            </div>
-                            <h1 className="text-2xl font-bold text-white mb-2">Email verified!</h1>
-                            <p className="text-gray-400 text-sm mb-8">
-                                Your email address has been verified. Your account is now fully active.
-                            </p>
-                            <Link
-                                href={user ? '/profile' : '/auth'}
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all hover:shadow-lg hover:shadow-orange-500/25"
-                            >
-                                {user ? 'Go to Profile' : 'Sign In'}
-                                <ArrowRight className="w-4 h-4" />
-                            </Link>
-                        </>
-                    )}
-
-                    {status === 'error' && (
-                        <>
-                            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                                <XCircle className="w-8 h-8 text-red-400" />
-                            </div>
-                            <h1 className="text-2xl font-bold text-white mb-2">Link expired or invalid</h1>
-                            <p className="text-gray-400 text-sm mb-6">{errorMessage}</p>
-
-                            {user && !user.isVerified ? (
-                                <button
-                                    onClick={handleResend}
-                                    disabled={resendLoading}
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-medium rounded-xl transition-all"
-                                >
-                                    {resendLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                                    Resend Verification Email
-                                </button>
-                            ) : (
-                                <Link
-                                    href="/auth"
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-xl transition-all"
-                                >
-                                    Back to Login
-                                    <ArrowRight className="w-4 h-4" />
-                                </Link>
-                            )}
-                        </>
-                    )}
-
-                    {status === 'resent' && (
-                        <>
-                            <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                                <Mail className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <h1 className="text-2xl font-bold text-white mb-2">New link sent!</h1>
-                            <p className="text-gray-400 text-sm mb-6">
-                                We&apos;ve sent a new verification email to your address. Check your inbox and spam folder.
-                            </p>
-                            <Link href="/profile" className="text-orange-400 hover:text-orange-300 text-sm">
-                                Go to Profile →
-                            </Link>
-                        </>
-                    )}
+                    <Suspense fallback={<Verifying />}>
+                        <VerifyEmailContent />
+                    </Suspense>
                 </div>
             </div>
         </div>

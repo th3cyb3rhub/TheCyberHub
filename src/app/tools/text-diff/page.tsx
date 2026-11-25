@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from 'react';
-import DOMPurify from 'dompurify';
+import { useSanitizer } from '@/hooks/useSanitizer';
 import {
     Copy,
     Download,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 const TextDiffTool = () => {
+    const sanitizeHtml = useSanitizer();
     const [leftText, setLeftText] = useState('');
     const [rightText, setRightText] = useState('');
     const [viewMode, setViewMode] = useState('side-by-side');
@@ -547,7 +548,7 @@ const TextDiffTool = () => {
                                                     <div className="flex-1 px-2">
                                                         {line.type !== 'added' && (
                                                             syntaxMode !== 'none'
-                                                                ? <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightSyntax(line.leftLine)) }} />
+                                                                ? <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(highlightSyntax(line.leftLine)) }} />
                                                                 : renderWhitespace(line.leftLine)
                                                         )}
                                                     </div>
@@ -576,7 +577,7 @@ const TextDiffTool = () => {
                                                     <div className="flex-1 px-2">
                                                         {line.type !== 'removed' && (
                                                             syntaxMode !== 'none'
-                                                                ? <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightSyntax(line.rightLine)) }} />
+                                                                ? <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(highlightSyntax(line.rightLine)) }} />
                                                                 : renderWhitespace(line.rightLine)
                                                         )}
                                                     </div>
@@ -611,7 +612,7 @@ const TextDiffTool = () => {
                                             )}
                                             <div className="flex-1 px-2">
                                                 {syntaxMode !== 'none'
-                                                    ? <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightSyntax(line.type === 'removed' ? line.leftLine : line.rightLine)) }} />
+                                                    ? <span dangerouslySetInnerHTML={{ __html: sanitizeHtml(highlightSyntax(line.type === 'removed' ? line.leftLine : line.rightLine)) }} />
                                                     : renderWhitespace(line.type === 'removed' ? line.leftLine : line.rightLine)
                                                 }
                                             </div>

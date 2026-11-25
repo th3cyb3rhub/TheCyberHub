@@ -14,7 +14,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicCohort(id);
 
     if (result.state !== 'ok') {
-        return { title: 'Internship', robots: { index: false, follow: false } };
+        // A failing API says nothing about the program: no robots rule, so an outage cannot drop a good page
+        return result.state === 'error' ? { title: 'Internship' } : { title: 'Internship', robots: { index: false, follow: false } };
     }
 
     const { cohort } = result;
@@ -40,10 +41,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function InternshipPage({ params }: PageProps) {
     const { id } = await params;
     const result = await fetchPublicCohort(id);
-    // An id that cannot be a cohort is a real 404
-    if (result.state === 'invalid') notFound();
-    // A draft or a switched-off cohort is hidden from the server's anonymous request, but staff
-    // may open it: the browser asks again with the token and shows "not available" on its own 404.
-    // The same goes for a slow or failing API. Metadata keeps these pages out of search results.
+    // An id that cannot be a cohort, an unknown cohort and a draft or switched-off cohort (hidden from
+    // the server's anonymous request) are a real HTTP 404. Staff may still open one: `not-found.tsx`
+    // asks again in the browser with their token. A slow or failing API stays HTTP 200 and the
+    // browser asks again, so a hiccup never tells a search engine the program is gone.
+    if (result.state === 'invalid' || result.state === 'missing') notFound();
     return <CohortDetailView id={id} initialCohort={result.state === 'ok' ? result.cohort : null} />;
 }

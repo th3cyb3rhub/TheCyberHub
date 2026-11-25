@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicLab(slug);
 
     if (result.state !== 'ok') {
-        // A draft, an archived lab or an unknown slug stays out of search results
-        return { title: 'Lab', robots: { index: false, follow: false } };
+        // A failing API says nothing about the lab: no robots rule, so an outage cannot drop a good page.
+        // A draft, an archived lab or an unknown slug stays out of search results.
+        return result.state === 'error' ? { title: 'Lab' } : { title: 'Lab', robots: { index: false, follow: false } };
     }
 
     const { lab } = result;
@@ -41,11 +42,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function LabPage({ params }: PageProps) {
     const { slug } = await params;
     const result = await fetchPublicLab(slug);
-    // A segment that cannot be a lab slug is a real 404
-    if (result.state === 'invalid') notFound();
-    // A draft or archived lab is hidden from the server's anonymous request, but staff may open it:
-    // the browser asks again with the token and shows "not available" on its own 404. The same goes
-    // for a slow or failing API. The answer is HTTP 200 on purpose (a 404 here would hide the staff
-    // preview), so the page is marked noindex in `generateMetadata` instead.
+    // A segment that cannot be a lab slug, an unknown slug and a draft or archived lab (hidden from the
+    // server's anonymous request) are a real HTTP 404. Staff may still open a draft: `not-found.tsx` asks
+    // again in the browser with their token. A slow or failing API is not "missing": that page is HTTP
+    // 200 and the browser asks again, so a hiccup never tells a search engine the lab is gone.
+    if (result.state === 'invalid' || result.state === 'missing') notFound();
     return <LabDetailView slug={slug.toLowerCase()} initialLab={result.state === 'ok' ? result.lab : null} initialUpdatedAt={Date.now()} />;
 }

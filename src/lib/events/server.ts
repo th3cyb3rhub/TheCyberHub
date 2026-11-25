@@ -4,6 +4,7 @@ import { plainExcerpt } from './display';
 import { effectiveStatus } from './time';
 
 import { SITE_URL } from './site';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
 
@@ -17,7 +18,7 @@ export type ServerEvent =
 export async function fetchPublicEvent(slug: string): Promise<ServerEvent> {
     try {
         const res = await fetch(`${API_URL}/api/events/${encodeURIComponent(slug)}`, {
-            next: { revalidate: 60, tags: ['events'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['events'] },
             // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
             signal: AbortSignal.timeout(5000),
         });
@@ -74,7 +75,7 @@ export type ServerSeries =
 export async function fetchPublicSeries(id: string): Promise<ServerSeries> {
     try {
         const res = await fetch(`${API_URL}/api/events/series/${encodeURIComponent(id)}`, {
-            next: { revalidate: 60, tags: ['events'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['events'] },
             signal: AbortSignal.timeout(5000),
         });
         if (res.status === 404) return { state: 'missing' };

@@ -39,7 +39,7 @@ describe('the exercise fetched while rendering', () => {
         }
         const [address, options] = fetchMock.mock.calls[0]
         expect(address).toMatch(/\/api\/code-review\/sql-injection-login$/)
-        expect(options.next).toEqual({ revalidate: 300, tags: ['code-review'] })
+        expect(options.next).toEqual({ revalidate: 60, tags: ['code-review'] })
         expect(options.headers).toBeUndefined()
     })
 

@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import DOMPurify from 'dompurify';
+import { useSanitizer } from '@/hooks/useSanitizer';
 import {
     FileText,
     Download,
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 const MarkdownEditorPage = () => {
+    const sanitizeHtml = useSanitizer();
     const [markdown, setMarkdown] = useState(`# Welcome to Markdown Editor
 
 This is a **simple** and *elegant* markdown editor built for professionals.
@@ -540,7 +541,7 @@ nmap -sS -sV target.com
                                 </div>
                                 <div
                                     className="p-6 h-96 lg:h-[600px] overflow-y-auto prose prose-invert max-w-none"
-                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(preview) }}
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(preview) }}
                                 />
                             </div>
                         )}

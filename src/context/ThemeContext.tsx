@@ -1,8 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-type Theme = 'dark' | 'light';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { DEFAULT_THEME, THEME_STORAGE_KEY, applyTheme, currentTheme, isTheme, resolveTheme, type Theme } from '@/lib/theme';
 
 interface ThemeContextType {
     theme: Theme;
@@ -12,85 +11,52 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// `<html>` is the one source of truth: the script in the root layout sets it before the first paint,
+// `applyTheme` changes it, and this store only tells React when it did.
+const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+};
+const notify = () => listeners.forEach((listener) => listener());
+const getSnapshot = (): Theme => currentTheme();
+// The server has no `<html>` class to read and always renders the default; the first client render
+// uses the same value, then React re-renders with the real one without a hydration mismatch.
+const getServerSnapshot = (): Theme => DEFAULT_THEME;
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [theme, setThemeState] = useState<Theme>('dark');
-    const [mounted, setMounted] = useState(false);
+    const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
+    // After mount: make sure `<html>` shows the stored (or system) theme even when the inline script
+    // did not run, and follow the choice made in another tab.
     useEffect(() => {
-        setMounted(true);
-        try {
-            if (typeof window !== 'undefined') {
-                const stored = localStorage.getItem('tch-theme') as Theme;
-                if (stored && (stored === 'dark' || stored === 'light')) {
-                    setThemeState(stored);
-                    applyTheme(stored);
-                    return;
-                }
-            }
-        } catch {
-            // localStorage may be unavailable (e.g. private browsing)
-        }
-        // Respect system preference
-        if (typeof window !== 'undefined') {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const initial = prefersDark ? 'dark' : 'light';
-            setThemeState(initial);
-            applyTheme(initial);
-        }
-    }, []);
-
-    const applyTheme = (t: Theme) => {
-        const root = document.documentElement;
-        if (t === 'dark') {
-            root.classList.add('dark');
-            root.classList.remove('light');
-            root.removeAttribute('data-theme');
-        } else {
-            root.classList.remove('dark');
-            root.classList.add('light');
-            root.setAttribute('data-theme', 'light');
-        }
-    };
-
-    const setTheme = (t: Theme) => {
-        setThemeState(t);
-        try {
-            localStorage.setItem('tch-theme', t);
-        } catch {
-            // localStorage may be unavailable
-        }
-        applyTheme(t);
-    };
-
-    const toggleTheme = () => {
-        const next = theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
-    };
-
-    // Sync theme across browser tabs
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'tch-theme' && e.newValue) {
-                const newTheme = e.newValue as Theme;
-                if (newTheme === 'dark' || newTheme === 'light') {
-                    setThemeState(newTheme);
-                    applyTheme(newTheme);
-                }
+        applyTheme(resolveTheme());
+        notify();
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === THEME_STORAGE_KEY && isTheme(e.newValue)) {
+                applyTheme(e.newValue);
+                notify();
             }
         };
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
     }, []);
 
-    // Prevent flash of wrong theme
-    if (!mounted) return null;
+    const setTheme = useCallback((next: Theme) => {
+        try {
+            window.localStorage.setItem(THEME_STORAGE_KEY, next);
+        } catch {
+            // Storage may be unavailable (private browsing, blocked site data): the choice still holds for this visit
+        }
+        applyTheme(next);
+        notify();
+    }, []);
 
-    return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-            {children}
-        </ThemeContext.Provider>
-    );
+    const toggleTheme = useCallback(() => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'), [setTheme]);
+
+    const value = useMemo(() => ({ theme, toggleTheme, setTheme }), [theme, toggleTheme, setTheme]);
+
+    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

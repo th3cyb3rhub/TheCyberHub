@@ -1,26 +1,13 @@
 import { cache } from 'react';
 import { API_URL } from '@/lib/api';
 import { SITE_URL } from '@/lib/events/site';
+import { isLabSlug } from './slug';
 import { labCardSchema, labDetailSchema, labFacetsSchema } from './schemas';
 import type { LabCard, LabDetail, LabFacets, Page } from '@/types/lab';
+import { PUBLIC_ITEM_REVALIDATE_SECONDS } from '@/lib/server/cacheTimes';
 
 export { SITE_URL };
-
-/** Slugs that would shadow a fixed API route: they can never be a lab */
-const RESERVED = new Set(['progress', 'stats', 'categories', 'leaderboard', 'manage']);
-/**
- * What the API accepts when it reads a lab (its READ_REF): any 1 to 80 characters of a to z, 0 to 9
- * and hyphens, which covers a slug as written by the author and a 24 character hex id. The stricter
- * rule for new slugs (no leading, trailing or doubled hyphens, at least 3 characters) belongs to the
- * authoring form only: labs saved before it, or by other tools, must stay reachable.
- */
-const READ_REF = /^[a-z0-9-]{1,80}$/;
-
-/** Whether a path segment can address a lab: anything else is a real 404 without asking the API */
-export function isLabSlug(value: string): boolean {
-    const ref = value.toLowerCase();
-    return READ_REF.test(ref) && !RESERVED.has(ref);
-}
+export { isLabSlug };
 
 export type ServerLab =
     | { state: 'ok'; lab: LabDetail }
@@ -42,7 +29,7 @@ export const fetchPublicLab = cache(async (slug: string): Promise<ServerLab> => 
     if (!isLabSlug(slug)) return { state: 'invalid' };
     try {
         const res = await fetch(`${API_URL}/api/labs/${encodeURIComponent(slug.toLowerCase())}`, {
-            next: { revalidate: 60, tags: ['labs'] },
+            next: { revalidate: PUBLIC_ITEM_REVALIDATE_SECONDS, tags: ['labs'] },
             // The page is rendered while the visitor waits; a slow API falls back to the browser fetch
             signal: AbortSignal.timeout(TIMEOUT_MS),
         });

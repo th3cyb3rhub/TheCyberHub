@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Analytics } from "@vercel/analytics/next"
 import ClientProviders from "@/components/ClientProviders";
+import { themeInitScript } from '@/lib/theme';
 
 const inter = Inter({
     subsets: ['latin'],
@@ -64,29 +65,18 @@ export const viewport: Viewport = {
     ],
 }
 
+// The server always renders the default (dark) theme. The script in <head> switches <html> to the
+// stored or system theme before the first paint, so only <html> differs from the server markup.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="en" suppressHydrationWarning>
+        <html lang="en" className="dark" suppressHydrationWarning>
             <head>
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <meta name="darkreader-lock" />
-                <script dangerouslySetInnerHTML={{
-                    __html: `
-                        (function() {
-                            try {
-                                var t = localStorage.getItem('tch-theme');
-                                if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                                document.documentElement.classList.add(t);
-                                if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-                            } catch(e) {
-                                document.documentElement.classList.add('dark');
-                            }
-                        })();
-                    `
-                }} />
+                <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
             </head>
-            <body className={`${inter.className} cyberhub-bg`} suppressHydrationWarning>
+            <body className={`${inter.className} cyberhub-bg`}>
                 <a
                     href="#main-content"
                     className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-brand-500 focus:text-white focus:rounded"
