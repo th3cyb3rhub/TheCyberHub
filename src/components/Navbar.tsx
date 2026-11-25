@@ -319,7 +319,12 @@ const Navbar = () => {
                                 />
                             )}
 
-                            {/* User / Sign In */}
+                            {/* User / Sign In. While the session is checked the space stays reserved, so the links do not move when it answers. */}
+                            {loading && (
+                                <span aria-hidden="true" className="hidden sm:inline-flex invisible items-center gap-2 px-4 py-1.5 text-[13px] font-semibold font-mono uppercase tracking-wider">
+                                    <Zap className="w-3.5 h-3.5" /> Sign In
+                                </span>
+                            )}
                             {!loading && (
                                 user ? (
                                     <UserDropdown user={user} logout={logout} theme={theme} />
