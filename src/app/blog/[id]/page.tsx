@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, User, Clock, Eye, Loader2, Edit, Trash2, Twitter, Linkedin, Link2, Check } from 'lucide-react';
-import DOMPurify from 'dompurify';
+import { useSanitizer } from '@/hooks/useSanitizer';
 import { fetchApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -213,6 +213,7 @@ function SocialShareButtons({ title }: { title: string }) {
 }
 
 const BlogPostPage = () => {
+    const sanitizeHtml = useSanitizer();
     const params = useParams();
     const router = useRouter();
     const { user, token } = useAuth();
@@ -450,7 +451,7 @@ const BlogPostPage = () => {
                         <article className="prose prose-invert prose-orange max-w-none">
                             <div
                                 className="text-gray-300 leading-relaxed whitespace-pre-wrap blog-content"
-                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(blog.content) }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(blog.content) }}
                             />
                         </article>
 

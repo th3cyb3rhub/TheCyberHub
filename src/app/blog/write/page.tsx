@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import DOMPurify from 'dompurify';
+import { useSanitizer } from '@/hooks/useSanitizer';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { renderMarkdownToHtml } from '@/lib/renderMarkdown';
@@ -33,6 +33,7 @@ import { fetchApi } from '@/lib/api';
 import { blogPostSchema } from '@/lib/validations';
 
 const BlogWritePage = () => {
+    const sanitizeHtml = useSanitizer();
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -367,7 +368,7 @@ const BlogWritePage = () => {
                         <div
                             className="prose prose-invert max-w-none"
                             dangerouslySetInnerHTML={{
-                                __html: DOMPurify.sanitize(`<div>${renderMarkdown(content) || '<span class="text-gray-500">No content yet...</span>'}</div>`)
+                                __html: sanitizeHtml(`<div>${renderMarkdown(content) || '<span class="text-gray-500">No content yet...</span>'}</div>`)
                             }}
                         />
                     </div>
