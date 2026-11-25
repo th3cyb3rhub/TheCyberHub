@@ -60,7 +60,11 @@ function Row({ snippet, canWrite }: { snippet: CrManageCard; canWrite: boolean }
                     <h2 className="break-words text-base font-semibold text-gray-900 dark:text-white">
                         <Link href={`/code-review/${encodeURIComponent(snippet.slug)}`} className={`rounded hover:underline ${focusRing}`}>{snippet.title}</Link>
                     </h2>
-                    <p className={`mt-1 break-all text-xs ${muted}`}>/code-review/{snippet.slug} {'·'} {snippet.points} pts {'·'} updated <ViewerTime iso={snippet.updatedAt} /></p>
+                    <p className={`mt-1 flex flex-wrap gap-x-2 text-xs ${muted}`}>
+                        <span className="break-all">/code-review/{snippet.slug}</span>
+                        <span>{snippet.points} pts</span>
+                        <span>updated <ViewerTime iso={snippet.updatedAt} /></span>
+                    </p>
                     <p className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-800 dark:text-gray-200" data-testid="admin-counts">
                         <span><strong>{snippet.findingCount}</strong> {snippet.findingCount === 1 ? 'finding' : 'findings'}</span>
                         <span><strong>{snippet.hintCount}</strong> {snippet.hintCount === 1 ? 'hint' : 'hints'}</span>

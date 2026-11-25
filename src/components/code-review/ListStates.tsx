@@ -28,7 +28,7 @@ export function CardSkeleton() {
 
 export function GridSkeleton({ count = 6, label = 'Loading exercises' }: { count?: number; label?: string }) {
     return (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label={label}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label={label}>
             {Array.from({ length: count }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
     );

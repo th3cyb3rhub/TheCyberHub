@@ -11,7 +11,7 @@ export function ServerSnippetList({ snippets }: { snippets: CrCard[] | null }) {
     if (!snippets) return <GridSkeleton />;
     if (snippets.length === 0) return <p className={`py-10 text-center text-sm ${muted}`}>No exercises are published yet.</p>;
     return (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-testid="cr-grid">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 lg:grid-cols-3" data-testid="cr-grid">
             {snippets.map((s) => <SnippetCard key={s._id} snippet={s} />)}
         </div>
     );

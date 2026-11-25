@@ -14,7 +14,7 @@ export function StatsHeader({ stats }: { stats: CrStats | undefined }) {
     const percent = stats.total > 0 ? Math.min(100, Math.round((v.passed / stats.total) * 100)) : 0;
     return (
         <section aria-label="Your progress" className={`${card} mb-6 p-5`} data-testid="cr-stats">
-            <dl className="grid gap-4 sm:grid-cols-3">
+            <dl className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-3">
                 <div className="flex items-center gap-3">
                     <Target className="h-6 w-6 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                     <div><dt className={`text-xs ${muted}`}>Attempted</dt><dd className="text-xl font-semibold text-gray-900 dark:text-white" data-testid="stat-attempted">{v.attempted} <span className={`text-sm font-normal ${muted}`}>of {stats.total}</span></dd></div>

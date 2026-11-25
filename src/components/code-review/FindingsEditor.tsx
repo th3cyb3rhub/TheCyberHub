@@ -47,7 +47,7 @@ export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, l
                                     <button type="button" className={`${iconBtn} text-red-800 dark:text-red-300`} disabled={disabled} onClick={() => { if (picking) onPick(null); onChange(rows.filter((_, j) => j !== i)); }} aria-label={`Remove finding ${i + 1}`}><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                                 </div>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
                                 <Field id={`finding-${row.key}-start`} label={`Finding ${i + 1} first line`} required error={err(i, 'lineStart')} hint={lineCount > 0 ? `The code has ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}.` : 'Write the code first.'}>
                                     {(p) => <input {...p} inputMode="numeric" value={row.lineStart} onChange={(e) => set(i, { lineStart: e.target.value })} className={`${input} ${err(i, 'lineStart') ? inputError : ''}`} />}
                                 </Field>
@@ -58,7 +58,7 @@ export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, l
                             <Field id={`finding-${row.key}-title`} label={`Finding ${i + 1} title`} error={err(i, 'title')} hint={`Optional, at most ${CR_LIMITS.findingTitle} characters. Members see it only after they find it.`}>
                                 {(p) => <input {...p} maxLength={CR_LIMITS.findingTitle} value={row.title} onChange={(e) => set(i, { title: e.target.value })} className={`${input} ${err(i, 'title') ? inputError : ''}`} />}
                             </Field>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
                                 <Field id={`finding-${row.key}-type`} label={`Finding ${i + 1} vulnerability type`} required error={err(i, 'vulnerabilityType')}>
                                     {(p) => (
                                         <select {...p} value={row.vulnerabilityType} onChange={(e) => set(i, { vulnerabilityType: e.target.value })} className={input}>

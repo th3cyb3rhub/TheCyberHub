@@ -102,7 +102,7 @@ export function SnippetsExplorer({ initialPage, initialStats, initialUpdatedAt }
             )}
 
             <div className="mb-6 space-y-4" role="search" aria-label="Filter exercises">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+                <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
                     <div className="relative sm:col-span-2 lg:col-span-1">
                         <label htmlFor="cr-search" className="sr-only">Search exercises</label>
                         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" aria-hidden="true" />
@@ -176,7 +176,7 @@ export function SnippetsExplorer({ initialPage, initialStats, initialUpdatedAt }
                         {total !== null && total > snippets.length ? `Showing ${snippets.length} of ${total} exercises` : `${snippets.length} ${snippets.length === 1 ? 'exercise' : 'exercises'}`}
                         {effectiveQuery(url.q) && <> matching &ldquo;{effectiveQuery(url.q)}&rdquo;</>}
                     </p>
-                    <div className={`grid gap-5 sm:grid-cols-2 lg:grid-cols-3 ${query.isPlaceholderData ? 'opacity-60' : ''}`} data-testid="cr-grid">
+                    <div className={`grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 lg:grid-cols-3 ${query.isPlaceholderData ? 'opacity-60' : ''}`} data-testid="cr-grid">
                         {snippets.map((s) => <SnippetCard key={s._id} snippet={s} />)}
                     </div>
                     {query.isError && (

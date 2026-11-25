@@ -23,6 +23,8 @@ import { CodeLines, type Band } from './CodeLines';
 import { FindingsEditor } from './FindingsEditor';
 import { HintsEditor } from './HintsEditor';
 
+// A disabled field is dimmed by the shared input style; a moderator reading the answer key needs it at full contrast
+const READ_ONLY_FIELDS = '[&_input:disabled]:opacity-100 [&_input:disabled]:text-gray-900 dark:[&_input:disabled]:text-white [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:text-gray-900 dark:[&_textarea:disabled]:text-white [&_select:disabled]:opacity-100 [&_select:disabled]:text-gray-900 dark:[&_select:disabled]:text-white';
 const mono = `${input} font-mono text-[13px] leading-6`;
 
 /**
@@ -190,11 +192,11 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                 </div>
             )}
 
-            <fieldset disabled={readOnly} className="min-w-0 space-y-6 border-0 p-0">
+            <fieldset disabled={readOnly} className={`min-w-0 space-y-6 border-0 p-0 ${readOnly ? READ_ONLY_FIELDS : ''}`}>
                 <legend className="sr-only">Exercise</legend>
 
                 <Section id="cr-basics" title="Basics" description="What members see in the list and at the top of the exercise.">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                         <Field id="cr-title" label="Title" required error={e.title} hint={`${values.title.trim().length}/${CR_LIMITS.title}. Avoid naming the vulnerability class: it gives the answer away.`} className="sm:col-span-2">
                             {(p) => <input {...p} maxLength={CR_LIMITS.title + 50} value={values.title} onChange={(ev) => set('title', ev.target.value)} className={`${input} ${e.title ? inputError : ''}`} />}
                         </Field>
@@ -256,7 +258,7 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                             <span>Something you typed looks like a script tag or an event handler. The API will strip it when you save, which would change the code and the line numbers.</span>
                         </p>
                     )}
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
                         <Field id="cr-vulnerable-code" label="Vulnerable code" required error={e.vulnerableCode}
                             hint={`${lineCount} ${lineCount === 1 ? 'line' : 'lines'}, ${(bytes / 1024).toFixed(1)} of ${CR_LIMITS.codeBytes / 1024} KB. Line endings and trailing blank lines are normalised when it is saved.`}>
                             {(p) => <textarea {...p} rows={16} wrap="off" spellCheck={false} autoCapitalize="off" autoCorrect="off" value={values.vulnerableCode} onChange={(ev) => set('vulnerableCode', ev.target.value)} className={`${mono} whitespace-pre overflow-x-auto ${e.vulnerableCode ? inputError : ''}`} />}
@@ -301,7 +303,7 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                 </Section>
 
                 <Section id="cr-solution" title="Solution material" description="Shown to a member in the solution, after their first graded attempt. Optional.">
-                    <div className="grid gap-4">
+                    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
                         <Field id="cr-explanation" label="Overview" error={e.explanation} hint={`${values.explanation.length}/${CR_LIMITS.overview}. Markdown or text, shown sanitised.`}>
                             {(p) => <textarea {...p} rows={4} value={values.explanation} onChange={(ev) => set('explanation', ev.target.value)} className={`${input} ${e.explanation ? inputError : ''}`} />}
                         </Field>
@@ -314,7 +316,7 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                         <Field id="cr-fixed-exploited" label="Fixed code against the exploit" error={e.fixedExploitedCode}>
                             {(p) => <textarea {...p} rows={6} wrap="off" spellCheck={false} value={values.fixedExploitedCode} onChange={(ev) => set('fixedExploitedCode', ev.target.value)} className={`${mono} whitespace-pre overflow-x-auto ${e.fixedExploitedCode ? inputError : ''}`} />}
                         </Field>
-                        <fieldset className="grid gap-4 rounded-xl border border-gray-200 p-4 dark:border-neutral-800">
+                        <fieldset className="grid grid-cols-[minmax(0,1fr)] gap-4 rounded-xl border border-gray-200 p-4 dark:border-neutral-800">
                             <legend className="px-1 text-sm font-medium text-gray-800 dark:text-gray-200">Exploit example (optional)</legend>
                             <Field id="cr-ex-title" label="Exploit example title" error={e.exploitExample}>
                                 {(p) => <input {...p} maxLength={CR_LIMITS.findingTitle} value={values.exploitTitle} onChange={(ev) => set('exploitTitle', ev.target.value)} className={input} />}

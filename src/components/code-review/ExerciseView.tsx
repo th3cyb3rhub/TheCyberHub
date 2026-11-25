@@ -156,7 +156,7 @@ export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug:
         <Shell>
             <Header snippet={snippet} canEdit={isCrWriter(user?.role)} />
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[repeat(4,auto)_1fr] lg:items-start">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[repeat(4,auto)_1fr] lg:items-start">
                 {viewer && (
                     <div className="lg:col-start-2">
                         <ProgressPanel viewer={viewer} staff={staff} />

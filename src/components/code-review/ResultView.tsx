@@ -58,7 +58,7 @@ export const ResultView = forwardRef<HTMLDivElement, {
             </div>
             <p className={`mt-2 text-xs ${muted}`}>A pass needs {result.passPercent}% of the best possible score (the line on the bar).</p>
 
-            <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
+            <dl className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-3 text-sm sm:grid-cols-3">
                 <div className="rounded-xl bg-gray-50 p-3 dark:bg-neutral-800/60" data-testid="found-count">
                     <dt className={muted}>Findings found</dt>
                     <dd className="text-lg font-semibold text-gray-900 dark:text-white">{found} of {total}</dd>
