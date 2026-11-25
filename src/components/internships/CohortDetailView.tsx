@@ -134,6 +134,27 @@ function Deadline({ cohort }: { cohort: CohortDetail }) {
     );
 }
 
+/** What a program that is not there (or not published, for this viewer) says */
+export function CohortMissingBody() {
+    return (
+        <>
+            <GraduationCap className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
+            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This program is not available</h1>
+            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
+            <Link href="/internships" className={btnSecondary}>Back to internships</Link>
+        </>
+    );
+}
+
+/** The page for an address that cannot be a program */
+export function CohortMissing() {
+    return (
+        <div className={pageBg}>
+            <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6"><CohortMissingBody /></div>
+        </div>
+    );
+}
+
 export function CohortDetailView({ id, initialCohort = null }: { id: string; initialCohort?: CohortDetail | null }) {
     const { user } = useAuth();
     const query = useInternship(id, initialCohort);
@@ -158,12 +179,7 @@ export function CohortDetailView({ id, initialCohort = null }: { id: string; ini
             <div className={pageBg}>
                 <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6">
                     {missing ? (
-                        <>
-                            <GraduationCap className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-                            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This program is not available</h1>
-                            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
-                            <Link href="/internships" className={btnSecondary}>Back to internships</Link>
-                        </>
+                        <CohortMissingBody />
                     ) : (
                         <ErrorState error={query.error} onRetry={() => void query.refetch()} title="Could not load this program" />
                     )}

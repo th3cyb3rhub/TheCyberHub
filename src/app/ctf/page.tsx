@@ -2,7 +2,7 @@
 // app/ctf/page.tsx
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Flag, Trophy, Target, Users, Star, ChevronRight, ChevronLeft, Lock, Search, Filter, X, Loader2, CheckCircle, Bookmark } from 'lucide-react';
 import Link from 'next/link';
@@ -37,7 +37,7 @@ interface PaginationMeta {
 
 const PAGE_SIZES = [10, 20, 50];
 
-const CTFPage = () => {
+const CTFPageContent = () => {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
@@ -560,5 +560,17 @@ return (
     </div>
     );
 };
+
+// `useSearchParams` needs a boundary of its own: a page that reads the address with none would hand
+// the whole page to the browser (and fail the build) now that no app wide loading screen sits above it
+const CTFPage = () => (
+    <Suspense fallback={(
+        <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
+            <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+    )}>
+        <CTFPageContent />
+    </Suspense>
+);
 
 export default CTFPage;

@@ -41,11 +41,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function CodeReviewExercisePage({ params }: PageProps) {
     const { ref } = await params;
     const result = await fetchPublicSnippet(ref);
-    // A segment that cannot be an exercise reference is a real 404
-    if (result.state === 'invalid') notFound();
-    // A draft is hidden from the server's anonymous request, but staff may open it: the browser asks
-    // again with the token and shows "not available" on its own 404. The same goes for a slow or
-    // failing API. The answer is HTTP 200 on purpose (a 404 here would hide the staff preview), so
-    // the page is marked noindex in `generateMetadata` instead.
+    // A segment that cannot be an exercise reference, an unknown slug and a draft (hidden from the
+    // server's anonymous request) are a real HTTP 404. Staff may still open a draft: `not-found.tsx`
+    // asks again in the browser with their token. A slow or failing API is not "missing": that page is
+    // HTTP 200 and the browser asks again, so a hiccup never tells a search engine the exercise is gone.
+    if (result.state === 'invalid' || result.state === 'missing') notFound();
     return <ExerciseView slug={ref.toLowerCase()} initialSnippet={result.state === 'ok' ? result.snippet : null} initialUpdatedAt={Date.now()} />;
 }

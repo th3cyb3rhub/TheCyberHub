@@ -25,8 +25,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ResultsPage({ params }: PageProps) {
     const { slug } = await params;
     const result = await fetchPublicResults(slug);
-    if (result.state === 'invalid') notFound();
-    // 409 (not ended), 404 (a draft only staff can open) and a failing API are all answered by the
-    // browser, which asks again with the token: the page is HTTP 200 and says what is going on.
+    // An address that cannot be a competition, or results the API does not have for a visitor (an
+    // unknown slug, a draft only staff can open) are a real HTTP 404; `not-found.tsx` asks again in the
+    // browser with the viewer's token. 409 (not ended) and a failing API stay HTTP 200: the browser asks
+    // again and the page says what is going on.
+    if (result.state === 'invalid' || result.state === 'missing') notFound();
     return <ResultsView slug={slug.toLowerCase()} initialResults={result.state === 'ok' ? result.results : null} initialUpdatedAt={result.state === 'ok' ? result.fetchedAt : 0} />;
 }

@@ -3,17 +3,11 @@ import { API_URL } from '@/lib/api';
 import { SITE_URL } from '@/lib/events/site';
 import type { CtfCompetition, CtfCompetitionCard, CtfListFilter, CtfPage, CtfResults } from '@/types/ctf';
 import { CTF_CACHE_TAG, LIST_FILTER_QUERY } from './constants';
+import { isCtfSlug } from './slug';
 import { ctfCardSchema, ctfDetailSchema, ctfResultsSchema } from './schemas';
 
 export { SITE_URL };
-
-/**
- * What the API accepts for a competition slug: 1 to 80 characters of a to z, 0 to 9
- * and hyphens. Anything else can never be a competition: a real 404 without asking the API.
- */
-const SLUG = /^[a-z0-9-]{1,80}$/;
-
-export const isCtfSlug = (value: string): boolean => SLUG.test(value.toLowerCase());
+export { isCtfSlug };
 
 const TIMEOUT_MS = 5000;
 

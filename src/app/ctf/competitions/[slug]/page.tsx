@@ -21,12 +21,11 @@ export default async function CompetitionPage({ params, searchParams }: PageProp
     const { slug } = await params;
     const { tab } = await searchParams;
     const result = await fetchPublicCompetition(slug);
-    // A segment that cannot be a slug is a real 404
-    if (result.state === 'invalid') notFound();
-    // A draft is hidden from the server's anonymous request, but staff may open it: the browser asks
-    // again with the token and shows "not available" on its own 404. The same goes for a slow or
-    // failing API. The answer is HTTP 200 on purpose (a 404 here would hide the staff preview), so
-    // the page is marked noindex in `generateMetadata` instead.
+    // A segment that cannot be a slug, an unknown slug and a draft (hidden from the server's anonymous
+    // request) are a real HTTP 404. Staff may still open a draft: `not-found.tsx` asks again in the
+    // browser with their token. A slow or failing API is not "missing": that page is HTTP 200 and the
+    // browser asks again, so a hiccup never tells a search engine the competition is gone.
+    if (result.state === 'invalid' || result.state === 'missing') notFound();
     return (
         <CompetitionView
             slug={slug.toLowerCase()}

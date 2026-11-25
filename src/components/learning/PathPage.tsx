@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
 import StructuredData from '@/components/StructuredData';
 import { pathHref } from '@/lib/learning/display';
 import { fetchPublicPath, pathDescription, pathJsonLd, SITE_URL } from '@/lib/learning/server';
@@ -32,7 +32,7 @@ export async function PathPage({ kind, slug }: { kind: PathKind; slug: string })
     const result = await fetchPublicPath(slug);
     const path = result.state === 'ok' ? result.data : null;
     // A roadmap opened under the learning-paths address (or the other way round) moves to its own page
-    if (path && path.kind !== kind) redirect(pathHref(path.kind, path.slug));
+    if (path?.kind && path.kind !== kind) permanentRedirect(pathHref(path.kind, path.slug));
     return (
         <>
             {path && <StructuredData data={JSON.parse(JSON.stringify(pathJsonLd(path)))} />}

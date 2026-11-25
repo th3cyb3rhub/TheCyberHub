@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Shield, CheckCircle, XCircle, Loader2, ArrowRight, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
     const searchParams = useSearchParams();
     const token = searchParams.get('token') || '';
     const { verifyEmail, user, requestVerification } = useAuth();
@@ -132,5 +132,18 @@ export default function VerifyEmailPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// `useSearchParams` needs a boundary of its own, so the rest of the page can be rendered ahead of it
+export default function VerifyEmailPage() {
+    return (
+        <Suspense fallback={(
+            <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
+                <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        )}>
+            <VerifyEmailContent />
+        </Suspense>
     );
 }

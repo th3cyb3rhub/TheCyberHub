@@ -48,6 +48,11 @@ All routes live under `src/app/`. Each route directory contains:
 - `layout.tsx` -- optional layout wrapper
 - `loading.tsx` -- loading UI (Suspense boundary)
 - `error.tsx` -- error boundary
+- `not-found.tsx` -- what `notFound()` shows; a detail page that a staff member may still open asks again in the browser here
+
+A `loading.tsx` wraps its page, and every page below it, in a Suspense boundary, so the response starts as HTTP 200 and `notFound()` or `permanentRedirect()` can no longer change the status. Pages that answer with a real 404 or 308 (the job, lab, exercise, competition, program and company pages) therefore have no `loading.tsx` at their segment or any segment above it, including `src/app/`; `src/app/__tests__/httpStatus.test.ts` keeps it that way.
+
+The root layout renders real HTML on the server (there is no "mounted" gate). The theme is set on `<html>` before the first paint by a small inline script (`themeInitScript` in `src/lib/theme.ts`), which the policy allows like the framework's own inline bootstrap. Anything that only exists in a browser (`window`, `localStorage`, DOMPurify) must not change the first render: use `useSyncExternalStore` or an effect, or `useSanitizer` for HTML.
 
 Key routes: `/auth`, `/blog`, `/forums`, `/feed`, `/ctf`, `/challenges`, `/events`, `/jobs`, `/mentorship`, `/labs`, `/code-review`, `/tools`, `/cheatsheets`, `/admin`.
 

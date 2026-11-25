@@ -167,6 +167,20 @@ export function ResultsBody({ results }: { results: CtfResults }) {
     );
 }
 
+/** What results that are not there (or not published, for this viewer) say */
+export function ResultsMissing() {
+    return (
+        <Shell>
+            <div className="mx-auto max-w-xl py-10 text-center">
+                <Trophy className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
+                <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">These results are not available</h1>
+                <p className={`mb-6 text-sm ${muted}`}>The competition may have been removed, or it is not published.</p>
+                <Link href="/ctf/competitions" className={btnSecondary}>All competitions</Link>
+            </div>
+        </Shell>
+    );
+}
+
 interface Props { slug: string; initialResults: CtfResults | null; initialUpdatedAt?: number }
 
 /** The results of a competition. Before the end the API answers 409: say so, and say when. */
@@ -204,17 +218,6 @@ export function ResultsView({ slug, initialResults, initialUpdatedAt }: Props) {
             </Shell>
         );
     }
-    if (status === 404) {
-        return (
-            <Shell>
-                <div className="mx-auto max-w-xl py-10 text-center">
-                    <Trophy className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-                    <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">These results are not available</h1>
-                    <p className={`mb-6 text-sm ${muted}`}>The competition may have been removed, or it is not published.</p>
-                    <Link href="/ctf/competitions" className={btnSecondary}>All competitions</Link>
-                </div>
-            </Shell>
-        );
-    }
+    if (status === 404) return <ResultsMissing />;
     return <Shell>{back}<ErrorState error={query.error} onRetry={() => void query.refetch()} title="Could not load the results" /></Shell>;
 }
