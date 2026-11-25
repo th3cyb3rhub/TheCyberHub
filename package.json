@@ -15,7 +15,8 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ssr": "node scripts/e2e-ssr.mjs"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.12",

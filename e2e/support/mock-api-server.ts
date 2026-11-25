@@ -17,6 +17,12 @@ import { mockLabsApi, VISITOR as LABS_VISITOR } from '../labs-mocks';
  * Old job address: `OLD_JOB_SLUG` answers as the previous slug of the first job.
  */
 
+// Only this machine can reach it, and only the app's own origins get a CORS answer
+const HOST = '127.0.0.1';
+const ALLOWED_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const allowOrigin = (origin: string | undefined): Record<string, string> =>
+    origin && ALLOWED_ORIGIN.test(origin) ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {};
+
 export const OLD_JOB_SLUG = 'old-pentester-slug';
 
 export const EVENT_SLUG = 'winter-ctf-night';
@@ -90,13 +96,13 @@ export async function startMockApi(port = 0): Promise<{ url: string; port: numbe
         let answered = false;
         const send = (status: number, body: unknown, headers: Record<string, string> = {}) => {
             answered = true;
-            res.writeHead(status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', ...headers });
+            res.writeHead(status, { 'content-type': 'application/json', ...allowOrigin(req.headers.origin), ...headers });
             res.end(typeof body === 'string' ? body : JSON.stringify(body));
         };
         // The browser asks before it calls from another origin: allow it, for every path
         if (req.method === 'OPTIONS') {
             res.writeHead(204, {
-                'access-control-allow-origin': String(req.headers.origin || '*'),
+                ...allowOrigin(req.headers.origin),
                 'access-control-allow-credentials': 'true',
                 'access-control-allow-headers': 'content-type, authorization',
                 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
@@ -131,10 +137,10 @@ export async function startMockApi(port = 0): Promise<{ url: string; port: numbe
         try { await first(route(others)); } catch { if (!answered) send(500, { success: false }); }
         if (!answered) send(500, { success: false });
     });
-    await new Promise<void>((resolve) => server.listen(port, resolve));
+    await new Promise<void>((resolve) => server.listen(port, HOST, resolve));
     const bound = (server.address() as AddressInfo).port;
     return {
-        url: `http://localhost:${bound}`,
+        url: `http://${HOST}:${bound}`,
         port: bound,
         close: () => new Promise<void>((resolve) => server.close(() => resolve())),
     };

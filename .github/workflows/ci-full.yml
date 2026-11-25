@@ -9,6 +9,10 @@ on:
         description: Run the Playwright e2e suite
         type: boolean
         default: false
+      run_e2e_ssr:
+        description: Run the server rendered shell spec against the stand-in API
+        type: boolean
+        default: false
       target:
         description: Build and push the image, then deploy to this environment
         type: choice
@@ -99,6 +103,37 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-ssr:
+    name: E2E Server Rendered Shell
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_e2e_ssr }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Builds the app against the stand-in API (e2e/support/mock-api-server.ts), starts it,
+      # runs e2e/ssr-shell.spec.ts with the server-data checks on and stops it.
+      - name: Run the server rendered shell spec
+        run: npm run test:e2e:ssr
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-ssr
           path: playwright-report/
           retention-days: 7
 
