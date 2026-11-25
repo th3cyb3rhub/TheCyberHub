@@ -52,8 +52,11 @@ export const createQueryClient = () => new QueryClient({
  */
 export const queryKeys = {
     // Auth
-    user: ['user'] as const,
-    session: ['session'] as const,
+    // The signed-in account. The key carries the account id (read from the access token), so one
+    // account's cached profile is never served to another.
+    auth: {
+        me: (userId: string | null) => ['auth', 'me', userId ?? 'unknown'] as const,
+    },
     
     // Users
     users: {

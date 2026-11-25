@@ -1,144 +1,60 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { API_URL } from '@/lib/api';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { ApiError, fetchApi } from '@/lib/api';
+import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
+import { authErrorMessage } from '@/lib/authErrors';
+import { onSessionEnded, stashSessionNotice } from '@/lib/authSession';
+import { takePending2fa } from '@/lib/pending2fa';
 import { unsubscribeThisDevice } from '@/lib/push';
+import { signInHref } from '@/lib/safeRedirect';
+import { legacyRefreshToken, tokenStore, tokenUserId } from '@/lib/tokenStore';
+import { meKey, useMe } from '@/hooks/queries/useMe';
+import type { AuthUser } from '@/types/auth';
 
-interface User {
-    id: string;
-    name: string;
-    username: string;
-    email: string;
-    avatar: string | null;
-    role: string;
-    provider?: 'local' | 'google' | 'github';
-    isVerified?: boolean;
-    organization?: {
-        name?: string;
-        domain?: string;
-        website?: string;
-        logo?: string;
-        description?: string;
-    };
-    stats?: {
-        eventsAttended: number;
-        challengesSolved: number;
-        points: number;
-    };
-    bookmarks?: {
-        roadmaps: string[];
-        cheatsheets: string[];
-        tools: string[];
-    };
-    progress?: {
-        roadmaps: {
-            roadmapId: string;
-            completedSteps: string[];
-            percent: number;
-        }[];
-    };
-    createdAt?: string;
-    twoFactorAuth?: {
-        enabled: boolean;
-    };
+export type { AuthUser };
+export type TwoFactorChallenge = { requires2FA: true; tempToken: string };
+
+interface ProfileUpdate {
+    name?: string;
+    username?: string;
+    avatar?: string;
     bio?: string | null;
     location?: string | null;
     skills?: string[];
-    socialLinks?: {
-        website?: string | null;
-        github?: string | null;
-        twitter?: string | null;
-        linkedin?: string | null;
-    };
-    interests?: string[];
-    experienceLevel?: string | null;
-    goal?: string | null;
-    onboarding?: {
-        completedAt: string | null;
-        skippedAt: string | null;
-    };
+    socialLinks?: { website?: string | null; github?: string | null; twitter?: string | null; linkedin?: string | null };
 }
 
-export type TwoFactorChallenge = { requires2FA: true; tempToken: string };
-
 interface AuthContextType {
-    user: User | null;
+    user: AuthUser | null;
+    /** The access token, kept current when the request layer renews it */
     token: string | null;
     loading: boolean;
     login: (email: string, password: string) => Promise<{ requires2FA: boolean; tempToken: string } | void>;
     verify2faLogin: (tempToken: string, code: string) => Promise<void>;
     register: (name: string, email: string, password: string, username?: string) => Promise<void>;
-    logout: () => void;
+    /**
+     * Ends the session on the server, then clears everything this browser holds for it. With
+     * `allDevices` it ends every session and clears nothing until the server has confirmed.
+     */
+    logout: (options?: { allDevices?: boolean }) => Promise<void>;
     /** Re-read the signed-in user from the API (after something changed on the server) */
     refreshUser: () => Promise<void>;
-    updateProfile: (data: {
-        name?: string;
-        username?: string;
-        avatar?: string;
-        bio?: string | null;
-        location?: string | null;
-        skills?: string[];
-        socialLinks?: { website?: string | null; github?: string | null; twitter?: string | null; linkedin?: string | null };
-    }) => Promise<void>;
-    updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+    updateProfile: (data: ProfileUpdate) => Promise<void>;
+    /** Resolves with how many other devices were signed out by the change */
+    updatePassword: (currentPassword: string, newPassword: string) => Promise<{ revokedSessions: number }>;
     forgotPassword: (email: string) => Promise<string>;
     resetPassword: (token: string, password: string) => Promise<void>;
     requestVerification: () => Promise<string>;
     verifyEmail: (token: string) => Promise<void>;
     loginWithGoogle: (idToken: string) => Promise<TwoFactorChallenge | void>;
     loginWithGithub: (code: string) => Promise<TwoFactorChallenge | void>;
-    updateBookmarks: (data: Partial<NonNullable<User['bookmarks']>>) => Promise<void>;
+    updateBookmarks: (data: Partial<NonNullable<AuthUser['bookmarks']>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Helper to check if we're on the client with working localStorage
-const isClient = (): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-        // Check if localStorage exists AND has proper methods (functions)
-        // This handles the case where Node.js --localstorage-file flag creates a broken localStorage
-        const storage = window.localStorage;
-        if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
-            return false;
-        }
-        // Test if localStorage is actually functional
-        const testKey = '__storage_test__';
-        storage.setItem(testKey, testKey);
-        storage.removeItem(testKey);
-        return true;
-    } catch {
-        return false;
-    }
-};
-
-// Helper to safely access localStorage (client-side only)
-const safeLocalStorage = {
-    getItem: (key: string): string | null => {
-        if (!isClient()) return null;
-        try {
-            return window.localStorage.getItem(key);
-        } catch {
-            return null;
-        }
-    },
-    setItem: (key: string, value: string): void => {
-        if (!isClient()) return;
-        try {
-            window.localStorage.setItem(key, value);
-        } catch {
-            // Ignore storage errors (e.g., quota exceeded, private browsing)
-        }
-    },
-    removeItem: (key: string): void => {
-        if (!isClient()) return;
-        try {
-            window.localStorage.removeItem(key);
-        } catch {
-            // Ignore storage errors
-        }
-    },
-};
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -148,357 +64,191 @@ export const useAuth = () => {
     return context;
 };
 
+/** How long a sign-out waits for the server before this browser signs out anyway */
+const LOGOUT_WAIT_MS = 5000;
+
+const noopSubscribe = () => () => {};
+
+/** A call to the API that does not carry the access token (sign-in, reset, the second factor): its errors never renew or sign out. */
+async function publicCall(endpoint: string, body: unknown, fallback: string) {
+    try {
+        return await fetchApi(endpoint, { method: 'POST', requireAuth: false, body: JSON.stringify(body) });
+    } catch (err) {
+        throw withMessage(err, fallback);
+    }
+}
+
+/** A call made as the signed-in member. */
+async function memberCall(endpoint: string, method: string, body: unknown, fallback: string) {
+    try {
+        return await fetchApi(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    } catch (err) {
+        throw withMessage(err, fallback);
+    }
+}
+
+/** The same error with the text a form should show (a field problem first, a rate limit with its wait). */
+function withMessage(err: unknown, fallback: string): unknown {
+    if (!(err instanceof ApiError)) return err;
+    return new ApiError(authErrorMessage(err, fallback), err.status, err.code, err.details, err.meta);
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [mounted, setMounted] = useState(false);
+    const queryClient = useQueryClient();
+    const router = useRouter();
 
-    // Mark as mounted on client
+    // Before hydration the server and the first client render both say "not known yet"
+    const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+    const token = useSyncExternalStore(tokenStore.subscribe, tokenStore.get, () => null);
+    const me = useMe(token);
+
+    const user = token ? me.data ?? null : null;
+    const loading = !hydrated || (!!token && me.isPending);
+
+    const userRef = useRef(user);
+    userRef.current = user;
+    const signingOut = useRef(false);
+
+    /** Everything this browser keeps for the session, apart from the cookie the server clears */
+    const clearClientState = useCallback(() => {
+        tokenStore.remove();
+        legacyRefreshToken.remove();
+        takePending2fa();
+        queryClient.clear();
+    }, [queryClient]);
+
+    // The API says this session is over (signed out from another device, a ban, an old token) or a
+    // refresh failed: clear, and take a member who was signed in to sign-in, back here afterwards
+    useEffect(() => onSessionEnded((reason) => {
+        if (signingOut.current) return;
+        const hadUser = userRef.current !== null;
+        clearClientState();
+        if (!hadUser || window.location.pathname.startsWith('/auth')) return;
+        stashSessionNotice(reason);
+        router.replace(signInHref(window.location.pathname + window.location.search));
+    }), [clearClientState, router]);
+
+    // Another tab signed out or signed in as someone else: nothing cached for the previous account stays
+    const identity = token ? tokenUserId(token) ?? 'unknown' : null;
+    const lastIdentity = useRef<string | null>(null);
     useEffect(() => {
-        setMounted(true);
-    }, []);
+        if (lastIdentity.current !== null && lastIdentity.current !== identity) queryClient.clear();
+        lastIdentity.current = identity;
+    }, [identity, queryClient]);
 
-    // Load token from localStorage on mount (client-side only)
-    useEffect(() => {
-        if (!mounted) return;
+    /** Stores the session a sign-in answered with. The previous account's cache goes first. */
+    const startSession = useCallback((result: { token?: string; data?: AuthUser }) => {
+        if (!result.token) throw new Error('The server did not return a session');
+        queryClient.clear();
+        if (result.data) queryClient.setQueryData(meKey(result.token), result.data);
+        tokenStore.set(result.token);
+        legacyRefreshToken.remove();
+    }, [queryClient]);
 
-        const savedToken = safeLocalStorage.getItem('token');
-        if (savedToken) {
-            setToken(savedToken);
-            fetchUser(savedToken);
-        } else {
-            setLoading(false);
-        }
-    }, [mounted]);
-
-    const fetchUser = async (authToken: string) => {
-        try {
-            const response = await fetch(`${API_URL}/api/auth/me`, {
-                headers: { Authorization: `Bearer ${authToken}` },
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setUser(data.data);
-            } else {
-                // Token invalid, clear it
-                safeLocalStorage.removeItem('token');
-                setToken(null);
-            }
-        } catch (error) {
-            console.error('Failed to fetch user:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const setUser = useCallback((data: AuthUser | undefined) => {
+        if (data) queryClient.setQueryData(meKey(tokenStore.get()), data);
+    }, [queryClient]);
 
     const login = async (email: string, password: string): Promise<{ requires2FA: boolean; tempToken: string } | void> => {
-        const response = await fetch(`${API_URL}/api/auth/login`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            // Handle nested error format: {error: {code, message, details}}
-            const errorObj = data.error || data;
-            const errorMessage = errorObj.details?.[0]?.message || errorObj.message || 'Login failed';
-            throw new Error(errorMessage);
-        }
-
-        if (data.requires2FA) {
-            return { requires2FA: true, tempToken: data.tempToken };
-        }
-
-        safeLocalStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.data);
+        const result = await publicCall(API_ENDPOINTS.AUTH.LOGIN, { email, password }, 'Login failed');
+        if (result.requires2FA) return { requires2FA: true, tempToken: result.tempToken };
+        startSession(result);
     };
 
     const verify2faLogin = async (tempToken: string, code: string) => {
-        const response = await fetch(`${API_URL}/api/auth/2fa/verify`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tempToken, code }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            const errorObj = data.error || data;
-            const errorMessage = errorObj.details?.[0]?.message || errorObj.message || '2FA Verification failed';
-            throw new Error(errorMessage);
-        }
-
-        safeLocalStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.data);
+        startSession(await publicCall(API_ENDPOINTS.AUTH.TWO_FACTOR_VERIFY, { tempToken, code }, '2FA Verification failed'));
     };
 
     const register = async (name: string, email: string, password: string, username?: string) => {
-        const response = await fetch(`${API_URL}/api/auth/register`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, ...(username && { username }) }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            // Handle nested error format: {error: {code, message, details}}
-            const errorObj = data.error || data;
-            const errorMessage = errorObj.details?.[0]?.message || errorObj.message || 'Registration failed';
-            throw new Error(errorMessage);
-        }
-
-        safeLocalStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.data);
+        startSession(await publicCall(API_ENDPOINTS.AUTH.REGISTER, { name, email, password, ...(username && { username }) }, 'Registration failed'));
     };
 
-    // Unlike fetchUser this never signs anyone out: a failed refresh just keeps what we have
-    const refreshUser = async () => {
-        if (!token) return;
-        try {
-            const response = await fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-            if (response.ok) setUser((await response.json()).data);
-        } catch {
-            // Keep the current user
-        }
+    const oauth = async (endpoint: string, body: Record<string, string>, fallback: string): Promise<TwoFactorChallenge | void> => {
+        const result = await publicCall(endpoint, body, fallback);
+        if (result.requires2FA) return { requires2FA: true, tempToken: result.tempToken };
+        startSession(result);
     };
 
-    const logout = () => {
-        // This browser must stop getting the member's pushes. Started before the token goes, with that token, and never allowed to block or break signing out.
-        if (token) {
+    const loginWithGoogle = (idToken: string) => oauth(API_ENDPOINTS.AUTH.OAUTH_GOOGLE, { idToken }, 'Google login failed');
+    const loginWithGithub = (code: string) => oauth(API_ENDPOINTS.AUTH.OAUTH_GITHUB, { code }, 'GitHub login failed');
+
+    const logout = async (options?: { allDevices?: boolean }) => {
+        const current = tokenStore.get();
+        const allDevices = !!options?.allDevices;
+        if (current) {
+            // This browser must stop getting the member's pushes. Started before the token goes, with that token, and never allowed to block or break signing out.
             try {
-                void Promise.resolve(unsubscribeThisDevice(token)).catch(() => { /* best effort */ });
+                void Promise.resolve(unsubscribeThisDevice(current)).catch(() => { /* best effort */ });
             } catch {
                 // Nothing to do
             }
+            signingOut.current = true;
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+                const request = fetchApi(API_ENDPOINTS.AUTH.LOGOUT, { method: 'POST', body: JSON.stringify(allDevices ? { allDevices: true } : {}) });
+                const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Sign out timed out')), LOGOUT_WAIT_MS); });
+                await Promise.race([request, timeout]);
+            } catch (err) {
+                // Signing out of one device always completes here: a session that is already gone, or an
+                // API that cannot be reached, must not keep the member signed in. "Everywhere" is a promise
+                // about other devices, so it is only kept when the server confirmed it.
+                if (allDevices) {
+                    signingOut.current = false;
+                    throw withMessage(err, 'Could not sign out of all devices. Please try again.');
+                }
+            } finally {
+                clearTimeout(timer);
+            }
         }
-        safeLocalStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
+        clearClientState();
+        signingOut.current = false;
     };
 
-    const updateProfile = async (data: {
-        name?: string;
-        username?: string;
-        avatar?: string;
-        bio?: string | null;
-        location?: string | null;
-        skills?: string[];
-        socialLinks?: { website?: string | null; github?: string | null; twitter?: string | null; linkedin?: string | null };
-    }) => {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(data),
-        });
+    // Unlike a sign-in check this never signs anyone out by itself: a failed read just keeps what we have
+    const refreshUser = async () => {
+        if (!tokenStore.get()) return;
+        await queryClient.invalidateQueries({ queryKey: meKey(tokenStore.get()) });
+    };
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Update failed');
-        }
-
-        setUser(result.data);
+    const updateProfile = async (data: ProfileUpdate) => {
+        setUser((await memberCall(API_ENDPOINTS.AUTH.ME, 'PUT', data, 'Update failed')).data);
     };
 
     const updatePassword = async (currentPassword: string, newPassword: string) => {
-        const response = await fetch(`${API_URL}/api/auth/password`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ currentPassword, newPassword }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Password update failed');
-        }
-
-        // Update token if returned
-        if (result.token) {
-            safeLocalStorage.setItem('token', result.token);
-            setToken(result.token);
-        }
+        const result = await memberCall(API_ENDPOINTS.AUTH.PASSWORD, 'PUT', { currentPassword, newPassword }, 'Password update failed');
+        // The change ended every other session; this one continues on the new access token the API returns
+        if (result.token) tokenStore.set(result.token);
+        legacyRefreshToken.remove();
+        return { revokedSessions: typeof result.revokedSessions === 'number' ? result.revokedSessions : 0 };
     };
 
-    const forgotPassword = async (email: string): Promise<string> => {
-        const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Request failed');
-        }
-
-        return result.message;
-    };
+    const forgotPassword = async (email: string): Promise<string> => (await publicCall(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, { email }, 'Request failed')).message;
 
     const resetPassword = async (resetToken: string, password: string) => {
-        const response = await fetch(`${API_URL}/api/auth/reset-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: resetToken, password }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Reset failed');
-        }
-
-        // Auto-login after reset
-        if (result.token) {
-            safeLocalStorage.setItem('token', result.token);
-            setToken(result.token);
-            await fetchUser(result.token);
-        }
+        const result = await publicCall(API_ENDPOINTS.AUTH.RESET_PASSWORD, { token: resetToken, password }, 'Reset failed');
+        // The reset signs the member in (and ended every other session)
+        if (result.token) startSession(result);
     };
 
-    const requestVerification = async (): Promise<string> => {
-        const response = await fetch(`${API_URL}/api/auth/verify/request`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Verification request failed');
-        }
-
-        return result.message;
-    };
+    const requestVerification = async (): Promise<string> => (await memberCall(API_ENDPOINTS.AUTH.VERIFY_REQUEST, 'POST', {}, 'Verification request failed')).message;
 
     const verifyEmail = async (verificationToken: string) => {
-        const response = await fetch(`${API_URL}/api/auth/verify/confirm`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: verificationToken }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Verification failed');
-        }
-
-        if (result.token) {
-            safeLocalStorage.setItem('token', result.token);
-            setToken(result.token);
-        }
-
-        if (result.data) {
-            setUser(result.data);
-        }
+        const result = await publicCall(API_ENDPOINTS.AUTH.VERIFY_CONFIRM, { token: verificationToken }, 'Verification failed');
+        if (result.token) startSession(result);
     };
 
-    const loginWithGoogle = async (idToken: string): Promise<TwoFactorChallenge | void> => {
-        const response = await fetch(`${API_URL}/api/auth/oauth/google`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
-        });
-
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error?.message || (typeof result.error === 'string' ? result.error : 'Google login failed'));
-        }
-
-        if (result.requires2FA) {
-            return { requires2FA: true, tempToken: result.tempToken };
-        }
-
-        safeLocalStorage.setItem('token', result.token);
-        setToken(result.token);
-        setUser(result.data);
+    const updateBookmarks = async (data: Partial<NonNullable<AuthUser['bookmarks']>>) => {
+        setUser((await memberCall(API_ENDPOINTS.AUTH.BOOKMARKS, 'PUT', data, 'Bookmark update failed')).data);
     };
 
-    const loginWithGithub = async (code: string): Promise<TwoFactorChallenge | void> => {
-        const response = await fetch(`${API_URL}/api/auth/oauth/github`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
-        });
+    const value = useMemo<AuthContextType>(() => ({
+        user, token, loading,
+        login, verify2faLogin, register, logout, refreshUser, updateProfile, updatePassword,
+        forgotPassword, resetPassword, requestVerification, verifyEmail,
+        loginWithGoogle, loginWithGithub, updateBookmarks,
+    // The actions only read the stores and the query client, so they change when those do
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [user, token, loading, queryClient, clearClientState, startSession, setUser]);
 
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error?.message || (typeof result.error === 'string' ? result.error : 'GitHub login failed'));
-        }
-
-        if (result.requires2FA) {
-            return { requires2FA: true, tempToken: result.tempToken };
-        }
-
-        safeLocalStorage.setItem('token', result.token);
-        setToken(result.token);
-        setUser(result.data);
-    };
-
-    const updateBookmarks = async (data: Partial<NonNullable<User['bookmarks']>>) => {
-        const response = await fetch(`${API_URL}/api/auth/bookmarks`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(data),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.error || 'Bookmark update failed');
-        }
-
-        if (result.data) setUser(result.data);
-    };
-
-    return (
-        <AuthContext.Provider value={{
-            user,
-            token,
-            loading,
-            login,
-            verify2faLogin,
-            register,
-            logout,
-            refreshUser,
-            updateProfile,
-            updatePassword,
-            forgotPassword,
-            resetPassword,
-            requestVerification,
-            verifyEmail,
-            loginWithGoogle,
-            loginWithGithub,
-            updateBookmarks,
-        }}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
