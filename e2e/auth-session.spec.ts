@@ -112,6 +112,24 @@ test.describe('Sign out', () => {
         await page.waitForURL(/\/auth\?redirect=%2Fprofile%2Fsessions$/);
     });
 
+    test('signing out with an expired access token still completes, and the sign-out does not start a renewal', async ({ page, isMobile }) => {
+        desktopOnly(isMobile);
+        const api = await mockAuthApi(page);
+        await storeToken(page, 'good-token');
+        await page.goto(`${BASE_URL}/profile/sessions`);
+        await expect(page.getByText('Chrome on macOS')).toBeVisible();
+
+        // The token expires while the page is open; the server still ends the session by the cookie
+        api.state.valid.delete('good-token');
+        await page.getByRole('button', { name: 'User menu' }).hover();
+        await page.getByRole('button', { name: 'Sign Out', exact: true }).click();
+
+        await expect.poll(() => api.calls('/api/auth/logout', 'POST').length).toBe(1);
+        expect(api.calls('/api/auth/logout')[0].token).toBe('good-token');
+        await expect.poll(() => storedToken(page)).toBeNull();
+        expect(api.calls('/api/auth/refresh')).toHaveLength(0);
+    });
+
     test('sign out everywhere asks first, tells the server to end every session, and goes to sign-in', async ({ page }) => {
         const api = await mockAuthApi(page);
         await storeToken(page, 'good-token');
@@ -242,7 +260,7 @@ test.describe('Two-step sign-in', () => {
         // A wrong code is a form error, not a sign-out and not a renewal
         await page.getByLabel('Authenticator Code').fill('000000');
         await page.locator('button[type="submit"]').click();
-        await expect(alertIn(page).filter({ hasText: 'Invalid 2FA code' })).toBeVisible();
+        await expect(alertIn(page).filter({ hasText: 'The two-factor code is invalid' })).toBeVisible();
         expect(api.calls('/api/auth/refresh')).toHaveLength(0);
 
         await page.getByLabel('Authenticator Code').fill('123456');

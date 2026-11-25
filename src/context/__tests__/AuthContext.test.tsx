@@ -134,6 +134,17 @@ describe('signing in', () => {
         expect(window.localStorage.getItem('token')).toBeNull()
     })
 
+    it('shows a wrong second-step code as the server words it, with no renewal and no sign-out', async () => {
+        await signedIn()
+        handler = () => ({ status: 400, body: { success: false, error: { code: 'AUTH_2FA_CODE_INVALID', message: 'The two-factor code is invalid' } } })
+        await act(async () => {
+            await expect(api.verify2faLogin('temp-1', '000000')).rejects.toMatchObject({ status: 400, code: 'AUTH_2FA_CODE_INVALID', message: 'The two-factor code is invalid' })
+        })
+        expect(callsTo('/auth/refresh')).toHaveLength(0)
+        expect(window.localStorage.getItem('token')).toBe('tok-1')
+        expect(nav.replace).not.toHaveBeenCalled()
+    })
+
     it('shows the wait of a rate limited sign-in', async () => {
         mount()
         handler = () => ({ status: 429, body: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many attempts.', meta: { retryAfter: 600 } } } })
@@ -387,6 +398,16 @@ describe('signing out without a usable access token', () => {
         expect(call).toBeDefined()
         expect(call[1]).toMatchObject({ method: 'POST', credentials: 'include' })
         expect((call[1].headers as Record<string, string>).Authorization).toBeUndefined()
+    })
+
+    it('completes with an expired access token and starts no renewal: the server ends the session by the cookie', async () => {
+        await signedIn()
+        handler = (url) => (url.includes('/logout') ? { status: 200, body: { success: true, message: 'Logged out successfully' } } : url.includes('/refresh') ? invalid : meOk)
+        await act(async () => { await api.logout() })
+        expect(callsTo('/api/auth/logout')).toHaveLength(1)
+        expect(callsTo('/api/auth/refresh')).toHaveLength(0)
+        expect(window.localStorage.getItem('token')).toBeNull()
+        expect(screen.getByTestId('user')).toHaveTextContent('none')
     })
 
     it('ends this device even when the server refuses because the token is gone', async () => {

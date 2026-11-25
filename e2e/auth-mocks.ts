@@ -128,13 +128,21 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
         }
         if (path === '/api/auth/2fa/verify') {
             if (state.challengeExpired) return failure(route, 401, 'AUTH_2FA_CHALLENGE_EXPIRED', 'Session expired, sign in again');
-            if (body?.code !== state.code) return failure(route, 401, 'AUTH_TOKEN_INVALID', 'Invalid 2FA code');
+            // A wrong code is a 400 with its own code, never an AUTH_TOKEN_INVALID that could start a renewal
+            if (body?.code !== state.code) return failure(route, 400, 'AUTH_2FA_CODE_INVALID', 'The two-factor code is invalid');
             state.valid.add('login-token');
             return json(route, { success: true, token: 'login-token', refreshToken: 'r', expiresIn: 900, data: state.user });
         }
         if (path.startsWith('/api/auth/oauth/')) {
             state.valid.add('oauth-token');
             return json(route, { success: true, token: 'oauth-token', refreshToken: 'r', expiresIn: 900, data: state.user });
+        }
+
+        // Sign-out works with no, an expired or a junk access token: the session is ended by the refresh
+        // cookie, which is always cleared. Only "everywhere" needs a valid access token (and clears nothing without it).
+        if (path === '/api/auth/logout') {
+            if (body?.allDevices && (!token || !state.valid.has(token))) return failure(route, 401, 'AUTH_TOKEN_INVALID', 'Invalid or expired token');
+            return json(route, { success: true, message: 'Logged out successfully' });
         }
 
         // Everything else is a bearer call
@@ -145,7 +153,6 @@ export async function mockAuthApi(page: Page, overrides: Partial<AuthState> = {}
             if (state.expireAfterMe) state.valid.delete(token);
             return json(route, { success: true, data: state.user });
         }
-        if (path === '/api/auth/logout') return json(route, { success: true, message: 'Logged out' });
         if (path === '/api/auth/sessions' && method === 'GET') return json(route, { success: true, data: state.sessions });
         if (path === '/api/auth/sessions/others' && method === 'DELETE') {
             const revoked = state.sessions.filter((s) => !s.current).length;

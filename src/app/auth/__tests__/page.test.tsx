@@ -51,11 +51,11 @@ describe('the sign-in page', () => {
     it('stays on the code step for a wrong code', async () => {
         const user = userEvent.setup()
         stashPending2fa('temp-1')
-        auth.verify2faLogin.mockRejectedValue(new ApiError('Invalid 2FA code', 401, 'AUTH_TOKEN_INVALID'))
+        auth.verify2faLogin.mockRejectedValue(new ApiError('The two-factor code is invalid', 400, 'AUTH_2FA_CODE_INVALID'))
         render(<AuthPage />)
         await user.type(await screen.findByLabelText('Authenticator Code'), '123456')
         await user.click(screen.getByRole('button', { name: /verify code/i }))
-        expect(await screen.findByRole('alert')).toHaveTextContent('Invalid 2FA code')
+        expect(await screen.findByRole('alert')).toHaveTextContent('The two-factor code is invalid')
         expect(screen.getByLabelText('Authenticator Code')).toBeInTheDocument()
         await act(async () => {})
     })
