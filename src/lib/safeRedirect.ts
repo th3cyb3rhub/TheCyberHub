@@ -42,8 +42,11 @@ export function safeRedirectPath(target: string | null | undefined, fallback = '
     if (decoded === null || isOffSite(decoded)) return fallback;
     if (AUTH_LOOP.test(target) || AUTH_LOOP.test(decoded)) return fallback;
     try {
-        // The final word is the URL parser: whatever it resolves must still be this site
-        if (new URL(target, PROBE_ORIGIN).origin !== PROBE_ORIGIN) return fallback;
+        // The final word is the URL parser: whatever it resolves must still be this site, and must not be
+        // the sign-in page by another spelling (`/./auth`, `/x/../auth`, `/%2e/auth`)
+        const resolved = new URL(target, PROBE_ORIGIN);
+        if (resolved.origin !== PROBE_ORIGIN) return fallback;
+        if (AUTH_LOOP.test(resolved.pathname) || AUTH_LOOP.test(new URL(decoded, PROBE_ORIGIN).pathname)) return fallback;
     } catch {
         return fallback;
     }

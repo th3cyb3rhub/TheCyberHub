@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { legacyRefreshToken, tokenStore, tokenUserId } from '../tokenStore'
 
 const jwt = (claims: Record<string, unknown>) => {
@@ -49,5 +49,42 @@ describe('tokenUserId', () => {
 
     it.each([null, undefined, '', 'not-a-jwt', 'a.b.c', `x.${btoa('{"id":42}')}.y`, `x.${btoa('{}')}.y`])('gives null for %j', (token) => {
         expect(tokenUserId(token as string | null | undefined)).toBeNull()
+    })
+})
+
+describe('when the browser refuses to store the token', () => {
+    afterEach(() => {
+        vi.restoreAllMocks()
+        tokenStore.remove()
+    })
+
+    it('keeps the token in memory so signing in still works, and says so to subscribers', () => {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+        const listener = vi.fn()
+        const stop = tokenStore.subscribe(listener)
+        expect(() => tokenStore.set('mem-token')).not.toThrow()
+        expect(tokenStore.get()).toBe('mem-token')
+        expect(listener).toHaveBeenCalledTimes(1)
+        stop()
+    })
+
+    it('keeps it when reading is blocked as well, and removes it again', () => {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('SecurityError') })
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
+        vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('SecurityError') })
+        tokenStore.set('mem-token')
+        expect(tokenStore.get()).toBe('mem-token')
+        tokenStore.remove()
+        expect(tokenStore.get()).toBeNull()
+    })
+
+    it('goes back to the stored value once storage works again', () => {
+        const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+        tokenStore.set('mem-token')
+        spy.mockRestore()
+        tokenStore.set('stored-token')
+        expect(localStorage.getItem('token')).toBe('stored-token')
+        localStorage.setItem('token', 'changed-in-another-tab')
+        expect(tokenStore.get()).toBe('changed-in-another-tab')
     })
 })

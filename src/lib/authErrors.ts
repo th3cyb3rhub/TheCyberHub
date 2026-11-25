@@ -16,6 +16,8 @@ export const AUTH_CODES = {
     PASSWORD_INCORRECT: 'AUTH_PASSWORD_INCORRECT',
     /** The 2FA code in an enable or disable form is wrong (400, a form error). */
     TWO_FACTOR_CODE_INVALID: 'AUTH_2FA_CODE_INVALID',
+    /** The second sign-in step waited too long, or its challenge is not valid any more (401). Start again from the password. */
+    TWO_FACTOR_CHALLENGE_EXPIRED: 'AUTH_2FA_CHALLENGE_EXPIRED',
     RATE_LIMITED: 'RATE_LIMIT_EXCEEDED',
 } as const;
 

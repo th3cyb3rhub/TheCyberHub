@@ -2,7 +2,7 @@ import { API_URL } from '@/lib/apiBase';
 import { AUTH_CODES, sessionEndReason } from '@/lib/authErrors';
 import { refreshAccessToken } from '@/lib/authRefresh';
 import { endSession } from '@/lib/authSession';
-import { tokenStore } from '@/lib/tokenStore';
+import { tokenStore, tokenUserId } from '@/lib/tokenStore';
 
 export { API_URL, tokenStore };
 
@@ -126,8 +126,13 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
     let failure = response.ok ? null : await failureOf(response);
 
     if (failure?.status === 401 && failure.code === AUTH_CODES.TOKEN_INVALID && requireAuth && bearer) {
-        const outcome = await refreshAccessToken(bearer.replace(/^Bearer /, ''));
+        const stale = bearer.replace(/^Bearer /, '');
+        const outcome = await refreshAccessToken(stale);
         if (outcome === 'refreshed') {
+            // Another account may have signed in here while this call waited: its token must not carry this call
+            const staleId = tokenUserId(stale);
+            const freshId = tokenUserId(tokenStore.get());
+            if (staleId && freshId && staleId !== freshId) throw failure;
             ({ response, bearer } = await send());
             failure = response.ok ? null : await failureOf(response);
         }
@@ -135,7 +140,8 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
 
     if (failure) {
         const reason = bearer ? sessionEndReason(failure.status, failure.code) : null;
-        if (reason) endSession(reason);
+        // Only the session this call was sent with: a newer sign-in is not ended by an old answer
+        if (reason) endSession(reason, bearer!.replace(/^Bearer /, ''));
         throw failure;
     }
 

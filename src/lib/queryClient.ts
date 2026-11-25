@@ -8,6 +8,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { errorStatus } from '@/lib/authErrors';
 
 // ============================================
 // Query Client Configuration
@@ -23,8 +24,14 @@ export const createQueryClient = () => new QueryClient({
             staleTime: 5 * 60 * 1000,
             // Keep unused data in cache for 30 minutes
             gcTime: 30 * 60 * 1000,
-            // Retry failed requests up to 3 times
-            retry: 3,
+            // Retry failed requests up to 3 times, but never an answer the API gave on purpose (4xx: a
+            // refused session, a rate limit): repeating it does not change it, and every repeat of a
+            // refused sign-in would ask for a new access token again
+            retry: (failureCount: number, error: unknown) => {
+                const status = errorStatus(error);
+                if (status !== undefined && status >= 400 && status < 500) return false;
+                return failureCount < 3;
+            },
             // Exponential backoff for retries (1s, 2s, 4s)
             retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
             // Don't refetch on window focus (can be enabled per-query)

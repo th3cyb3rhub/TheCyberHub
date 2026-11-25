@@ -11,11 +11,15 @@ import { legacyRefreshToken, tokenStore } from '@/lib/tokenStore';
  */
 export type RefreshOutcome = 'refreshed' | 'ended' | 'unavailable';
 
-type Attempt = { kind: 'ok' } | { kind: 'race' } | { kind: 'unavailable' } | { kind: 'ended'; reason: SessionEndReason };
+type Attempt = { kind: 'ok' } | { kind: 'superseded' } | { kind: 'race' } | { kind: 'unavailable' } | { kind: 'ended'; reason: SessionEndReason };
 
 /** How long to wait before asking again after the API says another request just rotated the token. */
 export const RACE_RETRY_MS = 200;
 const LOCK_NAME = 'thecyberhub-auth-refresh';
+/** A refresh request that has not answered by then is given up on, so one stalled connection cannot hang the page */
+export const REFRESH_TIMEOUT_MS = 10_000;
+/** Waiting for another tab's refresh (the lock) is bounded too: that tab may be frozen */
+export const LOCK_TIMEOUT_MS = 30_000;
 
 async function readBody(response: Response): Promise<{ token?: string; code?: string }> {
     try {
@@ -29,25 +33,34 @@ async function readBody(response: Response): Promise<{ token?: string; code?: st
     }
 }
 
-async function attempt(): Promise<Attempt> {
+async function attempt(staleToken: string): Promise<Attempt> {
     // The refresh token is an httpOnly cookie that `credentials: 'include'` sends. One that an older
     // version kept in localStorage is sent in the body as a fallback.
     const legacy = legacyRefreshToken.get();
     let response: Response;
+    let body: { token?: string; code?: string };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
     try {
         response = await fetch(`${API_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(legacy ? { refreshToken: legacy } : {}),
+            signal: controller.signal,
         });
+        body = await readBody(response);
     } catch {
         return { kind: 'unavailable' };
+    } finally {
+        clearTimeout(timer);
     }
 
-    const { token, code } = await readBody(response);
+    const { token, code } = body;
     if (response.ok) {
         if (!token) return { kind: 'ended', reason: 'expired' };
+        // The member may have signed out, or in as someone else, while this was in flight: that answer is not theirs to store
+        if (tokenStore.get() !== staleToken) return { kind: 'superseded' };
         tokenStore.set(token);
         // The cookie now carries the session, and the old value was just used up
         legacyRefreshToken.remove();
@@ -67,28 +80,37 @@ async function renew(staleToken: string): Promise<RefreshOutcome> {
     // Another tab may have renewed while this one waited for the lock
     if (tokenStore.get() !== staleToken) return tokenStore.get() ? 'refreshed' : 'ended';
 
-    let result = await attempt();
+    let result = await attempt(staleToken);
     if (result.kind === 'race') {
         // Another request of this browser rotated the token a moment ago and the new one is in the cookie. Do not
         // sign out: take the token that request stored, or ask once more with the cookie as it is now.
         await pause(RACE_RETRY_MS);
         const stored = tokenStore.get();
         if (stored && stored !== staleToken) return 'refreshed';
-        result = await attempt();
+        result = await attempt(staleToken);
         if (result.kind === 'race') return 'unavailable';
     }
     if (result.kind === 'ok') return 'refreshed';
+    if (result.kind === 'superseded') return tokenStore.get() ? 'refreshed' : 'ended';
     if (result.kind === 'ended') {
-        endSession(result.reason);
-        return 'ended';
+        // Only this session is ended: a newer token stored meanwhile is left alone
+        endSession(result.reason, staleToken);
+        return tokenStore.get() ? 'refreshed' : 'ended';
     }
     return 'unavailable';
 }
 
 /** Runs `task` while no other tab of this browser is refreshing (Web Locks), or at once where they do not exist. */
-function exclusive<T>(task: () => Promise<T>): Promise<T> {
+function exclusive(task: () => Promise<RefreshOutcome>): Promise<RefreshOutcome> {
     const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
-    return locks?.request ? (locks.request(LOCK_NAME, task) as unknown as Promise<T>) : task();
+    if (!locks?.request) return task();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LOCK_TIMEOUT_MS);
+    const granted = () => { clearTimeout(timer); return task(); };
+    // An aborted wait (another tab holds the lock for too long) is "could not ask", not a sign-out
+    return (locks.request(LOCK_NAME, { signal: controller.signal }, granted) as unknown as Promise<RefreshOutcome>)
+        .catch(() => 'unavailable' as const)
+        .finally(() => clearTimeout(timer));
 }
 
 let inFlight: Promise<RefreshOutcome> | null = null;

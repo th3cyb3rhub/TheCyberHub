@@ -1,4 +1,4 @@
-import { legacyRefreshToken, tokenStore } from '@/lib/tokenStore';
+import { legacyRefreshToken, tokenStore, tokenUserId } from '@/lib/tokenStore';
 
 /** Why this browser is no longer signed in, when it was not the member's own choice. */
 export type SessionEndReason = 'expired' | 'revoked' | 'legacy' | 'disabled';
@@ -22,9 +22,19 @@ export function onSessionEnded(listener: Listener): () => void {
 /**
  * Drops the local sign-in and tells the app. Several failing requests can report the same end at
  * once; only the first one that finds a token to drop is announced.
+ *
+ * `forToken` is the access token the failing call carried. When the browser holds a different one by
+ * now (the member signed in again meanwhile, here or in another tab), the answer is about a session
+ * that is already gone and the newer one is left alone. A disabled account is the exception when the
+ * newer token belongs to the same account: the ban applies to every session of it.
  */
-export function endSession(reason: SessionEndReason): void {
-    const hadToken = tokenStore.get() !== null;
+export function endSession(reason: SessionEndReason, forToken?: string | null): void {
+    const current = tokenStore.get();
+    if (forToken !== undefined && current !== forToken) {
+        const sameAccount = !!tokenUserId(current) && tokenUserId(current) === tokenUserId(forToken);
+        if (!(reason === 'disabled' && sameAccount)) return;
+    }
+    const hadToken = current !== null;
     tokenStore.remove();
     legacyRefreshToken.remove();
     if (hadToken) listeners.forEach((listener) => listener(reason));

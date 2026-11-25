@@ -9,12 +9,29 @@ function read(key: string): string | null {
     try { return window.localStorage.getItem(key); } catch { return null; }
 }
 
-function write(key: string, value: string | null): void {
-    if (typeof window === 'undefined') return;
+/** Returns false when the browser refused the write (blocked site data, quota). */
+function write(key: string, value: string | null): boolean {
+    if (typeof window === 'undefined') return false;
     try {
         if (value === null) window.localStorage.removeItem(key);
         else window.localStorage.setItem(key, value);
-    } catch { /* quota or private browsing: the token then lives for this page only */ }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Where the token lives when the browser refuses to store it. It then lasts for this page only, and
+ * other tabs do not see it, but signing in still works instead of silently doing nothing.
+ */
+let memoryToken: string | null = null;
+let memoryOnly = false;
+
+function readToken(): string | null {
+    if (memoryOnly) return memoryToken;
+    if (typeof window === 'undefined') return null;
+    try { return window.localStorage.getItem(TOKEN_KEY); } catch { return memoryToken; }
 }
 
 /**
@@ -23,15 +40,17 @@ function write(key: string, value: string | null): void {
  * The refresh token is not kept here: it lives in an httpOnly cookie.
  */
 export const tokenStore = {
-    get: (): string | null => read(TOKEN_KEY),
+    get: readToken,
     set: (token: string): void => {
-        if (read(TOKEN_KEY) === token) return;
-        write(TOKEN_KEY, token);
+        if (readToken() === token) return;
+        memoryOnly = !write(TOKEN_KEY, token);
+        memoryToken = memoryOnly ? token : null;
         notify();
     },
     remove: (): void => {
-        const had = read(TOKEN_KEY) !== null;
-        write(TOKEN_KEY, null);
+        const had = readToken() !== null;
+        memoryToken = null;
+        memoryOnly = !write(TOKEN_KEY, null);
         if (had) notify();
     },
     subscribe: (listener: () => void): (() => void) => {
@@ -50,7 +69,7 @@ export const tokenStore = {
 /** A refresh token that an older version of the site kept in localStorage. Sent once as a fallback, then dropped. */
 export const legacyRefreshToken = {
     get: (): string | null => read(LEGACY_REFRESH_KEY),
-    remove: (): void => write(LEGACY_REFRESH_KEY, null),
+    remove: (): void => { write(LEGACY_REFRESH_KEY, null); },
 };
 
 /**
