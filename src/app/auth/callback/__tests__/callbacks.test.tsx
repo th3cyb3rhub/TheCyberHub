@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -37,7 +38,9 @@ describe('GitHub callback', () => {
         await waitFor(() => expect(screen.getByRole('heading', { name: 'You are signed in' })).toBeInTheDocument())
         rerender(<GitHubCallbackPage />)
         expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/ctf/competitions/x?tab=team')
-        await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/ctf/competitions/x?tab=team'), { timeout: 3000 })
+        await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/ctf/competitions/x?tab=team'), { timeout: 3000 })
+        // Leaving replaces the callback entry, so Back does not return to it
+        expect(nav.push).not.toHaveBeenCalled()
         expect(auth.loginWithGithub).toHaveBeenCalledWith('abc')
     })
 
@@ -49,6 +52,26 @@ describe('GitHub callback', () => {
         rerender(<GitHubCallbackPage />)
         await act(async () => {})
         expect(auth.loginWithGithub).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends the code once under StrictMode, which runs effects twice in development', async () => {
+        nav.search = 'code=abc'
+        auth.loginWithGithub.mockResolvedValue(undefined)
+        render(<StrictMode><GitHubCallbackPage /></StrictMode>)
+        await act(async () => {})
+        expect(auth.loginWithGithub).toHaveBeenCalledTimes(1)
+    })
+
+    it('removes the one-time code from the address bar before calling the API', async () => {
+        window.history.replaceState({ keep: 1 }, '', '/auth/callback/github?code=abc&state=s')
+        nav.search = 'code=abc&state=s'
+        let seenWhenCalled = 'unset'
+        auth.loginWithGithub.mockImplementation(async () => { seenWhenCalled = window.location.search + window.location.hash })
+        render(<GitHubCallbackPage />)
+        await act(async () => {})
+        expect(auth.loginWithGithub).toHaveBeenCalledWith('abc')
+        expect(seenWhenCalled).toBe('')
+        expect(window.location.href).not.toContain('code=')
     })
 
     it('never follows an unsafe remembered page', async () => {
@@ -110,6 +133,29 @@ describe('Google callback', () => {
         rerender(<GoogleCallbackPage />)
         expect(auth.loginWithGoogle).toHaveBeenCalledWith('tok-1')
         expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/blog/write')
+    })
+
+    it('removes the token from the address bar before calling the API, and does not leave a way back to it', async () => {
+        window.history.replaceState({}, '', '/auth/callback/google#id_token=tok-1&state=x')
+        let seenWhenCalled = 'unset'
+        auth.loginWithGoogle.mockImplementation(async () => { seenWhenCalled = window.location.hash + window.location.search; auth.user = member })
+        const { rerender } = render(<GoogleCallbackPage />)
+        await waitFor(() => expect(screen.getByRole('heading', { name: 'You are signed in' })).toBeInTheDocument())
+        expect(auth.loginWithGoogle).toHaveBeenCalledWith('tok-1')
+        expect(seenWhenCalled).toBe('')
+        expect(window.location.href).not.toContain('id_token')
+        rerender(<GoogleCallbackPage />)
+        await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/profile'), { timeout: 3000 })
+        expect(nav.push).not.toHaveBeenCalled()
+    })
+
+    it('sends the token once under StrictMode', async () => {
+        window.history.replaceState({}, '', '/auth/callback/google#id_token=tok-1')
+        auth.loginWithGoogle.mockResolvedValue(undefined)
+        render(<StrictMode><GoogleCallbackPage /></StrictMode>)
+        await act(async () => {})
+        expect(auth.loginWithGoogle).toHaveBeenCalledTimes(1)
+        expect(auth.loginWithGoogle).toHaveBeenCalledWith('tok-1')
     })
 
     it('fails with a way back when Google sent no token', async () => {

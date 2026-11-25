@@ -35,6 +35,8 @@ const GoogleCallbackPage = () => {
         // Google returns the token in the URL hash (implicit flow) or as a credential (One Tap)
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const idToken = hashParams.get('id_token') || hashParams.get('access_token') || searchParams.get('credential');
+        // The token must not stay in the address bar or in history: Back would run this page again with it
+        window.history.replaceState(window.history.state, '', window.location.pathname);
         if (!idToken) return fail('Google did not send a sign-in token.');
 
         loginWithGoogle(idToken).then((challenge) => {
@@ -52,7 +54,7 @@ const GoogleCallbackPage = () => {
     const next = user ? landingPath(user, returnTo) : undefined;
     useEffect(() => {
         if (state !== 'success' || !next) return;
-        const timer = setTimeout(() => router.push(next), 800);
+        const timer = setTimeout(() => router.replace(next), 800);
         return () => clearTimeout(timer);
     }, [state, next, router]);
 

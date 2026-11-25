@@ -29,6 +29,8 @@ const GitHubCallbackPage = () => {
 
         const code = searchParams.get('code');
         const errorParam = searchParams.get('error');
+        // The one-time code must not stay in the address bar or in history
+        window.history.replaceState(window.history.state, '', window.location.pathname);
         if (errorParam) {
             setState('error');
             setError(providerErrorMessage(errorParam));
@@ -58,7 +60,7 @@ const GitHubCallbackPage = () => {
     const next = user ? landingPath(user, returnTo) : undefined;
     useEffect(() => {
         if (state !== 'success' || !next) return;
-        const timer = setTimeout(() => router.push(next), 800);
+        const timer = setTimeout(() => router.replace(next), 800);
         return () => clearTimeout(timer);
     }, [state, next, router]);
 
