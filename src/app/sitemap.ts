@@ -1,6 +1,7 @@
 import { fetchMentorIdsForSitemap } from '@/lib/mentorship/server'
 import { MetadataRoute } from 'next'
 import { fetchSitemapRows } from '@/lib/learning/server'
+import { fetchSitemapSlugs } from '@/lib/codeReview/server'
 import { FALLBACK_TOOLS, toolHref } from '@/lib/tools/registry'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
@@ -330,6 +331,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Approved events: every public one except those that were cancelled
     const eventPages = await eventSitemapEntries(baseUrl)
 
+    // Published code review exercises: their addresses only, no answer text
+    const codeReviewPages: MetadataRoute.Sitemap = (await fetchSitemapSlugs()).map((slug) => ({
+        url: `${baseUrl}/code-review/${encodeURIComponent(slug)}`,
+        lastModified: currentDate,
+        changeFrequency: 'monthly' as const,
+        priority: 0.5,
+    }))
+
     // Approved mentors. Private mentorship pages are never listed.
     const mentorPages: MetadataRoute.Sitemap = (await fetchMentorIdsForSitemap()).map((mentor) => ({
         url: `${baseUrl}/mentorship/mentor/${mentor.id}`,
@@ -350,5 +359,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         ...resources.map((r) => ({ url: `${baseUrl}/resources/${r.slug}`, lastModified: r.updatedAt ? new Date(r.updatedAt) : currentDate, changeFrequency: 'monthly' as const, priority: 0.5 })),
     ]
 
-    return [...staticPages, ...jobPages, ...companyPages, ...eventPages, ...mentorPages, ...learningPages]
+    return [...staticPages, ...jobPages, ...companyPages, ...eventPages, ...codeReviewPages, ...mentorPages, ...learningPages]
 }
