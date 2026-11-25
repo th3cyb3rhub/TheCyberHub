@@ -1,3 +1,8 @@
+/**
+ * API paths that more than one place needs. Only groups some code imports live here: a module that
+ * owns its own paths (a file under `src/lib/api/`) keeps them there, so there is one definition of
+ * each path and none that nothing uses. `AUTH` is the auth contract the client relies on.
+ */
 export const API_ENDPOINTS = {
     AUTH: {
         LOGIN: '/api/auth/login',
@@ -21,11 +26,7 @@ export const API_ENDPOINTS = {
         SESSIONS_OTHERS: '/api/auth/sessions/others',
         SESSION: (id: string) => `/api/auth/sessions/${encodeURIComponent(id)}`,
     },
-    BLOGS: { BASE: '/api/blogs', BY_ID: (id: string) => `/api/blogs/${id}` },
-    CHALLENGES: { BASE: '/api/challenges', BY_SLUG: (slug: string) => `/api/challenges/${slug}`, SUBMIT: (id: string) => `/api/challenges/${id}/submit`, HINT: (id: string) => `/api/challenges/${id}/hint` },
-    EVENTS: { BASE: '/api/events', BY_SLUG: (slug: string) => `/api/events/${slug}`, REGISTER: (id: string) => `/api/events/${id}/register`, UPCOMING: '/api/events/upcoming' },
-    FORUMS: { DISCUSSIONS: '/api/forum/discussions', BY_ID: (id: string) => `/api/forum/discussions/${id}`, REPLIES: (id: string) => `/api/forum/discussions/${id}/replies` },
-    FEED: { BASE: '/api/feed', BY_ID: (id: string) => `/api/feed/${id}`, LIKE: (id: string) => `/api/feed/${id}/like`, COMMENT: (id: string) => `/api/feed/${id}/comments` },
+    CHALLENGES: { BASE: '/api/challenges' },
     JOBS: {
         BASE: '/api/jobs',
         CATEGORY_STATS: '/api/jobs/categories/stats',
@@ -53,13 +54,7 @@ export const API_ENDPOINTS = {
         ADMIN_APPROVE: (id: string) => `/api/companies/admin/${id}/approve`,
         ADMIN_REJECT: (id: string) => `/api/companies/admin/${id}/reject`,
     },
-    USERS: { BASE: '/api/users', BY_USERNAME: (username: string) => `/api/users/${username}`, SEARCH: '/api/users/search' },
-    LEADERBOARD: { BASE: '/api/leaderboard' },
-    BADGES: { BASE: '/api/badges' },
-    SEARCH: { BASE: '/api/search' },
-    NOTIFICATIONS: { BASE: '/api/notifications', UNREAD: '/api/notifications/unread-count', READ: (id: string) => `/api/notifications/${id}/read`, READ_ALL: '/api/notifications/read-all' },
-    BOOKMARKS: { BASE: '/api/bookmarks', COLLECTIONS: '/api/bookmarks/collections' },
-    MENTORSHIP: { BASE: '/api/mentorships', MENTORS: '/api/mentors', REQUESTS: '/api/mentorship-requests', SESSIONS: '/api/sessions' },
+    BOOKMARKS: { BASE: '/api/bookmarks' },
     INTERNSHIPS: {
         BASE: '/api/internships',
         PAST: '/api/internships/past',
@@ -115,9 +110,4 @@ export const API_ENDPOINTS = {
         TEAM_LEAVE: (ref: string) => `/api/ctf-competitions/${ref}/team/leave`,
         TEAM_KICK: (ref: string) => `/api/ctf-competitions/${ref}/team/kick`,
     },
-    LEARNING_PATHS: { BASE: '/api/learning-paths', BY_SLUG: (slug: string) => `/api/learning-paths/${slug}` },
-    UPLOAD: { AVATAR: '/api/upload/avatar', MEDIA: '/api/upload/media' },
-    HEALTH: { BASE: '/api/health' },
-    DAILY_CHALLENGE: { TODAY: '/api/daily-challenge/today', SUBMIT: '/api/daily-challenge/submit', HISTORY: '/api/daily-challenge/history' },
-    STREAK: { BASE: '/api/streak', CHECKIN: '/api/streak/checkin' },
 } as const;

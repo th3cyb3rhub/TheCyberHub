@@ -230,7 +230,7 @@ const AuthPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center px-4 py-20 overflow-hidden">
+        <div className="relative min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center px-4 py-20 overflow-hidden">
             {/* Background elements */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-orange-500/8 rounded-full blur-[150px]" />
