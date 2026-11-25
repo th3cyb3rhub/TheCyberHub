@@ -127,7 +127,10 @@ export function useMyCodeReviewProgress(enabled = true) {
 
 /**
  * The solution. Opening it is recorded by the API, so this is never fetched until `enabled` (the
- * member chose to open it), never refetched on its own, and not retried after a refusal.
+ * member chose to open it), and never again on its own: not on mount, focus or reconnect, and not
+ * retried after a refusal or a dropped connection, because every request is a state change on the
+ * server. Whatever the outcome, the exercise and the progress are refreshed: a request that failed
+ * on the way back may still have been recorded.
  */
 export function useSolution(ref: string, enabled: boolean) {
     const { user } = useAuth();
@@ -137,19 +140,21 @@ export function useSolution(ref: string, enabled: boolean) {
         queryFn: async () => {
             try {
                 const solution = await api.getSolution(ref);
-                // The API now knows it was opened: the viewer block says so
-                void qc.invalidateQueries({ queryKey: [...crKeys.details(), ref] });
+                refreshSnippet(qc);
                 return solution;
             } catch (err) {
-                if (isStaleState(err)) void qc.invalidateQueries({ queryKey: [...crKeys.details(), ref] });
+                refreshSnippet(qc);
                 throw err;
             }
         },
         enabled: enabled && !!ref && !!user,
         staleTime: Infinity,
         gcTime: 5 * 60_000,
+        refetchOnMount: false,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
+        // A failed read is not tried again by mounting the panel again: only the member's own press does
+        retryOnMount: false,
         retry: false,
     });
 }
@@ -185,9 +190,10 @@ export function useAdminSnippet(ref: string, enabled = true) {
 // ---------------------------------------------------------------------------
 
 /** What changes for one exercise and for the member: the cards, the viewer block, progress and totals */
-export function refreshSnippet(qc: QueryClient, ref?: string | null) {
+export function refreshSnippet(qc: QueryClient) {
     void qc.invalidateQueries({ queryKey: crKeys.lists() });
-    void qc.invalidateQueries({ queryKey: ref ? [...crKeys.details(), ref] : crKeys.details() });
+    // Every address of the exercise (its slug or its id) may be cached, so all details are refreshed
+    void qc.invalidateQueries({ queryKey: crKeys.details() });
     void qc.invalidateQueries({ queryKey: ['code-review', 'progress'] });
     void qc.invalidateQueries({ queryKey: ['code-review', 'stats'] });
 }
@@ -223,11 +229,12 @@ export function useSubmitAttempt() {
                 maxScore: result.maxScore || viewer.maxScore,
                 passed: viewer.passed || result.passed,
                 status: viewer.passed || result.passed ? 'passed' : 'in-progress',
-                pointsAvailable: result.pointsAvailable,
+                pointsForfeited: viewer.pointsForfeited || result.pointsForfeited,
+                pointsAvailable: viewer.pointsForfeited || result.pointsForfeited ? 0 : result.pointsAvailable,
                 pointsEarned: viewer.pointsEarned + result.pointsAwarded,
                 solutionUnlocked: true,
             }));
-            refreshSnippet(qc, v.ref);
+            refreshSnippet(qc);
             void qc.invalidateQueries({ queryKey: crKeys.attempts(v.ref, userId) });
             if (result.firstPass || result.newBadges.length > 0) {
                 void qc.invalidateQueries({ queryKey: ['leaderboard'] });
@@ -239,7 +246,7 @@ export function useSubmitAttempt() {
         onError: (err, v) => {
             if (err instanceof ApiError && err.code === 'CR_ATTEMPT_LIMIT') {
                 patchViewer(qc, v.ref, userId, (viewer) => ({ ...viewer, attemptsLeftToday: 0 }));
-            } else if (isStaleState(err)) refreshSnippet(qc, v.ref);
+            } else if (isStaleState(err)) refreshSnippet(qc);
         },
     });
 }
@@ -262,9 +269,9 @@ export function useUnlockHint() {
                 }),
                 (d) => ({ ...d, hints: d.hints.map((h) => (h.order === result.hint.order ? { ...h, unlocked: true, text: result.hint.text } : h)) }),
             );
-            void qc.invalidateQueries({ queryKey: [...crKeys.details(), v.ref] });
+            void qc.invalidateQueries({ queryKey: crKeys.details() });
         },
-        onError: (err, v) => { if (isStaleState(err)) refreshSnippet(qc, v.ref); },
+        onError: (err) => { if (isStaleState(err)) refreshSnippet(qc); },
     });
 }
 

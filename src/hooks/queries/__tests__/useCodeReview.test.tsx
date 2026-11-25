@@ -1,7 +1,8 @@
 import React from 'react'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query'
+import { createQueryClient } from '@/lib/queryClient'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { crErrorMessage } from '@/lib/codeReview/errors'
 import { SLUG, makeAdminSnippet, makeCard, makeDetail, makeResult, makeViewer } from '@/lib/codeReview/__tests__/fixtures'
@@ -263,5 +264,111 @@ describe('staff writes', () => {
         await act(async () => { await result.current.mutateAsync({ ref: SLUG }).catch(() => undefined) })
         expect(spy).toHaveBeenCalledWith({ queryKey: crKeys.all })
         expect(revalidate.refreshPublicCodeReview).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * The calls that change the server (a solution read, a graded attempt, a hint) must not be repeated
+ * by the defaults of the site: three retries, a refetch on reconnect and a refetch on mount. These
+ * run on the real `createQueryClient()`, not a test client that has retries switched off.
+ */
+describe('calls that change the server, on the real query client', () => {
+    const wrapReal = (client: QueryClient) => {
+        const Wrap = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        return Wrap
+    }
+    const solutionBody = { _id: '1', slug: SLUG, title: 'T', findings: [], hints: [], viewer: null, explanation: '', fixedCode: '', exploitedCode: '', fixedExploitedCode: '', exploitExample: null }
+    let real: QueryClient
+    beforeEach(() => { real = createQueryClient() })
+    afterEach(() => { onlineManager.setOnline(true); focusManager.setFocused(undefined); real.clear() })
+
+    it('reads the solution once, even if the request fails', async () => {
+        for (const failure of [new ApiError('boom', 500, 'INTERNAL'), new ApiError('bad shape', 502, 'BAD_RESPONSE'), new TypeError('Failed to fetch')]) {
+            api.getSolution.mockReset()
+            api.getSolution.mockRejectedValue(failure)
+            const client = createQueryClient()
+            const { result, unmount } = renderHook(() => useSolution(SLUG, true), { wrapper: wrapReal(client) })
+            await waitFor(() => expect(result.current.isError).toBe(true))
+            await new Promise((r) => setTimeout(r, 30))
+            expect(api.getSolution).toHaveBeenCalledTimes(1)
+            unmount()
+        }
+    })
+
+    it('does not read it again on focus, on reconnect or on a new mount', async () => {
+        api.getSolution.mockResolvedValue(solutionBody)
+        const { result, unmount } = renderHook(() => useSolution(SLUG, true), { wrapper: wrapReal(real) })
+        await waitFor(() => expect(result.current.data).toBeDefined())
+        expect(api.getSolution).toHaveBeenCalledTimes(1)
+        act(() => { focusManager.setFocused(false); focusManager.setFocused(true) })
+        act(() => { onlineManager.setOnline(false); onlineManager.setOnline(true) })
+        await new Promise((r) => setTimeout(r, 30))
+        expect(api.getSolution).toHaveBeenCalledTimes(1)
+        unmount()
+        const again = renderHook(() => useSolution(SLUG, true), { wrapper: wrapReal(real) })
+        await new Promise((r) => setTimeout(r, 30))
+        expect(again.result.current.data).toBeDefined()
+        expect(api.getSolution).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not read a failed solution again on a new mount or a reconnect either', async () => {
+        api.getSolution.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL'))
+        const first = renderHook(() => useSolution(SLUG, true), { wrapper: wrapReal(real) })
+        await waitFor(() => expect(first.result.current.isError).toBe(true))
+        first.unmount()
+        const second = renderHook(() => useSolution(SLUG, true), { wrapper: wrapReal(real) })
+        act(() => { onlineManager.setOnline(false); onlineManager.setOnline(true) })
+        await new Promise((r) => setTimeout(r, 30))
+        expect(second.result.current.isError).toBe(true)
+        expect(api.getSolution).toHaveBeenCalledTimes(1)
+    })
+
+    it('refreshes the exercise and the progress when the solution request fails, because it may have been recorded', async () => {
+        for (const failure of [new ApiError('boom', 500, 'INTERNAL'), new ApiError('bad shape', 502, 'BAD_RESPONSE'), new TypeError('Failed to fetch')]) {
+            api.getSnippet.mockReset()
+            api.getSnippet.mockResolvedValue(makeDetail())
+            api.getMyProgress.mockResolvedValue({ summary: { attempted: 0, passed: 0, points: 0 }, data: [] })
+            api.getSolution.mockReset()
+            api.getSolution.mockRejectedValue(failure)
+            const client = createQueryClient()
+            const spy = vi.spyOn(client, 'invalidateQueries')
+            // The exercise is on screen first; the member opens the solution afterwards
+            const view = renderHook(({ open }) => ({ detail: useCodeSnippet(SLUG), solution: useSolution(SLUG, open) }), { wrapper: wrapReal(client), initialProps: { open: false } })
+            await waitFor(() => expect(view.result.current.detail.data).toBeDefined())
+            view.rerender({ open: true })
+            await waitFor(() => expect(view.result.current.solution.isError).toBe(true))
+            // the exercise was read once to show it, and again because of the failed request
+            await waitFor(() => expect(api.getSnippet).toHaveBeenCalledTimes(2))
+            const keys = spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey))
+            expect(keys).toContain(JSON.stringify(crKeys.details()))
+            expect(keys).toContain(JSON.stringify(['code-review', 'progress']))
+            view.unmount()
+        }
+    })
+
+    it('sends a graded attempt once even when it fails', async () => {
+        api.submitAttempt.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL'))
+        const { result } = renderHook(() => useSubmitAttempt(), { wrapper: wrapReal(real) })
+        await act(async () => { await result.current.mutateAsync({ ref: SLUG, marks: [{ lineStart: 1, lineEnd: 1 }] }).catch(() => undefined) })
+        await new Promise((r) => setTimeout(r, 30))
+        expect(api.submitAttempt).toHaveBeenCalledTimes(1)
+    })
+
+    it('opens a hint once even when it fails', async () => {
+        api.unlockHint.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL'))
+        const { result } = renderHook(() => useUnlockHint(), { wrapper: wrapReal(real) })
+        await act(async () => { await result.current.mutateAsync({ ref: SLUG, order: 1 }).catch(() => undefined) })
+        await new Promise((r) => setTimeout(r, 30))
+        expect(api.unlockHint).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('forfeited points', () => {
+    it('a probing attempt takes the points off the cached viewer for good', async () => {
+        qc.setQueryData(crKeys.detail(SLUG, 'u1'), makeDetail({ viewer: makeViewer({ pointsAvailable: 25 }) }))
+        api.submitAttempt.mockResolvedValue(makeResult({ pointsForfeited: true, pointsAvailable: 0, falsePositives: 3 }))
+        const { result } = renderHook(() => useSubmitAttempt(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ ref: SLUG, marks: [{ lineStart: 1, lineEnd: 1 }] }) })
+        expect(qc.getQueryData<ReturnType<typeof makeDetail>>(crKeys.detail(SLUG, 'u1'))?.viewer).toMatchObject({ pointsForfeited: true, pointsAvailable: 0 })
     })
 })
