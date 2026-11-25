@@ -62,6 +62,28 @@ for (const size of SIZES) {
                 await noHorizontalScroll(page);
             });
 
+            test('filters by the six broad categories, and an old category in the address is no filter', async ({ page }) => {
+                await open(page, VISITOR, '/code-review');
+                // the counts come from the totals: wait until they are in
+                await expect(page.getByLabel('Category')).toContainText('Injection (1)');
+                const options = await page.getByLabel('Category').locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).textContent));
+                expect(options).toEqual(['All categories', 'Injection (1)', 'Web (1)', 'Cryptography (1)', 'Server side (1)']);
+                await page.getByLabel('Category').selectOption('web');
+                await expect(page).toHaveURL(/category=web/);
+                await expect(page.getByTestId('cr-card')).toHaveCount(1);
+                await expect(page.getByTestId('cr-card')).toContainText('Search results page');
+
+                // a category of the first release is not an error: it simply filters nothing
+                await page.goto('/code-review?category=sqli');
+                await expect(page.getByTestId('cr-card')).toHaveCount(4);
+                await expect(page.getByTestId('cr-error')).toHaveCount(0);
+            });
+
+            test('names the plain list as its canonical address, also when filtered', async ({ page }) => {
+                await open(page, VISITOR, '/code-review?category=web&difficulty=medium');
+                await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/code-review$/);
+            });
+
             test('opens an exercise from its card', async ({ page }) => {
                 await open(page, VISITOR, '/code-review');
                 await page.getByRole('link', { name: 'Login check' }).first().click();
@@ -180,7 +202,7 @@ for (const size of SIZES) {
                 await page.getByTestId('mark-selection').click();
             };
 
-            test('marks, submits and reads the result: matched findings, counts only for the rest, attempts left', async ({ page }) => {
+            test('marks, submits and reads the result before a pass: counts and a verdict per mark, no explanation, attempts left', async ({ page }) => {
                 const state = await open(page, MEMBER, `/code-review/${LOGIN}`);
                 await expect(page.getByTestId('attempts-left')).toContainText('30 graded attempts left today');
                 await mark(page, 4, 5);
@@ -191,18 +213,25 @@ for (const size of SIZES) {
                 await expect(result).toBeVisible();
                 await expect(page.getByTestId('score')).toContainText('7');
                 await expect(page.getByTestId('pass-state')).toContainText(/not passed/i);
-                await expect(page.getByTestId('found-count')).toContainText('1');
+                await expect(page.getByTestId('found-count')).toContainText('1 of 2 found');
                 await expect(page.getByTestId('missed-count')).toContainText('1');
                 await expect(page.getByTestId('false-count')).toContainText('1');
-                // the explanation of what was found, escaped markdown; the missed finding stays secret
-                await expect(result).toContainText('concatenated');
+                await expect(page.getByTestId('false-cost')).toContainText('cost 3 points');
+                // Before a pass nothing explains what was found, and the missed finding stays secret
+                await expect(page.getByTestId('details-locked')).toContainText('unlock when you pass or after you open the solution');
+                await expect(page.getByTestId('finding')).toHaveCount(0);
+                await expect(result).not.toContainText('concatenated');
                 await expect(result).not.toContainText('Timing difference');
+                // the verdict of each mark is there, and the marks that matched are green
+                await expect(page.getByTestId('mark-verdicts').locator('[data-verdict="matched"]')).toHaveCount(1);
+                await expect(line(page, 4)).toHaveAttribute('data-tone', 'match');
+                await expect(line(page, 2)).toHaveAttribute('data-tone', 'mark');
                 await expect(page.getByTestId('attempts-left')).toContainText('29 graded attempts left today');
                 expect(posts(state, '/attempts')[0].body).toEqual({ marks: [{ lineStart: 2, lineEnd: 2 }, { lineStart: 4, lineEnd: 5 }] });
                 await noHorizontalScroll(page);
             });
 
-            test('a pass shows points and the new badge', async ({ page }) => {
+            test('a pass shows points, the new badge and the explanation of each finding found', async ({ page }) => {
                 await open(page, MEMBER, `/code-review/${LOGIN}`);
                 await mark(page, 4, 5);
                 await mark(page, 7);
@@ -210,6 +239,84 @@ for (const size of SIZES) {
                 await expect(page.getByTestId('pass-state')).toContainText(/passed/i);
                 await expect(page.getByTestId('points-line')).toContainText('25');
                 await expect(page.getByTestId('new-badges')).toContainText('First Review');
+                await expect(page.getByTestId('found-count')).toContainText('2 of 2 found');
+                await expect(page.getByTestId('details-locked')).toHaveCount(0);
+                await expect(page.getByTestId('finding')).toHaveCount(2);
+                await expect(page.getByTestId('result')).toContainText('concatenated');
+            });
+
+            test('later attempts pay less: 25% off for each earlier graded attempt', async ({ page }) => {
+                const state = freshState();
+                state.progress[LOGIN] = tried();
+                await open(page, MEMBER, `/code-review/${LOGIN}`, state);
+                // one graded attempt before: a perfect pass pays 75% of 25, rounded
+                await expect(page.getByTestId('points-value')).toContainText('19 points');
+                await expect(page.getByTestId('rules-box')).toContainText('takes 25% off (at most 75%)');
+            });
+
+            test('more wrong marks than findings takes the points away, and says so', async ({ page }) => {
+                await open(page, MEMBER, `/code-review/${LOGIN}`);
+                await mark(page, 1);
+                await mark(page, 2);
+                await mark(page, 3);
+                await page.getByTestId('submit-marks').click();
+                await expect(page.getByTestId('forfeited')).toContainText('3 wrong marks, more than the 2 findings');
+                await expect(page.getByTestId('false-cost')).toContainText('cost 9 points');
+                await expect(page.getByTestId('forfeited-note')).toContainText('its points are gone');
+                await expect(page.getByTestId('points-value')).toContainText('0 points');
+            });
+
+            test('shows the limit of marks and lines as it is used, and stops adding beyond it', async ({ page }) => {
+                await open(page, MEMBER, `/code-review/${LOGIN}`);
+                await expect(page.getByTestId('marks-count')).toContainText('0 of 4 marks, 0 of 6 lines');
+                for (const n of [1, 3, 5, 7]) await mark(page, n);
+                await expect(page.getByTestId('marks-count')).toContainText('4 of 4 marks, 4 of 6 lines');
+                await hit(line(page, 2), size.touch);
+                await expect(page.getByTestId('mark-selection')).toBeDisabled();
+                await expect(page.getByTestId('limit-note')).toContainText('at most 4 marks');
+                await noHorizontalScroll(page);
+            });
+
+            test('follows the limits the API names when it refuses an answer as too broad', async ({ page }) => {
+                const state = await open(page, MEMBER, `/code-review/${LOGIN}`);
+                state.failOnce['POST /attempts'] = { status: 400, code: 'CR_TOO_BROAD', message: 'Too broad', meta: { maxMarks: 3, maxLines: 5 } };
+                await mark(page, 4);
+                await page.getByTestId('submit-marks').click();
+                await expect(page.getByTestId('submit-error')).toContainText('at most 3 marks covering at most 5 lines');
+                await expect(page.getByTestId('marks-count')).toContainText('1 of 3 marks, 1 of 5 lines');
+                await expect(page.getByTestId('mark-item')).toHaveCount(1);
+            });
+
+            test('every line has a spoken number, and the type chooser offers the finding types', async ({ page }) => {
+                await open(page, MEMBER, `/code-review/${LOGIN}`);
+                await expect(page.getByRole('option', { name: /^Line 4:/ })).toBeVisible();
+                await hit(line(page, 4), size.touch);
+                await expect(page.getByTestId('selection-status')).toHaveAttribute('aria-live', 'polite');
+                const values = await page.getByLabel('Type for new marks (optional)').locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value));
+                expect(values).toContain('sqli');
+                expect(values).toContain('race-condition');
+                expect(values).not.toContain('server-side');
+            });
+
+            test('opened by its id every panel keeps working: marks, hint, solution', async ({ page }) => {
+                const id = 'bbbbbbbbbbbbbbbbbbbbbbb1';
+                const state = await open(page, MEMBER, `/code-review/${id}`);
+                await expect(page.getByRole('heading', { name: 'Login check', level: 1 })).toBeVisible();
+                await mark(page, 4, 5);
+                await page.getByTestId('submit-marks').click();
+                await expect(page.getByTestId('result')).toBeVisible();
+                await expect(page.getByTestId('progress-panel')).toContainText('Attempts1');
+                await page.getByRole('button', { name: 'Open hint 1' }).click();
+                await page.getByRole('button', { name: /^Open for/ }).click();
+                await expect(page.getByTestId('cr-hint').nth(0)).toContainText('Opened');
+                await expect(page.getByTestId('points-value')).toContainText('16 points');
+                await page.getByTestId('solution-panel').getByRole('button', { name: 'Show solution' }).click();
+                await page.getByRole('button', { name: 'Open the solution' }).click();
+                await expect(page.getByTestId('solution-body')).toBeVisible();
+                // every call went to the address of the page
+                const own = state.calls.filter((c) => c.method !== 'GET' || c.path.endsWith('/solution') || c.path.endsWith('/attempts'));
+                expect(own.length).toBeGreaterThan(3);
+                for (const c of own) expect(c.path.startsWith(`/${id}`)).toBe(true);
             });
 
             test('opens hints in order after a confirm, showing the cost', async ({ page }) => {
@@ -305,6 +412,12 @@ for (const size of SIZES) {
                 await expect(page.getByRole('link', { name: /Edit exercise/ })).toHaveAttribute('href', `/admin/code-review/${LOGIN}/edit`);
                 await expect(page.getByText('As staff you can read the solution at any time.')).toBeVisible();
             });
+
+            test('staff are told they are not scored, never "0 points"', async ({ page }) => {
+                await open(page, ADMIN, `/code-review/${LOGIN}`);
+                await expect(page.getByTestId('points-value')).toHaveText('Not scored for staff');
+                await expect(page.getByTestId('progress-panel')).not.toContainText(/up to 0 points/i);
+            });
         });
 
         test.describe('admin', () => {
@@ -360,7 +473,8 @@ for (const size of SIZES) {
             test('creates an exercise: code preview, findings picked on it, live validation, then saves', async ({ page }) => {
                 const state = await open(page, ADMIN, '/admin/code-review/new');
                 await expect(page.getByRole('heading', { name: 'New exercise', level: 1 })).toBeVisible();
-                await expect(page.getByTestId('strip-note')).toContainText('seed file');
+                await expect(page.getByTestId('strip-note')).toContainText('stored exactly as written');
+                await expect(page.getByLabel(/^Category/)).toHaveValue('injection');
 
                 await page.getByLabel(/^Title/).fill('Fresh exercise');
                 await page.getByLabel(/^Description/).fill('Find what is wrong in this sample.');
@@ -450,12 +564,80 @@ for (const size of SIZES) {
                 await expect(page.getByTestId('admin-snippet').filter({ hasText: 'Login check, revised' })).toBeVisible();
             });
 
-            test('warns about a script sample in the code and still shows it as text', async ({ page }) => {
+            test('keeps a script sample in the code as written and shows it as text, and warns only for titles and descriptions', async ({ page }) => {
                 await open(page, ADMIN, '/admin/code-review/new');
                 await page.getByLabel(/^Vulnerable code/).fill('el.innerHTML = "<img src=x onerror=alert(1)>"');
-                await expect(page.getByTestId('strip-warning')).toBeVisible();
+                await expect(page.getByTestId('strip-warning')).toHaveCount(0);
                 await expect(page.getByTestId('code-preview')).toContainText('<img src=x onerror=alert(1)>');
                 await expect(page.getByTestId('code-preview').locator('img')).toHaveCount(0);
+                await page.getByLabel(/^Title/).fill('Greeting <script>alert(1)</script>');
+                await expect(page.getByTestId('strip-warning')).toBeVisible();
+            });
+
+            test('the finding type chooser has the 15 types, the category chooser the 6 topics', async ({ page }) => {
+                await open(page, ADMIN, '/admin/code-review/new');
+                await expect(page.getByLabel(/^Category/)).toBeVisible();
+                const categories = await page.getByLabel(/^Category/).locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value));
+                expect(categories).toEqual(['injection', 'web', 'access-control', 'crypto', 'server-side', 'other']);
+                await page.getByRole('button', { name: /Add a finding/ }).click();
+                const types = await page.getByLabel(/vulnerability type/).locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value));
+                expect(types).toHaveLength(15);
+                expect(types).toContain('race-condition');
+            });
+
+            test('keeps the id of a hint when an edited exercise is saved', async ({ page }) => {
+                const state = await open(page, ADMIN, `/admin/code-review/${LOGIN}/edit`);
+                await page.getByLabel(/^Hint 1 text/).fill('Look at how the query is put together.');
+                await page.getByRole('button', { name: /Add a hint/ }).click();
+                await page.getByLabel(/^Hint 3 text/).fill('A hint with no id yet.');
+                await page.getByTestId('save-snippet').click();
+                // The exercise was solved, so the change is held back until it is confirmed
+                await page.getByRole('dialog').getByRole('button', { name: 'Save the change' }).click();
+                await expect(page).toHaveURL(/\/admin\/code-review$/);
+                const puts = state.calls.filter((c) => c.method === 'PUT');
+                const hints = (puts.at(-1)?.body as { hints: { id?: string }[] }).hints;
+                expect(hints[0].id).toBe('hint-login-1');
+                expect(hints[1].id).toBe('hint-login-2');
+                expect(hints[2].id).toBeUndefined();
+            });
+
+            test('asks before changing the key of an exercise members solved, with the numbers, then resends with the confirmation', async ({ page }) => {
+                const state = await open(page, ADMIN, `/admin/code-review/${LOGIN}/edit`);
+                await page.getByTestId('finding-row').nth(1).getByRole('button', { name: /^Remove finding 2/ }).click();
+                await page.getByTestId('save-snippet').click();
+                const dialog = page.getByRole('dialog');
+                await expect(dialog).toContainText('2 members have solved this exercise');
+                await expect(dialog).toContainText('findings go from 2 to 1');
+                expect(state.calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+                await dialog.getByRole('button', { name: 'Keep editing' }).click();
+                await expect(page).toHaveURL(/\/edit$/);
+                await page.getByTestId('save-snippet').click();
+                await page.getByRole('dialog').getByRole('button', { name: 'Save the change' }).click();
+                await expect(page).toHaveURL(/\/admin\/code-review$/);
+                const puts = state.calls.filter((c) => c.method === 'PUT');
+                expect(puts).toHaveLength(3);
+                expect(puts[0].body).not.toHaveProperty('confirmKeyChange');
+                expect(puts.at(-1)?.body).toMatchObject({ confirmKeyChange: true });
+            });
+
+            test('a title change on a solved exercise is saved without a question', async ({ page }) => {
+                const state = await open(page, ADMIN, `/admin/code-review/${LOGIN}/edit`);
+                await page.getByLabel(/^Title/).fill('Login check, reworded');
+                await page.getByTestId('save-snippet').click();
+                await expect(page).toHaveURL(/\/admin\/code-review$/);
+                expect(state.calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+            });
+
+            test('a refused delete offers to unpublish right in the editor', async ({ page }) => {
+                const state = await open(page, ADMIN, `/admin/code-review/${LOGIN}/edit`);
+                await page.getByRole('button', { name: /^Delete exercise/ }).click();
+                await page.getByRole('dialog').getByRole('button', { name: 'Delete exercise' }).click();
+                await expect(page.getByTestId('form-banner')).toContainText(/Unpublish it instead/);
+                // the dialog buttons never save the form behind them
+                expect(state.calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
+                await page.getByTestId('unpublish-now').click();
+                await expect(page).toHaveURL(/\/admin\/code-review$/);
+                expect(posts(state, `/${LOGIN}/unpublish`)).toHaveLength(1);
             });
 
             test('an exercise that does not exist shows an error, not an empty editor', async ({ page }) => {

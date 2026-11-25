@@ -4,8 +4,10 @@ import type { Page, Route } from '@playwright/test';
  * An in-memory stand-in for the code review API, so the e2e specs run without a backend. Reads
  * answer from `state`; writes change it and are pushed to `calls` for assertions. The grading
  * follows the contract rules (10 points a finding, 3 off a false mark, 70% for a wrong type, a pass
- * at 70%, hints cost points, the solution unlocks after the first graded attempt) so the screens
- * are exercised, not the mock. The answer key lives in the mock only, never in a member response.
+ * at 70%, 25% off for every earlier graded attempt up to 75%, hints cost points, the solution unlocks
+ * after the first graded attempt, more false marks than findings forfeit the points, at most
+ * findings + 2 marks over 40% of the lines, and the findings are only explained after a pass, after
+ * the solution was opened, or for staff) so the screens are exercised, not the mock. The answer key lives in the mock only, never in a member response.
  */
 
 export interface Role { id: string; role: 'user' | 'moderator' | 'admin' | 'owner' | null }
@@ -20,12 +22,12 @@ interface FindingRec {
 }
 export interface SnippetRec {
     _id: string; slug: string; title: string; description: string; language: string; category: string; difficulty: 'easy' | 'medium' | 'hard';
-    points: number; tags: string[]; vulnerableCode: string; findings: FindingRec[]; hints: { order: number; text: string; cost: number }[];
+    points: number; tags: string[]; vulnerableCode: string; findings: FindingRec[]; hints: { id: string; order: number; text: string; cost: number }[];
     explanation: string; fixedCode: string; isPublished: boolean; solveCount: number; createdAt: string; updatedAt: string;
 }
 interface ProgressRec {
     attempts: { id: string; score: number; maxScore: number; percent: number; passed: boolean; matched: number; false: number; marks: unknown[]; at: string }[];
-    bestPercent: number; bestScore: number; maxScore: number; passed: boolean; pointsEarned: number; hintsUnlocked: number[]; solutionViewed: boolean;
+    bestPercent: number; bestScore: number; maxScore: number; passed: boolean; pointsEarned: number; hintsUnlocked: number[]; solutionViewed: boolean; forfeited: boolean;
 }
 
 const RANK = { easy: 1, medium: 2, hard: 3 } as const;
@@ -54,7 +56,7 @@ export const XSS_CODE = [
 ].join('\n');
 
 const make = (n: number, over: Partial<SnippetRec> & { slug: string; title: string }): SnippetRec => ({
-    _id: String(n).padStart(24, 'b'), description: `${over.title}: find the vulnerable lines.`, language: 'python', category: 'sqli', difficulty: 'easy', points: 0,
+    _id: String(n).padStart(24, 'b'), description: `${over.title}: find the vulnerable lines.`, language: 'python', category: 'injection', difficulty: 'easy', points: 0,
     tags: ['practice'], vulnerableCode: LOGIN_CODE, findings: [], hints: [], explanation: '', fixedCode: '', isPublished: true, solveCount: 2,
     createdAt: new Date(Date.UTC(2026, 0, 30 - n)).toISOString(), updatedAt: new Date(Date.UTC(2026, 1, 1)).toISOString(), ...over,
 });
@@ -75,22 +77,22 @@ export function freshState(over: Partial<MockState> = {}): MockState {
     return {
         snippets: [
             make(1, {
-                slug: LOGIN, title: 'Login check', difficulty: 'easy', category: 'sqli', tags: ['sqli', 'python'],
+                slug: LOGIN, title: 'Login check', difficulty: 'easy', category: 'injection', tags: ['sqli', 'python'],
                 description: 'This function checks a login against a small database. Review it and mark the lines that are vulnerable.',
                 findings: [
                     { lineStart: 4, lineEnd: 5, title: 'SQL injection', vulnerabilityType: 'sqli', severity: 'critical', cwe: 'CWE-89', owasp: 'A03:2021 - Injection', explanation: 'The name is **concatenated** into the query, so a quote changes its meaning. Use a bound parameter.' },
                     { lineStart: 7, lineEnd: 7, title: 'Timing difference', vulnerabilityType: 'auth', severity: 'low', cwe: null, owasp: null, explanation: 'The password is only checked when a row exists, so the time reveals whether the user exists.' },
                 ],
-                hints: [{ order: 1, text: 'Look at how the **query** is built.', cost: 3 }, { order: 2, text: 'What happens when the name contains a quote?', cost: 5 }],
+                hints: [{ id: 'hint-login-1', order: 1, text: 'Look at how the **query** is built.', cost: 3 }, { id: 'hint-login-2', order: 2, text: 'What happens when the name contains a quote?', cost: 5 }],
                 explanation: 'Two issues: the query is built by concatenation, and the response time leaks which users exist.', fixedCode: 'cursor.execute("SELECT * FROM users WHERE name = ?", (username,))',
             }),
             make(2, {
-                slug: XSS, title: 'Search results page', language: 'javascript', category: 'xss', difficulty: 'medium', tags: ['xss', 'node'], vulnerableCode: XSS_CODE,
+                slug: XSS, title: 'Search results page', language: 'javascript', category: 'web', difficulty: 'medium', tags: ['xss', 'node'], vulnerableCode: XSS_CODE,
                 findings: [{ lineStart: 3, lineEnd: 3, title: 'Reflected XSS', vulnerabilityType: 'xss', severity: 'high', cwe: 'CWE-79', owasp: 'A03:2021 - Injection', explanation: 'The query is written into the page without escaping.' }],
-                hints: [{ order: 1, text: 'Where does `q` end up?', cost: 0 }],
+                hints: [{ id: 'hint-xss-1', order: 1, text: 'Where does `q` end up?', cost: 0 }],
             }),
-            make(3, { slug: 'hardcoded-secret', title: 'Config loader', category: 'secrets', difficulty: 'easy', language: 'go', findings: [{ lineStart: 2, lineEnd: 2, title: 'Hard-coded key', vulnerabilityType: 'secrets', severity: 'high', cwe: 'CWE-798', owasp: null, explanation: 'The key is in the source.' }] }),
-            make(4, { slug: 'path-join', title: 'File download', category: 'path-traversal', difficulty: 'hard', language: 'java', findings: [{ lineStart: 1, lineEnd: 2, title: 'Path traversal', vulnerabilityType: 'path-traversal', severity: 'high', cwe: 'CWE-22', owasp: null, explanation: 'The name is joined to the base path.' }] }),
+            make(3, { slug: 'hardcoded-secret', title: 'Config loader', category: 'crypto', difficulty: 'easy', language: 'go', findings: [{ lineStart: 2, lineEnd: 2, title: 'Hard-coded key', vulnerabilityType: 'auth', severity: 'high', cwe: 'CWE-798', owasp: null, explanation: 'The key is in the source.' }] }),
+            make(4, { slug: 'path-join', title: 'File download', category: 'server-side', difficulty: 'hard', language: 'java', findings: [{ lineStart: 1, lineEnd: 2, title: 'Path traversal', vulnerabilityType: 'traversal', severity: 'high', cwe: 'CWE-22', owasp: null, explanation: 'The name is joined to the base path.' }] }),
             make(5, { slug: DRAFT, title: 'Unfinished draft', isPublished: false, findings: [{ lineStart: 1, lineEnd: 1, title: 'x', vulnerabilityType: 'other', severity: 'low', cwe: null, owasp: null, explanation: 'Just a draft finding.' }] }),
             make(6, { slug: NO_FINDINGS, title: 'No findings yet', isPublished: false, findings: [] }),
         ],
@@ -105,7 +107,7 @@ export function freshState(over: Partial<MockState> = {}): MockState {
 
 /** A member who has already tried a snippet once */
 export function tried(over: Partial<ProgressRec> = {}): ProgressRec {
-    return { attempts: [{ id: 'a0', score: 7, maxScore: 20, percent: 35, passed: false, matched: 1, false: 1, marks: [{ lineStart: 4, lineEnd: 4 }], at: new Date(Date.now() - 3600_000).toISOString() }], bestPercent: 35, bestScore: 7, maxScore: 20, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false, ...over };
+    return { attempts: [{ id: 'a0', score: 7, maxScore: 20, percent: 35, passed: false, matched: 1, false: 1, marks: [{ lineStart: 4, lineEnd: 4 }], at: new Date(Date.now() - 3600_000).toISOString() }], bestPercent: 35, bestScore: 7, maxScore: 20, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false, forfeited: false, ...over };
 }
 
 const cors = (route: Route) => ({
@@ -127,7 +129,9 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
     const baseOf = (s: SnippetRec) => (s.points > 0 ? s.points : BASE_POINTS[s.difficulty]);
     const costOf = (s: SnippetRec, p?: ProgressRec) => (p?.hintsUnlocked ?? []).reduce((sum, o) => sum + (s.hints.find((h) => h.order === o)?.cost ?? 0), 0);
     const floorOf = (s: SnippetRec) => Math.max(1, Math.round(baseOf(s) * 0.1));
-    const available = (s: SnippetRec, p?: ProgressRec) => (p?.passed ? 0 : Math.max(floorOf(s), baseOf(s) - costOf(s, p)));
+    const decayOf = (p?: ProgressRec) => Math.min(75, (p?.attempts.length ?? 0) * 25) / 100;
+    /** What a perfect pass would pay now: nothing for staff, after a pass, after the solution was opened, or after a probe */
+    const available = (s: SnippetRec, p?: ProgressRec) => (staff || p?.passed || p?.solutionViewed || p?.forfeited ? 0 : Math.max(floorOf(s), Math.round(baseOf(s) * (1 - decayOf(p))) - costOf(s, p)));
     const status = (p?: ProgressRec) => (!p ? 'not-started' : p.passed ? 'passed' : 'in-progress');
     const todayCount = (p?: ProgressRec) => p?.attempts.length ?? 0;
 
@@ -149,6 +153,7 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
         return {
             ...progressOf(s), passedAt: p?.passed ? p.attempts.at(-1)?.at ?? null : null, hintsUnlocked: p?.hintsUnlocked ?? [], hintCost: costOf(s, p),
             pointsAvailable: available(s, p), solutionUnlocked: staff || (p?.attempts.length ?? 0) > 0, solutionViewed: p?.solutionViewed ?? false,
+            pointsForfeited: !staff && !!(p?.solutionViewed || p?.forfeited),
             attemptsToday: todayCount(p), attemptsLeftToday: Math.max(0, 30 - todayCount(p)),
         };
     };
@@ -158,7 +163,7 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             ...card(s), description: s.description, vulnerableCode: s.vulnerableCode, updatedAt: s.updatedAt,
             hints: s.hints.map((h) => {
                 const open = !!p?.hintsUnlocked.includes(h.order);
-                return { order: h.order, cost: h.cost, unlocked: open, ...((open || staff) && { text: h.text }) };
+                return { id: h.id, order: h.order, cost: h.cost, unlocked: open, ...((open || staff) && { text: h.text }) };
             }),
             viewer: who.role ? viewerOf(s) : null,
         };
@@ -268,7 +273,7 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             if (body.isPublished && findings.length === 0) return fail(route, 409, 'CR_NOT_READY', 'An exercise needs at least one finding before it is published');
             const snippet = make(state.snippets.length + 1, {
                 slug, title, description: String(body.description), language: String(body.language ?? 'other'), category: String(body.category ?? 'other'), difficulty: (body.difficulty as SnippetRec['difficulty']) ?? 'easy',
-                points: Number(body.points ?? 0), tags: (body.tags as string[]) ?? [], vulnerableCode: code, findings, hints: ((body.hints as { text: string; cost: number }[]) ?? []).map((h, i) => ({ order: i + 1, ...h })),
+                points: Number(body.points ?? 0), tags: (body.tags as string[]) ?? [], vulnerableCode: code, findings, hints: ((body.hints as { id?: string; text: string; cost: number }[]) ?? []).map((h, i) => ({ order: i + 1, ...h, id: h.id ?? `hint-new-${i + 1}` })),
                 explanation: String(body.explanation ?? ''), fixedCode: String(body.fixedCode ?? ''), isPublished: !!body.isPublished, solveCount: 0,
             });
             state.snippets.push(snippet);
@@ -294,10 +299,19 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             const lineCount = code.split('\n').length;
             (body.findings as FindingRec[] | undefined)?.forEach((f, i) => { if (f.lineEnd > lineCount) details.push({ field: `findings.${i}.lineEnd`, message: `lineEnd must not be past the last line (${lineCount})` }); });
             if (details.length) return fail(route, 400, 'VALIDATION_ERROR', 'Validation failed', { details });
-            const { findings, hints, ...rest } = body as Record<string, unknown>;
+            const { findings, hints, confirmKeyChange, ...rest } = body as Record<string, unknown>;
+            const nextFindings = findings ? (findings as FindingRec[]).map((f) => ({ ...f, title: f.title ?? '', cwe: f.cwe ?? null, owasp: f.owasp ?? null })) : s.findings;
+            const nextHints = hints ? (hints as { id?: string; text: string; cost: number }[]).map((h, i) => ({ ...h, order: i + 1, id: h.id ?? `hint-new-${i + 1}` })) : s.hints;
+            // Only what grades or explains counts as the key, compared like the server does: by value, not by the shape of the body
+            const same = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+            const keyOf = (f: FindingRec) => [f.lineStart, f.lineEnd, f.vulnerabilityType, f.severity, f.title, f.cwe, f.owasp, f.explanation];
+            const keyChanged = !same(nextFindings.map(keyOf), s.findings.map(keyOf)) || !same(code, s.vulnerableCode) || !same(nextHints.map((h) => [h.id, h.text, h.cost]), s.hints.map((h) => [h.id, h.text, h.cost]));
+            if (s.solveCount > 0 && keyChanged && confirmKeyChange !== true) {
+                return fail(route, 409, 'CR_KEY_CHANGE_UNCONFIRMED', 'Members solved this exercise', { meta: { solveCount: s.solveCount, oldFindingCount: s.findings.length, newFindingCount: nextFindings.length, oldHintCount: s.hints.length, newHintCount: nextHints.length } });
+            }
             Object.assign(s, rest, { updatedAt: new Date().toISOString() });
-            if (findings) s.findings = (findings as FindingRec[]).map((f) => ({ ...f, title: f.title ?? '', cwe: f.cwe ?? null, owasp: f.owasp ?? null }));
-            if (hints) s.hints = (hints as { text: string; cost: number }[]).map((h, i) => ({ order: i + 1, ...h }));
+            s.findings = nextFindings;
+            s.hints = nextHints;
             if (s.isPublished && s.findings.length === 0) return fail(route, 409, 'CR_NOT_READY', 'An exercise needs at least one finding before it is published');
             return send(route, 200, { success: true, data: adminView(s) });
         }
@@ -333,15 +347,24 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             const marks = (body.marks as { lineStart: number; lineEnd: number; vulnerabilityType?: string }[] | undefined) ?? [];
             if (marks.length < 1 || marks.length > 50) return fail(route, 400, 'VALIDATION_ERROR', 'Validation failed', { details: [{ field: 'marks', message: 'Send between 1 and 50 marks' }] });
             if (todayCount(p) >= 30) return fail(route, 429, 'CR_ATTEMPT_LIMIT', 'Daily limit reached', { meta: { retryAfter: 7200, limit: 30 } }, { 'Retry-After': '7200' });
+            // At most findings + 2 marks, over at most 40% of the lines (never fewer than 6, never fewer than the findings need)
+            const lineCount = snippet.vulnerableCode.split('\n').length;
+            const covered = new Set<number>();
+            marks.forEach((mk) => { for (let n = mk.lineStart; n <= mk.lineEnd; n += 1) covered.add(n); });
+            const findingLines = snippet.findings.reduce((sum, f) => sum + (f.lineEnd - f.lineStart + 1), 0);
+            const maxMarks = snippet.findings.length + 2;
+            const maxLines = Math.max(6, Math.floor((lineCount * 40) / 100), findingLines);
+            if (marks.length > maxMarks || covered.size > maxLines) return fail(route, 400, 'CR_TOO_BROAD', 'That answer is too broad', { meta: { maxMarks, maxLines } });
             const used = new Set<number>();
             const matched: Record<string, unknown>[] = [];
             const verdicts: { index: number; result: 'matched' | 'duplicate' | 'unmatched' }[] = [];
             let falseMarks = 0;
+            let duplicates = 0;
             let score = 0;
             marks.forEach((mk, index) => {
                 const at = snippet.findings.findIndex((f, i) => overlaps(f, mk) && !used.has(i));
                 const dup = at < 0 && snippet.findings.some((f) => overlaps(f, mk));
-                if (at < 0) { verdicts.push({ index, result: dup ? 'duplicate' : 'unmatched' }); if (!dup) falseMarks += 1; return; }
+                if (at < 0) { verdicts.push({ index, result: dup ? 'duplicate' : 'unmatched' }); if (dup) duplicates += 1; else falseMarks += 1; return; }
                 used.add(at);
                 const f = snippet.findings[at];
                 const typeCorrect = mk.vulnerabilityType ? mk.vulnerabilityType === f.vulnerabilityType : null;
@@ -354,11 +377,16 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             const maxScore = snippet.findings.length * 10;
             const percent = Math.min(100, Math.round((score / maxScore) * 100));
             const passed = percent >= 70;
-            const rec: ProgressRec = p ?? { attempts: [], bestPercent: 0, bestScore: 0, maxScore, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false };
+            const rec: ProgressRec = p ?? { attempts: [], bestPercent: 0, bestScore: 0, maxScore, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false, forfeited: false };
             const firstPass = passed && !rec.passed;
-            const pointsAvailable = available(snippet, rec);
-            const decay = Math.max(0.5, 1 - 0.1 * rec.attempts.length);
-            const pointsAwarded = firstPass && !rec.solutionViewed && who.role === 'user' ? Math.round(pointsAvailable * decay) : 0;
+            // More false marks than findings is a probe: the points of the exercise are gone
+            const probed = falseMarks > snippet.findings.length;
+            if (probed && !staff) rec.forfeited = true;
+            // What a perfect pass would have paid before this attempt, with the decay of the attempts before it
+            const pointsBefore = available(snippet, p);
+            const pointsAwarded = firstPass && who.role === 'user' && !rec.forfeited && !rec.solutionViewed ? Math.max(floorOf(snippet), pointsBefore) : 0;
+            // The explanations are shown after a pass, after a pass before, after the solution, and to staff
+            const revealed = passed || rec.passed || rec.solutionViewed || staff;
             const id = `a${rec.attempts.length + 1}`;
             rec.attempts.push({ id, score, maxScore, percent, passed, matched: matched.length, false: falseMarks, marks, at: new Date().toISOString() });
             if (percent >= rec.bestPercent) { rec.bestPercent = percent; rec.bestScore = score; }
@@ -366,8 +394,11 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             if (firstPass) { rec.passed = true; rec.pointsEarned = pointsAwarded; snippet.solveCount += 1; }
             state.progress[snippet.slug] = rec;
             return send(route, 201, { success: true, data: {
-                attemptId: id, score, maxScore, percent, passPercent: 70, passed, matched, marks: verdicts, missedCount: snippet.findings.length - matched.length, falsePositives: falseMarks, firstPass,
-                pointsAwarded, pointsAvailable, hintsUsed: rec.hintsUnlocked.length, attempts: rec.attempts.length, attemptsLeftToday: Math.max(0, 30 - rec.attempts.length), bestPercent: rec.bestPercent,
+                attemptId: id, score, maxScore, percent, passPercent: 70, passed, detailsRevealed: revealed, matchedCount: matched.length, ...(revealed ? { matched } : {}),
+                // Before the details are revealed a repeat is told as unmatched (and counted in `duplicateCount`)
+                marks: revealed ? verdicts : verdicts.map((v) => (v.result === 'duplicate' ? { ...v, result: 'unmatched' } : v)),
+                missedCount: snippet.findings.length - matched.length, falsePositives: falseMarks, duplicateCount: duplicates, pointsForfeited: probed && !staff, firstPass,
+                pointsAwarded, pointsAvailable: available(snippet, rec), hintsUsed: rec.hintsUnlocked.length, attempts: rec.attempts.length, attemptsLeftToday: Math.max(0, 30 - rec.attempts.length), bestPercent: rec.bestPercent,
                 solutionUnlocked: true, newBadges: firstPass && who.role === 'user' ? [{ code: 'first-review', name: 'First Review', icon: 'shield', rarity: 'common' }] : [],
             } });
         }
@@ -375,14 +406,14 @@ export async function mockCodeReviewApi(page: Page, who: Role, state: MockState 
             const order = Number(action.split('/')[1]);
             const hint = snippet.hints.find((h) => h.order === order);
             if (!hint) return fail(route, 404, 'CR_HINT_NOT_FOUND', 'Hint not found');
-            const rec = p ?? { attempts: [], bestPercent: 0, bestScore: 0, maxScore: 0, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false };
+            const rec = p ?? { attempts: [], bestPercent: 0, bestScore: 0, maxScore: 0, passed: false, pointsEarned: 0, hintsUnlocked: [], solutionViewed: false, forfeited: false };
             const next = snippet.hints.find((h) => !rec.hintsUnlocked.includes(h.order));
             const already = rec.hintsUnlocked.includes(order);
             if (!already && next && next.order !== order) return fail(route, 409, 'CR_HINT_OUT_OF_ORDER', 'Open the hints in order', { meta: { next: next.order } });
             if (!already) rec.hintsUnlocked.push(order);
             state.progress[snippet.slug] = rec;
             return send(route, 200, { success: true, data: {
-                hint: { order, text: hint.text, cost: hint.cost }, alreadyUnlocked: already, recorded: true, hintsUsed: rec.hintsUnlocked.length, hintCost: costOf(snippet, rec), pointsAvailable: available(snippet, rec),
+                hint: { id: hint.id, order, text: hint.text, cost: hint.cost }, alreadyUnlocked: already, recorded: true, hintsUsed: rec.hintsUnlocked.length, hintCost: costOf(snippet, rec), pointsAvailable: available(snippet, rec),
             } });
         }
         if (method === 'GET' && action === 'solution') {
