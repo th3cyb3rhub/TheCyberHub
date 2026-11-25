@@ -46,6 +46,8 @@ export function safeRedirectPath(target: string | null | undefined, fallback = '
         // the sign-in page by another spelling (`/./auth`, `/x/../auth`, `/%2e/auth`)
         const resolved = new URL(target, PROBE_ORIGIN);
         if (resolved.origin !== PROBE_ORIGIN) return fallback;
+        // Dot segments can leave a path that starts with `//` (`/..//host`), which a browser reads as another site
+        if (resolved.pathname.startsWith('//') || new URL(decoded, PROBE_ORIGIN).pathname.startsWith('//')) return fallback;
         if (AUTH_LOOP.test(resolved.pathname) || AUTH_LOOP.test(new URL(decoded, PROBE_ORIGIN).pathname)) return fallback;
     } catch {
         return fallback;

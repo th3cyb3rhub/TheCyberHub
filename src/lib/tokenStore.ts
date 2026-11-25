@@ -17,6 +17,8 @@ function write(key: string, value: string | null): boolean {
         else window.localStorage.setItem(key, value);
         return true;
     } catch {
+        // A refused write must not leave the previous value behind (it may be another account's token)
+        if (value !== null) { try { window.localStorage.removeItem(key); } catch { /* storage is unusable */ } }
         return false;
     }
 }
@@ -42,12 +44,15 @@ function readToken(): string | null {
 export const tokenStore = {
     get: readToken,
     set: (token: string): void => {
+        // On the server one module is shared by every request: nothing is kept there
+        if (typeof window === 'undefined') return;
         if (readToken() === token) return;
         memoryOnly = !write(TOKEN_KEY, token);
         memoryToken = memoryOnly ? token : null;
         notify();
     },
     remove: (): void => {
+        if (typeof window === 'undefined') return;
         const had = readToken() !== null;
         memoryToken = null;
         memoryOnly = !write(TOKEN_KEY, null);
@@ -77,13 +82,23 @@ export const legacyRefreshToken = {
  * verified here (the API does that on every call) and nothing is decided from this value.
  */
 export function tokenUserId(token: string | null | undefined): string | null {
+    return stringClaim(token, 'id');
+}
+
+/** The session id an access token belongs to (it stays the same when the token is renewed). Only used to tell whether two tokens are one session. */
+export function tokenSessionId(token: string | null | undefined): string | null {
+    return stringClaim(token, 'sid');
+}
+
+function stringClaim(token: string | null | undefined, name: string): string | null {
     if (!token) return null;
     const payload = token.split('.')[1];
     if (!payload) return null;
     try {
         const padded = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
-        const claims = JSON.parse(atob(padded)) as { id?: unknown };
-        return typeof claims.id === 'string' && claims.id ? claims.id : null;
+        const claims = JSON.parse(atob(padded)) as Record<string, unknown>;
+        const value = claims[name];
+        return typeof value === 'string' && value ? value : null;
     } catch {
         return null;
     }

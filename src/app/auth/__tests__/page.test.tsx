@@ -45,6 +45,8 @@ describe('the sign-in page', () => {
         await user.click(screen.getByRole('button', { name: /verify code/i }))
         await waitFor(() => expect(screen.queryByLabelText('Authenticator Code')).not.toBeInTheDocument())
         expect(screen.getByRole('alert')).toHaveTextContent(/expired/i)
+        // A hand-off from Google or GitHub has no password step to go back to
+        expect(screen.getByRole('alert')).not.toHaveTextContent(/password/i)
         expect(screen.getByLabelText('Email')).toBeInTheDocument()
     })
 

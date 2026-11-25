@@ -212,7 +212,7 @@ const AuthPage = () => {
                 setTwoFactorCode('');
                 setMode('login');
                 setSuccess(null);
-                setError('Your two-factor step expired. Enter your password again to get a new code prompt.');
+                setError('Your two-factor step expired. Please sign in again.');
                 return;
             }
             let message = 'Something went wrong';

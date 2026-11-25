@@ -42,6 +42,15 @@ describe('legacyRefreshToken', () => {
     })
 })
 
+describe('tokenSessionId', () => {
+    it('reads the session id, which a renewed token keeps', async () => {
+        const { tokenSessionId } = await import('../tokenStore')
+        expect(tokenSessionId(jwt({ id: 'u', sid: 's-9' }))).toBe('s-9')
+        expect(tokenSessionId(jwt({ id: 'u' }))).toBeNull()
+        expect(tokenSessionId('junk')).toBeNull()
+    })
+})
+
 describe('tokenUserId', () => {
     it('reads the account id from an access token', () => {
         expect(tokenUserId(jwt({ id: 'u-123', type: 'access', sid: 's' }))).toBe('u-123')
@@ -76,6 +85,16 @@ describe('when the browser refuses to store the token', () => {
         expect(tokenStore.get()).toBe('mem-token')
         tokenStore.remove()
         expect(tokenStore.get()).toBeNull()
+    })
+
+    it('does not leave the previous value in storage when the new one cannot be written', () => {
+        tokenStore.set('first')
+        expect(localStorage.getItem('token')).toBe('first')
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+        tokenStore.set('second')
+        // Another tab or a reload must not pick up the old account's token
+        expect(localStorage.getItem('token')).toBeNull()
+        expect(tokenStore.get()).toBe('second')
     })
 
     it('goes back to the stored value once storage works again', () => {

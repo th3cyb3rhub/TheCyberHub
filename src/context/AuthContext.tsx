@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type Query, type QueryClient } from '@tanstack/react-query';
 import { ApiError, fetchApi } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
 import { authErrorMessage } from '@/lib/authErrors';
@@ -94,6 +94,20 @@ function withMessage(err: unknown, fallback: string): unknown {
     return new ApiError(authErrorMessage(err, fallback), err.status, err.code, err.details, err.meta);
 }
 
+/**
+ * Forgets what is cached for any other account than `keepIdentity`. The account's own entries (`auth`
+ * keys) are removed: their observers follow the token and move to the new key when React renders. Every
+ * other query is reset, which tells mounted components at once and refetches the active ones, with the
+ * token that is stored now.
+ */
+function dropAccountData(queryClient: QueryClient, keepIdentity: string | null) {
+    const isAccountKey = (query: Query) => query.queryKey[0] === 'auth';
+    const isKept = (query: Query) => isAccountKey(query) && query.queryKey[1] === 'me' && query.queryKey[2] === keepIdentity;
+    queryClient.getMutationCache().clear();
+    queryClient.removeQueries({ predicate: (query) => isAccountKey(query) && !isKept(query) });
+    void queryClient.resetQueries({ predicate: (query) => !isAccountKey(query) });
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -115,7 +129,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         tokenStore.remove();
         legacyRefreshToken.remove();
         takePending2fa();
-        queryClient.clear();
+        dropAccountData(queryClient, null);
     }, [queryClient]);
 
     // The API says this session is over (signed out from another device, a ban, an old token) or a
@@ -142,9 +156,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     // The token changed to another account's, here or in another tab: nothing cached for the previous
-    // account stays. This runs when the token changes, before React renders for the new one, so it
-    // cannot remove what the new account's components start asking for. The new account's own `me`
-    // entry (seeded by a sign-in) is kept.
+    // account stays, and components that are mounted are told, so they never keep showing it.
+    // The new account's own `me` entry (seeded by a sign-in) is kept.
     useEffect(() => {
         const identityOf = (value: string | null) => (value ? tokenUserId(value) ?? 'unknown' : null);
         let last = identityOf(tokenStore.get());
@@ -154,17 +167,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const hadAccount = last !== null;
             last = next;
             if (!hadAccount) return;
-            queryClient.removeQueries({ predicate: (query) => !(query.queryKey[0] === 'auth' && query.queryKey[1] === 'me' && query.queryKey[2] === next) });
+            dropAccountData(queryClient, next);
         });
     }, [queryClient]);
 
     /** Stores the session a sign-in answered with. The previous account's cache goes first. */
     const startSession = useCallback((result: { token?: string; data?: AuthUser }) => {
         if (!result.token) throw new Error('The server did not return a session');
-        queryClient.clear();
         if (result.data) queryClient.setQueryData(meKey(result.token), result.data);
         tokenStore.set(result.token);
         legacyRefreshToken.remove();
+        // Whatever was cached before this sign-in (a visitor's, or the previous account's) is not this account's
+        dropAccountData(queryClient, tokenUserId(result.token) ?? 'unknown');
     }, [queryClient]);
 
     const setUser = useCallback((data: AuthUser | undefined) => {

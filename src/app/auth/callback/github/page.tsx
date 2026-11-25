@@ -30,7 +30,7 @@ const GitHubCallbackPage = () => {
         const code = searchParams.get('code');
         const errorParam = searchParams.get('error');
         // The one-time code must not stay in the address bar or in history
-        window.history.replaceState(window.history.state, '', window.location.pathname);
+        window.history.replaceState(null, '', window.location.pathname);
         if (errorParam) {
             setState('error');
             setError(providerErrorMessage(errorParam));

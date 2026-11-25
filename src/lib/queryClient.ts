@@ -14,6 +14,12 @@ import { errorStatus } from '@/lib/authErrors';
 // Query Client Configuration
 // ============================================
 
+/** An answer the API gave on purpose (4xx): repeating the request does not change it */
+const isClientError = (error: unknown) => {
+    const status = errorStatus(error);
+    return status !== undefined && status >= 400 && status < 500;
+};
+
 /**
  * Create a new QueryClient with default options
  */
@@ -27,11 +33,7 @@ export const createQueryClient = () => new QueryClient({
             // Retry failed requests up to 3 times, but never an answer the API gave on purpose (4xx: a
             // refused session, a rate limit): repeating it does not change it, and every repeat of a
             // refused sign-in would ask for a new access token again
-            retry: (failureCount: number, error: unknown) => {
-                const status = errorStatus(error);
-                if (status !== undefined && status >= 400 && status < 500) return false;
-                return failureCount < 3;
-            },
+            retry: (failureCount: number, error: unknown) => !isClientError(error) && failureCount < 3,
             // Exponential backoff for retries (1s, 2s, 4s)
             retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
             // Don't refetch on window focus (can be enabled per-query)
@@ -42,8 +44,8 @@ export const createQueryClient = () => new QueryClient({
             networkMode: 'always',
         },
         mutations: {
-            // Retry mutations once on failure
-            retry: 1,
+            // Retry mutations once on failure, unless the API refused them on purpose
+            retry: (failureCount: number, error: unknown) => !isClientError(error) && failureCount < 1,
             // Network mode for mutations
             networkMode: 'always',
         },

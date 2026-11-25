@@ -63,7 +63,8 @@ describe('GitHub callback', () => {
     })
 
     it('removes the one-time code from the address bar before calling the API', async () => {
-        window.history.replaceState({ keep: 1 }, '', '/auth/callback/github?code=abc&state=s')
+        window.history.replaceState({ __NA: true }, '', '/auth/callback/github?code=abc&state=s')
+        const replace = vi.spyOn(window.history, 'replaceState')
         nav.search = 'code=abc&state=s'
         let seenWhenCalled = 'unset'
         auth.loginWithGithub.mockImplementation(async () => { seenWhenCalled = window.location.search + window.location.hash })
@@ -72,6 +73,9 @@ describe('GitHub callback', () => {
         expect(auth.loginWithGithub).toHaveBeenCalledWith('abc')
         expect(seenWhenCalled).toBe('')
         expect(window.location.href).not.toContain('code=')
+        // Not Next's own history state: Next then keeps its address in step with the cleaned one
+        expect(replace).toHaveBeenCalledWith(null, '', '/auth/callback/github')
+        replace.mockRestore()
     })
 
     it('never follows an unsafe remembered page', async () => {

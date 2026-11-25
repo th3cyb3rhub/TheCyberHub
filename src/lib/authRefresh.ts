@@ -50,6 +50,8 @@ async function attempt(staleToken: string): Promise<Attempt> {
             signal: controller.signal,
         });
         body = await readBody(response);
+        // The timeout fired while the answer was being read: the outcome is unknown, so nothing is decided from it
+        if (controller.signal.aborted) return { kind: 'unavailable' };
     } catch {
         return { kind: 'unavailable' };
     } finally {
@@ -59,6 +61,8 @@ async function attempt(staleToken: string): Promise<Attempt> {
     const { token, code } = body;
     if (response.ok) {
         if (!token) return { kind: 'ended', reason: 'expired' };
+        // The refresh token was used up by this answer, whatever happens to it
+        legacyRefreshToken.remove();
         // The member may have signed out, or in as someone else, while this was in flight: that answer is not theirs to store
         if (tokenStore.get() !== staleToken) return { kind: 'superseded' };
         tokenStore.set(token);
@@ -108,8 +112,14 @@ function exclusive(task: () => Promise<RefreshOutcome>): Promise<RefreshOutcome>
     const timer = setTimeout(() => controller.abort(), LOCK_TIMEOUT_MS);
     const granted = () => { clearTimeout(timer); return task(); };
     // An aborted wait (another tab holds the lock for too long) is "could not ask", not a sign-out
-    return (locks.request(LOCK_NAME, { signal: controller.signal }, granted) as unknown as Promise<RefreshOutcome>)
-        .catch(() => 'unavailable' as const)
+    let ran = false;
+    const run = () => { ran = true; return granted(); };
+    return (locks.request(LOCK_NAME, { signal: controller.signal }, run) as unknown as Promise<RefreshOutcome>)
+        .catch((err: unknown) => {
+            // Waiting too long is "could not ask". A browser that refuses locks altogether (sandboxed origins) just refreshes without one.
+            if (ran || (err as { name?: string } | null)?.name === 'AbortError') return 'unavailable' as const;
+            return task();
+        })
         .finally(() => clearTimeout(timer));
 }
 

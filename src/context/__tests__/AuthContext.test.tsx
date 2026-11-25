@@ -1,5 +1,5 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const push = vi.hoisted(() => ({ unsubscribeThisDevice: vi.fn() }))
@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '../AuthContext'
 import { stashPending2fa, takePending2fa } from '@/lib/pending2fa'
 import { takeSessionNotice } from '@/lib/authSession'
 import { tokenStore } from '@/lib/tokenStore'
+import { fetchApi } from '@/lib/api'
 
 type Handler = (url: string, init: RequestInit) => { status: number; body?: unknown } | Promise<{ status: number; body?: unknown }>
 
@@ -386,6 +387,62 @@ describe('one account after another in the same browser', () => {
         expect(screen.getByTestId('user')).toHaveTextContent('grace')
         expect(queryClient.getQueryData(['feed'])).toBeUndefined()
         expect(queryClient.getQueryData(['auth', 'me', 'u1'])).toBeUndefined()
+    })
+})
+
+describe('components that are mounted while the account changes', () => {
+    const tokenA = jwt({ id: 'u1', sid: 's1' })
+    const tokenB = jwt({ id: 'u2', sid: 's2' })
+    // Reads nothing from useAuth: it re-renders only when its own query changes
+    function Feed() {
+        const feed = useQuery({ queryKey: ['feed'], queryFn: () => fetchApi('/api/feed') })
+        return <span data-testid="feed">{feed.data ? feed.data.owner : 'none'}</span>
+    }
+    const bearerOwner = (init: RequestInit) => (String((init.headers as Record<string, string>).Authorization).includes(tokenB) ? 'grace' : 'ada')
+    const answer = (url: string, init: RequestInit) => {
+        if (url.includes('/api/feed')) return { status: 200, body: { owner: bearerOwner(init) } }
+        if (url.includes('/api/auth/me')) return { status: 200, body: { success: true, data: bearerOwner(init) === 'grace' ? { id: 'u2', username: 'grace', role: 'user' } : ada } }
+        return { status: 200, body: { success: true } }
+    }
+    const mountWithFeed = () => {
+        queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        // The feed sits outside AuthProvider's children chain of useAuth consumers: it is a sibling
+        return render(<QueryClientProvider client={queryClient}><AuthProvider><Probe /></AuthProvider><Feed /></QueryClientProvider>)
+    }
+
+    it('show the new account after a sign-in in another tab (storage event), not the old one', async () => {
+        handler = answer
+        window.localStorage.setItem('token', tokenA)
+        mountWithFeed()
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('ada'))
+
+        act(() => {
+            window.localStorage.setItem('token', tokenB)
+            window.dispatchEvent(new StorageEvent('storage', { key: 'token', newValue: tokenB }))
+        })
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('grace'))
+        expect(screen.getByTestId('user')).toHaveTextContent('grace')
+    })
+
+    it('show the new account after a sign-in here', async () => {
+        handler = answer
+        window.localStorage.setItem('token', tokenA)
+        mountWithFeed()
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('ada'))
+
+        handler = (url, init) => (url.includes('/auth/login') ? { status: 200, body: { success: true, token: tokenB, data: { id: 'u2', username: 'grace', role: 'user' } } } : answer(url, init))
+        await act(async () => { await api.login('grace@example.com', 'Secret-123') })
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('grace'))
+    })
+
+    it('stop showing the old account after a sign-out', async () => {
+        handler = answer
+        window.localStorage.setItem('token', tokenA)
+        mountWithFeed()
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('ada'))
+        handler = (url, init) => (url.includes('/api/feed') ? { status: 401, body: { error: { code: 'X', message: 'sign in' } } } : answer(url, init))
+        await act(async () => { await api.logout() })
+        await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('none'))
     })
 })
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchApi } from '../api'
 import { refreshAccessToken, REFRESH_TIMEOUT_MS, LOCK_TIMEOUT_MS } from '../authRefresh'
 import { endSession, onSessionEnded } from '../authSession'
-import { tokenStore, legacyRefreshToken } from '../tokenStore'
+import { tokenStore, legacyRefreshToken, tokenSessionId } from '../tokenStore'
 import { createQueryClient } from '../queryClient'
 
 const jwt = (claims: Record<string, unknown>) => {
@@ -12,6 +12,8 @@ const jwt = (claims: Record<string, unknown>) => {
 const tokenA = jwt({ id: 'user-a', sid: 's1' })
 const tokenA2 = jwt({ id: 'user-a', sid: 's2' })
 const tokenB = jwt({ id: 'user-b', sid: 's3' })
+// The same session as tokenA after a renewal: a different string, the same sid
+const tokenA1 = jwt({ id: 'user-a', sid: 's1', iat: 2 })
 
 const reply = (status: number, body: unknown = {}) => ({
     ok: status >= 200 && status < 300,
@@ -51,6 +53,19 @@ describe('an answer about an old session', () => {
         stop()
         expect(tokenStore.get()).toBe(tokenA2)
         expect(ended).not.toHaveBeenCalled()
+    })
+
+    it('ends the session when the refused token is an older one of the same session (renewed meanwhile)', async () => {
+        tokenStore.set(tokenA)
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        global.fetch = vi.fn().mockImplementation(async () => { await gate; return failure(401, 'AUTH_SESSION_REVOKED') })
+        const pending = fetchApi('/api/thing').catch((err) => err)
+        tokenStore.set(tokenA1)
+        expect(tokenSessionId(tokenA1)).toBe('s1')
+        release()
+        await pending
+        expect(tokenStore.get()).toBeNull()
     })
 
     it('still signs out when the refused token is the one stored', async () => {
@@ -146,7 +161,39 @@ describe('a refresh that does not answer', () => {
     })
 })
 
+describe('a refresh whose answer is cut off by the timeout', () => {
+    it('keeps the session when the timeout fires while the body is read, instead of signing out', async () => {
+        vi.useFakeTimers()
+        tokenStore.set(tokenA)
+        global.fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => ({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: () => new Promise((_resolve, reject) => {
+                init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+            }),
+        }))
+        const ended = vi.fn()
+        const stop = onSessionEnded(ended)
+        const pending = refreshAccessToken(tokenA)
+        await vi.advanceTimersByTimeAsync(REFRESH_TIMEOUT_MS + 1)
+        await expect(pending).resolves.toBe('unavailable')
+        stop()
+        expect(tokenStore.get()).toBe(tokenA)
+        expect(ended).not.toHaveBeenCalled()
+    })
+})
+
 describe('Web Locks', () => {
+    it('refreshes without the lock when the browser refuses to grant locks at all', async () => {
+        const request = vi.fn().mockRejectedValue(new DOMException('not allowed', 'SecurityError'))
+        vi.stubGlobal('navigator', { ...navigator, locks: { request } })
+        tokenStore.set(tokenA)
+        global.fetch = vi.fn().mockResolvedValue(refreshed(tokenA2))
+        await expect(refreshAccessToken(tokenA)).resolves.toBe('refreshed')
+        expect(tokenStore.get()).toBe(tokenA2)
+    })
+
     it('runs the refresh at once where the browser has no locks', async () => {
         vi.stubGlobal('navigator', { ...navigator, locks: undefined })
         tokenStore.set(tokenA)
@@ -222,7 +269,31 @@ describe('query retries', () => {
     })
 })
 
+describe('mutation retries', () => {
+    const retry = createQueryClient().getDefaultOptions().mutations!.retry as (count: number, error: unknown) => boolean
+
+    it('does not repeat a mutation the API refused on purpose, and repeats server trouble once', () => {
+        expect(retry(0, { status: 401 })).toBe(false)
+        expect(retry(0, { status: 400 })).toBe(false)
+        expect(retry(0, { status: 503 })).toBe(true)
+        expect(retry(1, { status: 503 })).toBe(false)
+    })
+})
+
 describe('a legacy refresh token', () => {
+    it('is dropped when the answer that used it was not stored', async () => {
+        localStorage.setItem('refreshToken', 'old-refresh')
+        tokenStore.set(tokenA)
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        global.fetch = vi.fn().mockImplementation(async () => { await gate; return refreshed(tokenA2) })
+        const pending = refreshAccessToken(tokenA)
+        tokenStore.remove()
+        release()
+        await pending
+        expect(legacyRefreshToken.get()).toBeNull()
+    })
+
     it('is dropped once a refresh used it', async () => {
         localStorage.setItem('refreshToken', 'old-refresh')
         tokenStore.set(tokenA)

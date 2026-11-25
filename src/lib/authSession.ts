@@ -1,4 +1,4 @@
-import { legacyRefreshToken, tokenStore, tokenUserId } from '@/lib/tokenStore';
+import { legacyRefreshToken, tokenSessionId, tokenStore, tokenUserId } from '@/lib/tokenStore';
 
 /** Why this browser is no longer signed in, when it was not the member's own choice. */
 export type SessionEndReason = 'expired' | 'revoked' | 'legacy' | 'disabled';
@@ -30,7 +30,9 @@ export function onSessionEnded(listener: Listener): () => void {
  */
 export function endSession(reason: SessionEndReason, forToken?: string | null): void {
     const current = tokenStore.get();
-    if (forToken !== undefined && current !== forToken) {
+    // A renewed token is a different string of the same session: an answer about the old one still ends it
+    const sameSession = !!tokenSessionId(current) && tokenSessionId(current) === tokenSessionId(forToken);
+    if (forToken !== undefined && current !== forToken && !sameSession) {
         const sameAccount = !!tokenUserId(current) && tokenUserId(current) === tokenUserId(forToken);
         if (!(reason === 'disabled' && sameAccount)) return;
     }

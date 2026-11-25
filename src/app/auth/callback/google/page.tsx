@@ -36,7 +36,7 @@ const GoogleCallbackPage = () => {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const idToken = hashParams.get('id_token') || hashParams.get('access_token') || searchParams.get('credential');
         // The token must not stay in the address bar or in history: Back would run this page again with it
-        window.history.replaceState(window.history.state, '', window.location.pathname);
+        window.history.replaceState(null, '', window.location.pathname);
         if (!idToken) return fail('Google did not send a sign-in token.');
 
         loginWithGoogle(idToken).then((challenge) => {
