@@ -9,8 +9,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const { slug } = await params;
     const result = await fetchPublicResource(slug);
     if (result.state !== 'ok') {
-        // Pending and rejected entries are private, so there is nothing to describe or index
-        return { title: 'Resource', robots: { index: false, follow: false } };
+        // A failing API says nothing about the entry: no robots rule, so an outage cannot drop a good page.
+        // Pending and rejected entries are private, so there is nothing to describe or index.
+        return result.state === 'error' ? { title: 'Resource' } : { title: 'Resource', robots: { index: false, follow: false } };
     }
     const r = result.data;
     const url = `${SITE_URL}/resources/${r.slug}`;

@@ -15,9 +15,9 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
     // The same request as the page below: `fetchPublicJob` is cached per render.
-    // A job that is not public, an unknown reference or a failing API stays out of search results.
+    // A job that is not public or an unknown reference stays out of search results; a failing API says nothing about indexing.
     const result = await fetchPublicJob(slug);
-    return jobMetadata(result.state === 'ok' ? result.job : null);
+    return jobMetadata(result.state === 'ok' ? result.job : null, result.state === 'error');
 }
 
 export default async function JobPage({ params }: PageProps) {

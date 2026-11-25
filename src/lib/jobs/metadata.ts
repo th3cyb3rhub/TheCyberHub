@@ -7,9 +7,13 @@ import { jobUrl, SITE_URL } from './server';
 /** Kept out of search results and link crawlers */
 const NO_INDEX: Metadata['robots'] = { index: false, follow: false };
 
-/** The metadata of a job page. A job that is not public, an unknown reference or a failing API passes `null`. */
-export function jobMetadata(job: Job | null): Metadata {
-    if (!job) return { title: 'Job', robots: NO_INDEX };
+/**
+ * The metadata of a job page. A job that is not public or an unknown reference passes `null` and stays out of
+ * search results. When the API did not answer (`outage`) nothing is known about the job, so the page says nothing
+ * about indexing: an outage must not drop a good page from the index.
+ */
+export function jobMetadata(job: Job | null, outage = false): Metadata {
+    if (!job) return outage ? { title: 'Job' } : { title: 'Job', robots: NO_INDEX };
     const description = excerpt(job.description, 160) || `${job.title} at ${job.company}, a cybersecurity role on TheCyberHub.`;
     const title = `${job.title} at ${job.company}`;
     const url = jobUrl(job.slug);
@@ -48,8 +52,8 @@ export function jobsListMetadata(filtered: boolean): Metadata {
     };
 }
 
-export function companyMetadata(company: Company | null): Metadata {
-    if (!company) return { title: 'Company', robots: NO_INDEX };
+export function companyMetadata(company: Company | null, outage = false): Metadata {
+    if (!company) return outage ? { title: 'Company' } : { title: 'Company', robots: NO_INDEX };
     const description = excerpt(company.description, 160) || `Open cybersecurity roles at ${company.name}.`;
     const url = `${SITE_URL}/company/${company.slug}`;
     const logo = safeHref(company.logo);

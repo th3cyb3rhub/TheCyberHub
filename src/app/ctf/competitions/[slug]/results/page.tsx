@@ -11,8 +11,8 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
     const result = await fetchPublicResults(slug);
-    // Results of an ended competition are public and can be found; anything else stays out of search
-    if (result.state !== 'ok') return resultsMetadata(null, false);
+    // Results of an ended competition are public and can be found; anything else stays out of search, except a failing API, which says nothing
+    if (result.state !== 'ok') return resultsMetadata(null, false, result.state === 'error');
     // The results may not say whether the competition is link only: the (cached) detail does
     let unlisted = isUnlisted(result.results.competition);
     if (!unlisted && result.results.competition.isPublic === undefined) {

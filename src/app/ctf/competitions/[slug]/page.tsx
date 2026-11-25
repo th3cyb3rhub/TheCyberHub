@@ -12,9 +12,9 @@ interface PageProps {
 export async function generateMetadata({ params }: Pick<PageProps, 'params'>): Promise<Metadata> {
     const { slug } = await params;
     // The same request as the page below: `fetchPublicCompetition` is cached per render.
-    // A draft, an unknown slug or a failing API stays out of search results; so does a link only competition.
+    // A draft or an unknown slug stays out of search results, and so does a link only competition; a failing API says nothing about indexing.
     const result = await fetchPublicCompetition(slug);
-    return competitionMetadata(result.state === 'ok' ? result.competition : null);
+    return competitionMetadata(result.state === 'ok' ? result.competition : null, result.state === 'error');
 }
 
 export default async function CompetitionPage({ params, searchParams }: PageProps) {

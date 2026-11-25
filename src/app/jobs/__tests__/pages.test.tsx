@@ -141,6 +141,9 @@ describe('company page', () => {
         server.fetchCompany.mockResolvedValue({ state: 'error' })
         const html = renderToStaticMarkup(await CompanyPage({ ...params('acme-security'), searchParams: Promise.resolve({}) }) as React.ReactElement)
         expect(html).toContain('Try again')
-        expect((await companyMetadata(params('acme-security'))).robots).toEqual({ index: false, follow: false })
+        // The API did not answer: nothing is known about the company, so no robots rule
+        expect((await companyMetadata(params('acme-security'))).robots).toBeUndefined()
+        server.fetchCompany.mockResolvedValue({ state: 'missing' })
+        expect((await companyMetadata(params('gone'))).robots).toEqual({ index: false, follow: false })
     })
 })

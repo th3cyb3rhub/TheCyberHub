@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Pick<PageProps, 'params'>): P
     // The same request as the page below (`fetchCompany` is cached per render). A company that is
     // missing, rejected or unreachable stays out of search results.
     const result = await fetchCompany(slug);
-    return companyMetadata(result.state === 'ok' ? result.company : null);
+    return companyMetadata(result.state === 'ok' ? result.company : null, result.state === 'error');
 }
 
 export default async function CompanyPage({ params, searchParams }: PageProps) {

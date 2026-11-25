@@ -13,8 +13,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicEvent(slug);
 
     if (result.state !== 'ok') {
-        // Pending and rejected events are private, so there is nothing to describe or index
-        return { title: 'Event', robots: { index: false, follow: false } };
+        // A failing API says nothing about the event: no robots rule, so an outage cannot drop a good page.
+        // Pending and rejected events are private, so there is nothing to describe or index.
+        return result.state === 'error' ? { title: 'Event' } : { title: 'Event', robots: { index: false, follow: false } };
     }
 
     const { event } = result;

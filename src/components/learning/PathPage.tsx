@@ -13,8 +13,10 @@ import { LearningPathView } from './LearningPathView';
 export async function pathMetadata(kind: PathKind, slug: string): Promise<Metadata> {
     const result = await fetchPublicPath(slug);
     if (result.state !== 'ok') {
-        // Drafts, unknown slugs and API errors: nothing to describe or index
-        return { title: kind === 'roadmap' ? 'Roadmap' : 'Learning path', robots: { index: false, follow: false } };
+        const title = kind === 'roadmap' ? 'Roadmap' : 'Learning path';
+        // A failing API says nothing about the path: no robots rule, so an outage cannot drop a good page.
+        // Drafts and unknown slugs: nothing to describe or index.
+        return result.state === 'error' ? { title } : { title, robots: { index: false, follow: false } };
     }
     const path = result.data;
     const url = `${SITE_URL}${pathHref(path.kind, path.slug)}`;

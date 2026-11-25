@@ -14,7 +14,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicCohort(id);
 
     if (result.state !== 'ok') {
-        return { title: 'Internship', robots: { index: false, follow: false } };
+        // A failing API says nothing about the program: no robots rule, so an outage cannot drop a good page
+        return result.state === 'error' ? { title: 'Internship' } : { title: 'Internship', robots: { index: false, follow: false } };
     }
 
     const { cohort } = result;

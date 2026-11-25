@@ -13,7 +13,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const { id } = await params;
     if (!isSeriesId(id)) return { title: 'Series', robots: { index: false, follow: false } };
     const result = await fetchPublicSeries(id);
-    if (result.state !== 'ok') return { title: 'Series', robots: { index: false, follow: false } };
+    // A failing API says nothing about the series: no robots rule
+    if (result.state !== 'ok') return result.state === 'error' ? { title: 'Series' } : { title: 'Series', robots: { index: false, follow: false } };
 
     const { series } = result;
     const description = `${describeRecurrence(series.recurrence)}. ${plainExcerpt(series.shortDescription || series.description || '', 120)}`.trim();

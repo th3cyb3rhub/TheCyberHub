@@ -10,8 +10,9 @@ const NO_INDEX: Metadata['robots'] = { index: false, follow: false };
 export const isUnlisted = (competition: { isPublic?: boolean } | null | undefined): boolean => competition?.isPublic === false;
 
 /** The metadata of a competition page. A draft, an unknown slug or a failing API passes `null`. */
-export function competitionMetadata(competition: CtfCompetition | null): Metadata {
-    if (!competition) return { title: 'Competition', robots: NO_INDEX };
+/** A failing API (`outage`) says nothing about indexing: only a competition that is known to be hidden is kept out of search */
+export function competitionMetadata(competition: CtfCompetition | null, outage = false): Metadata {
+    if (!competition) return outage ? { title: 'Competition' } : { title: 'Competition', robots: NO_INDEX };
     if (isUnlisted(competition)) return { title: competition.title, robots: NO_INDEX };
 
     const description = excerpt(competition.shortDescription || competition.description, 160) || `${competition.title}: a capture the flag competition on TheCyberHub.`;
@@ -36,8 +37,8 @@ export function competitionMetadata(competition: CtfCompetition | null): Metadat
  * The metadata of a results page. `results` is null when there are none to show (not ended, a draft,
  * a failing API); `unlisted` says the competition is link only, however it was learnt.
  */
-export function resultsMetadata(results: CtfResults | null, unlisted: boolean): Metadata {
-    if (!results) return { title: 'Results', robots: { index: false, follow: true } };
+export function resultsMetadata(results: CtfResults | null, unlisted: boolean, outage = false): Metadata {
+    if (!results) return outage ? { title: 'Results' } : { title: 'Results', robots: { index: false, follow: true } };
     const { competition } = results;
     if (unlisted || isUnlisted(competition)) return { title: `${competition.title}: results`, robots: NO_INDEX };
 

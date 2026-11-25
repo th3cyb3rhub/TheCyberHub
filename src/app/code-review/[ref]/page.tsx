@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicSnippet(ref);
 
     if (result.state !== 'ok') {
-        // A draft, an unknown slug or a failing API stays out of search results
-        return { title: 'Code review exercise', robots: { index: false, follow: false } };
+        // A failing API says nothing about the exercise: no robots rule, so an outage cannot drop a good page.
+        // A draft or an unknown slug stays out of search results.
+        return result.state === 'error' ? { title: 'Code review exercise' } : { title: 'Code review exercise', robots: { index: false, follow: false } };
     }
 
     const { snippet } = result;

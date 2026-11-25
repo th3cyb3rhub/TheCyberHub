@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const result = await fetchPublicLab(slug);
 
     if (result.state !== 'ok') {
-        // A draft, an archived lab or an unknown slug stays out of search results
-        return { title: 'Lab', robots: { index: false, follow: false } };
+        // A failing API says nothing about the lab: no robots rule, so an outage cannot drop a good page.
+        // A draft, an archived lab or an unknown slug stays out of search results.
+        return result.state === 'error' ? { title: 'Lab' } : { title: 'Lab', robots: { index: false, follow: false } };
     }
 
     const { lab } = result;
