@@ -16,7 +16,10 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); document.body.innerHTML = '' })
 
+// Plain anchors on purpose: the bar listens for clicks on any document link.
+/* eslint-disable @next/next/no-html-link-for-pages */
 const Page = () => <div><a href="/jobs">Jobs</a><a href="https://other.example/">Other</a><a href="/labs">Here</a><NavigationProgress /></div>
+/* eslint-enable @next/next/no-html-link-for-pages */
 
 function setup() {
     window.history.pushState({}, '', '/labs')
