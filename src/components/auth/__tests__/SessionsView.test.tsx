@@ -45,6 +45,14 @@ describe('SessionsView', () => {
         expect(api.listSessions).not.toHaveBeenCalled()
     })
 
+    it('does not print "Invalid Date" for a last-used time the API got wrong', async () => {
+        api.listSessions.mockResolvedValue([{ ...here, lastUsedAt: 'not a date' }])
+        mount()
+        const row = await screen.findByTestId('session-row')
+        expect(row.querySelector('time')).not.toHaveAttribute('title')
+        expect(row).not.toHaveTextContent('Invalid Date')
+    })
+
     it('lists the devices, marks the current session and offers sign out only for the others', async () => {
         mount()
         const rows = await screen.findAllByTestId('session-row')

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, Eye, EyeOff, Mail, Lock, User, ArrowRight, Loader2, CheckCircle2, Zap, Users, BookOpen, XCircle } from 'lucide-react';
@@ -14,6 +14,7 @@ import { landingPath } from '@/lib/landingPath';
 import { takePending2fa } from '@/lib/pending2fa';
 import { stashOAuthReturn } from '@/lib/oauthReturn';
 import { takeSessionNotice } from '@/lib/authSession';
+import { AUTH_CODES, errorCode } from '@/lib/authErrors';
 import { PasswordStrength } from '@/components/auth/PasswordStrength';
 
 type AuthMode = 'login' | 'register' | '2fa';
@@ -107,7 +108,11 @@ const AuthPage = () => {
     };
 
     // An OAuth sign-in for an account with 2FA lands here with the challenge stashed.
+    // The note and the challenge are read once: a second run of this effect (React StrictMode in development) finds them taken
+    const handoffTaken = useRef(false);
     useEffect(() => {
+        if (handoffTaken.current) return;
+        handoffTaken.current = true;
         setNotice(takeSessionNotice());
         const pending = takePending2fa();
         if (pending) {
@@ -201,6 +206,15 @@ const AuthPage = () => {
 
             // The effect above takes the member on as soon as the user is set
         } catch (err) {
+            // The second step ran out of time: more codes cannot work, so start again at the password
+            if (mode === '2fa' && errorCode(err) === AUTH_CODES.TWO_FACTOR_CHALLENGE_EXPIRED) {
+                setTempToken(null);
+                setTwoFactorCode('');
+                setMode('login');
+                setSuccess(null);
+                setError('Your two-factor step expired. Enter your password again to get a new code prompt.');
+                return;
+            }
             let message = 'Something went wrong';
             if (err instanceof Error) {
                 message = err.message;
@@ -437,6 +451,9 @@ const AuthPage = () => {
                             </>
                         )}
 
+                        {/* Email and password are not part of the second step, where an empty required field would stop the form from sending */}
+                        {mode !== '2fa' && (
+                        <>
                         {/* Email */}
                         <div>
                             <label htmlFor="auth-email" className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Email</label>
@@ -499,6 +516,8 @@ const AuthPage = () => {
                             {fieldErrors.password && <p id="password-error" className="text-red-700 dark:text-red-400 text-xs mt-1">{fieldErrors.password}</p>}
                             {mode === 'register' && <PasswordStrength password={formData.password} id="password-strength" />}
                         </div>
+                        </>
+                        )}
 
                         {/* Confirm Password (Register only) */}
                         {mode === 'register' && (

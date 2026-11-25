@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ApiError, fetchApi } from '@/lib/api';
 import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
 import { authErrorMessage } from '@/lib/authErrors';
+import { refreshAccessToken } from '@/lib/authRefresh';
 import { onSessionEnded, stashSessionNotice } from '@/lib/authSession';
 import { takePending2fa } from '@/lib/pending2fa';
 import { unsubscribeThisDevice } from '@/lib/push';
@@ -118,23 +119,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [queryClient]);
 
     // The API says this session is over (signed out from another device, a ban, an old token) or a
-    // refresh failed: clear, and take a member who was signed in to sign-in, back here afterwards
+    // refresh failed: clear everything. A member who was signed in is told why on the sign-in page
+    // (the note waits there). Pages that need a member send them to sign-in themselves, and come back
+    // afterwards; a public page just carries on as signed out. A disabled account is taken to
+    // sign-in at once, wherever it was.
     useEffect(() => onSessionEnded((reason) => {
         if (signingOut.current) return;
         const hadUser = userRef.current !== null;
         clearClientState();
         if (!hadUser || window.location.pathname.startsWith('/auth')) return;
         stashSessionNotice(reason);
-        router.replace(signInHref(window.location.pathname + window.location.search));
+        if (reason === 'disabled') router.replace(signInHref(window.location.pathname + window.location.search));
     }), [clearClientState, router]);
 
-    // Another tab signed out or signed in as someone else: nothing cached for the previous account stays
-    const identity = token ? tokenUserId(token) ?? 'unknown' : null;
-    const lastIdentity = useRef<string | null>(null);
+    // A token an older version of the site kept for renewing is replaced by the cookie flow at once
+    // instead of whenever the first renewal happens: it is readable by any script on the page
     useEffect(() => {
-        if (lastIdentity.current !== null && lastIdentity.current !== identity) queryClient.clear();
-        lastIdentity.current = identity;
-    }, [identity, queryClient]);
+        if (!legacyRefreshToken.get()) return;
+        const current = tokenStore.get();
+        if (current) void refreshAccessToken(current);
+        else legacyRefreshToken.remove();
+    }, []);
+
+    // The token changed to another account's, here or in another tab: nothing cached for the previous
+    // account stays. This runs when the token changes, before React renders for the new one, so it
+    // cannot remove what the new account's components start asking for. The new account's own `me`
+    // entry (seeded by a sign-in) is kept.
+    useEffect(() => {
+        const identityOf = (value: string | null) => (value ? tokenUserId(value) ?? 'unknown' : null);
+        let last = identityOf(tokenStore.get());
+        return tokenStore.subscribe(() => {
+            const next = identityOf(tokenStore.get());
+            if (next === last) return;
+            const hadAccount = last !== null;
+            last = next;
+            if (!hadAccount) return;
+            queryClient.removeQueries({ predicate: (query) => !(query.queryKey[0] === 'auth' && query.queryKey[1] === 'me' && query.queryKey[2] === next) });
+        });
+    }, [queryClient]);
 
     /** Stores the session a sign-in answered with. The previous account's cache goes first. */
     const startSession = useCallback((result: { token?: string; data?: AuthUser }) => {
@@ -174,7 +196,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const logout = async (options?: { allDevices?: boolean }) => {
         const current = tokenStore.get();
-        const allDevices = !!options?.allDevices;
+        // "Everywhere" needs a signed-in session to speak for; without one it is the ordinary sign-out
+        const allDevices = !!options?.allDevices && !!current;
         if (current) {
             // This browser must stop getting the member's pushes. Started before the token goes, with that token, and never allowed to block or break signing out.
             try {
@@ -182,23 +205,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } catch {
                 // Nothing to do
             }
-            signingOut.current = true;
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            try {
-                const request = fetchApi(API_ENDPOINTS.AUTH.LOGOUT, { method: 'POST', body: JSON.stringify(allDevices ? { allDevices: true } : {}) });
-                const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Sign out timed out')), LOGOUT_WAIT_MS); });
-                await Promise.race([request, timeout]);
-            } catch (err) {
-                // Signing out of one device always completes here: a session that is already gone, or an
-                // API that cannot be reached, must not keep the member signed in. "Everywhere" is a promise
-                // about other devices, so it is only kept when the server confirmed it.
-                if (allDevices) {
-                    signingOut.current = false;
-                    throw err instanceof ApiError ? withMessage(err, 'Could not sign out of all devices.') : new Error('Could not sign out of all devices. Check your connection and try again.');
-                }
-            } finally {
-                clearTimeout(timer);
+        }
+        // The server is always asked, with or without a usable access token: it ends the session the
+        // refresh cookie belongs to and clears the cookie, which this page cannot do itself.
+        signingOut.current = true;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const request = fetchApi(API_ENDPOINTS.AUTH.LOGOUT, { method: 'POST', body: JSON.stringify(allDevices ? { allDevices: true } : {}) });
+            const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Sign out timed out')), LOGOUT_WAIT_MS); });
+            await Promise.race([request, timeout]);
+        } catch (err) {
+            // Signing out of one device always completes here: a session that is already gone, or an
+            // API that cannot be reached, must not keep the member signed in. "Everywhere" is a promise
+            // about other devices, so it is only kept when the server confirmed it.
+            if (allDevices) {
+                signingOut.current = false;
+                // A forced end (a failed renewal) may already have dropped the token: this device is signed out then
+                if (tokenStore.get() === null) clearClientState();
+                throw err instanceof ApiError ? withMessage(err, 'Could not sign out of all devices.') : new Error('Could not sign out of all devices. Check your connection and try again.');
             }
+        } finally {
+            clearTimeout(timer);
         }
         clearClientState();
         signingOut.current = false;

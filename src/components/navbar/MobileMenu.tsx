@@ -22,7 +22,7 @@ interface MobileMenuProps {
     isOpen: boolean;
     close: () => void;
     user: { name: string; email: string; role: string } | null;
-    logout: () => void;
+    logout: (options?: { allDevices?: boolean }) => Promise<void>;
     learnLinks: NavDropdownItem[];
     communityLinks: NavDropdownItem[];
     resourceLinks: NavDropdownItem[];
@@ -140,7 +140,7 @@ export const MobileMenu = ({
                                 </>
                             )}
 
-                            <button onClick={() => { logout(); close(); }} className="w-full flex items-center gap-3 p-4 rounded-lg text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-colors">
+                            <button onClick={() => { void logout(); close(); }} className="w-full flex items-center gap-3 p-4 rounded-lg text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-colors">
                                 <LogOut className="w-4 h-4" /> Sign Out
                             </button>
                         </>

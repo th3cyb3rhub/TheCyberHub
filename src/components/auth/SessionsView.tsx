@@ -38,7 +38,7 @@ function SessionRow({ session, busy, disabled, onRevoke }: { session: AccountSes
                 </p>
                 <p className={`break-words text-sm ${muted}`}>
                     {where} <span aria-hidden="true">&middot;</span> Last active{' '}
-                    <time dateTime={session.lastUsedAt} title={new Date(session.lastUsedAt).toLocaleString()}>{timeAgo(session.lastUsedAt)}</time>
+                    <time dateTime={session.lastUsedAt} title={Number.isNaN(Date.parse(session.lastUsedAt)) ? undefined : new Date(session.lastUsedAt).toLocaleString()}>{timeAgo(session.lastUsedAt)}</time>
                 </p>
                 <p className={`text-xs ${muted}`}>Signed in {startedOn(session.createdAt)}</p>
             </div>

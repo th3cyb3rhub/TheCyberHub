@@ -16,7 +16,7 @@ import {
 
 interface UserDropdownProps {
     user: { name: string; email: string; role: string };
-    logout: () => void;
+    logout: (options?: { allDevices?: boolean }) => Promise<void>;
 }
 
 export const UserDropdown = ({
@@ -75,7 +75,7 @@ export const UserDropdown = ({
                                 </Link>
                             </>
                         )}
-                        <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-all">
+                        <button onClick={() => { void logout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-all">
                             <LogOut className="w-4 h-4" /> Sign Out
                         </button>
                     </div>

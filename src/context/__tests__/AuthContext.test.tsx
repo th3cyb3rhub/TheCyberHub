@@ -243,7 +243,7 @@ describe('logout', () => {
 })
 
 describe('a session the API ended', () => {
-    it('signs a signed-in member out and sends them to sign-in, back to this page, with a note', async () => {
+    it('signs a signed-in member out and leaves a note for the sign-in page, without moving them off a public page', async () => {
         await signedIn()
         handler = () => ({ status: 401, body: { success: false, error: { code: 'AUTH_SESSION_REVOKED', message: 'This session has ended.' } } })
         await act(async () => {
@@ -251,8 +251,19 @@ describe('a session the API ended', () => {
         })
         await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('none'))
         expect(window.localStorage.getItem('token')).toBeNull()
-        expect(nav.replace).toHaveBeenCalledWith('/auth?redirect=%2Fnotifications%3Ftab%3Dall')
+        // Pages that need a member send them to sign-in themselves; a public page carries on signed out
+        expect(nav.replace).not.toHaveBeenCalled()
         expect(takeSessionNotice()).toBe('This device was signed out. Please sign in again.')
+    })
+
+    it('takes a disabled account to sign-in at once, back to this page, with a note', async () => {
+        await signedIn()
+        handler = () => ({ status: 403, body: { success: false, error: { code: 'AUTH_ACCOUNT_DISABLED', message: 'disabled' } } })
+        await act(async () => {
+            await expect(api.updateProfile({ name: 'Ada' })).rejects.toMatchObject({ code: 'AUTH_ACCOUNT_DISABLED' })
+        })
+        await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/auth?redirect=%2Fnotifications%3Ftab%3Dall'))
+        expect(takeSessionNotice()).toContain('disabled')
     })
 
     it('does not send anyone away from the sign-in page', async () => {
@@ -309,5 +320,109 @@ describe('account changes', () => {
         handler = (url) => (url.includes('/auth/me') ? { status: 200, body: { data: { ...ada, username: 'grace' } } } : { status: 200 })
         await act(async () => { await api.refreshUser() })
         await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('grace'))
+    })
+})
+
+
+const jwt = (claims: Record<string, unknown>) => {
+    const part = (value: unknown) => btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    return `${part({ alg: 'HS256', typ: 'JWT' })}.${part(claims)}.signature`
+}
+
+describe('one account after another in the same browser', () => {
+    const tokenA = jwt({ id: 'u1', sid: 's1' })
+    const tokenB = jwt({ id: 'u2', sid: 's2' })
+    const grace = { id: 'u2', username: 'grace', role: 'user' }
+    // The API answers for whoever the bearer token names
+    const byBearer = (url: string, init: RequestInit) => {
+        if (!url.includes('/api/auth/me')) return { status: 200, body: { success: true } }
+        const bearer = String((init.headers as Record<string, string>).Authorization ?? '')
+        return { status: 200, body: { success: true, data: bearer.includes(tokenB) ? grace : ada } }
+    }
+
+    it('keys the account by the id in the token', async () => {
+        handler = byBearer
+        window.localStorage.setItem('token', tokenA)
+        mount()
+        await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('ada'))
+        expect(queryClient.getQueryData(['auth', 'me', 'u1'])).toMatchObject({ username: 'ada' })
+        expect(queryClient.getQueryData(['auth', 'me', 'unknown'])).toBeUndefined()
+    })
+
+    it('shows the second account and none of the first when another tab signs in as someone else', async () => {
+        handler = byBearer
+        window.localStorage.setItem('token', tokenA)
+        mount()
+        await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('ada'))
+        queryClient.setQueryData(['feed'], { items: ['ada only'] })
+
+        act(() => { tokenStore.set(tokenB) })
+        await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('grace'))
+        expect(queryClient.getQueryData(['feed'])).toBeUndefined()
+        expect(queryClient.getQueryData(['auth', 'me', 'u1'])).toBeUndefined()
+        expect(queryClient.getQueryData(['auth', 'me', 'u2'])).toMatchObject({ username: 'grace' })
+    })
+
+    it('shows the second account and none of the first after a sign-in here', async () => {
+        handler = byBearer
+        window.localStorage.setItem('token', tokenA)
+        mount()
+        await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('ada'))
+        queryClient.setQueryData(['feed'], { items: ['ada only'] })
+
+        handler = (url, init) => (url.includes('/auth/login') ? { status: 200, body: { success: true, token: tokenB, data: grace } } : byBearer(url, init))
+        await act(async () => { await api.login('grace@example.com', 'Secret-123') })
+        expect(screen.getByTestId('user')).toHaveTextContent('grace')
+        expect(queryClient.getQueryData(['feed'])).toBeUndefined()
+        expect(queryClient.getQueryData(['auth', 'me', 'u1'])).toBeUndefined()
+    })
+})
+
+describe('signing out without a usable access token', () => {
+    it('still asks the server, with the cookie, when there is no token at all', async () => {
+        mount()
+        await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+        await act(async () => { await api.logout() })
+        const [call] = callsTo('/api/auth/logout')
+        expect(call).toBeDefined()
+        expect(call[1]).toMatchObject({ method: 'POST', credentials: 'include' })
+        expect((call[1].headers as Record<string, string>).Authorization).toBeUndefined()
+    })
+
+    it('ends this device even when the server refuses because the token is gone', async () => {
+        await signedIn()
+        handler = (url) => (url.includes('/logout') ? invalid : url.includes('/refresh') ? invalid : meOk)
+        await act(async () => { await api.logout() })
+        expect(window.localStorage.getItem('token')).toBeNull()
+        expect(screen.getByTestId('user')).toHaveTextContent('none')
+    })
+
+    it('reports that "everywhere" did not complete, but clears this device, when a failed renewal already ended it', async () => {
+        await signedIn()
+        stashPending2fa('temp-left-over')
+        handler = (url) => (url.includes('/logout') || url.includes('/refresh') ? invalid : meOk)
+        await act(async () => {
+            await expect(api.logout({ allDevices: true })).rejects.toBeTruthy()
+        })
+        expect(window.localStorage.getItem('token')).toBeNull()
+        expect(takePending2fa()).toBeNull()
+    })
+})
+
+describe('a refresh token an older version stored', () => {
+    it('is replaced by the cookie flow when the app starts, and dropped', async () => {
+        window.localStorage.setItem('refreshToken', 'old-refresh')
+        handler = (url) => (url.includes('/api/auth/refresh') ? { status: 200, body: { success: true, token: 'tok-new' } } : meOk)
+        window.localStorage.setItem('token', 'tok-1')
+        mount()
+        await waitFor(() => expect(window.localStorage.getItem('refreshToken')).toBeNull())
+        expect(JSON.parse(String(callsTo('/api/auth/refresh')[0][1].body))).toEqual({ refreshToken: 'old-refresh' })
+    })
+
+    it('is dropped without a call when there is no session to renew', async () => {
+        window.localStorage.setItem('refreshToken', 'old-refresh')
+        mount()
+        await waitFor(() => expect(window.localStorage.getItem('refreshToken')).toBeNull())
+        expect(callsTo('/api/auth/refresh')).toHaveLength(0)
     })
 })

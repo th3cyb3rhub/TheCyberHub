@@ -413,8 +413,9 @@ const ProfilePage = () => {
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        // Wait for the sign-out: the home page must not show this member as signed in
+        await logout();
         addToast({
             variant: 'info',
             title: 'Signed out',
