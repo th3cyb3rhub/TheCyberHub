@@ -167,6 +167,32 @@ describe('the list', () => {
         expect(q.params.at(-1)).toMatchObject({ isPublished: true })
     })
 
+    describe('after the last row of a page was deleted', () => {
+        const page = (n: number, items: CrManageCard[], hasMore: boolean, pages: number) => ({
+            data: { data: items, pagination: { page: n, limit: 20, total: 20 + items.length, pages, hasMore } },
+            isLoading: false, isError: false, isSuccess: true, isPlaceholderData: false, error: null, refetch: vi.fn(),
+        })
+
+        it('goes back a page when the page it is on is empty now', () => {
+            q.managed = page(1, [makeManageCard()], true, 2)
+            const view = render(<AdminSnippetsView />)
+            fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+            expect(q.params.at(-1)).toMatchObject({ page: 2 })
+            q.managed = page(2, [], false, 1)
+            view.rerender(<AdminSnippetsView />)
+            expect(q.params.at(-1)).toMatchObject({ page: 1 })
+        })
+
+        it('does not leave the page while the old list is only kept on screen', () => {
+            q.managed = page(1, [makeManageCard()], true, 2)
+            const view = render(<AdminSnippetsView />)
+            fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+            q.managed = { ...page(2, [], false, 1), isPlaceholderData: true }
+            view.rerender(<AdminSnippetsView />)
+            expect(q.params.at(-1)).toMatchObject({ page: 2 })
+        })
+    })
+
     it('shows an honest error with a retry, an empty state and a skeleton', () => {
         const refetch = vi.fn()
         q.managed = { data: undefined, isLoading: false, isError: true, error: new ApiError('x', 500, 'INTERNAL'), refetch }

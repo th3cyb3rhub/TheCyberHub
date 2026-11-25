@@ -3,9 +3,9 @@
 import { MousePointerClick, Plus, Trash2 } from 'lucide-react';
 import { btnSecondary, card, focusRing, input, inputError, muted } from '@/components/events/styles';
 import { Field } from '@/components/internships/FormField';
-import { CR_LIMITS, SEVERITY_LABELS, categoryLabel } from '@/lib/codeReview/constants';
+import { CR_LIMITS, SEVERITY_LABELS, findingTypeLabel } from '@/lib/codeReview/constants';
 import { newFinding, type FindingRow } from '@/lib/codeReview/form';
-import { CR_CATEGORIES, CR_SEVERITIES, type CrSeverity } from '@/types/codeReview';
+import { CR_FINDING_TYPES, CR_SEVERITIES, type CrSeverity } from '@/types/codeReview';
 
 type Errors = Record<string, string>;
 
@@ -15,12 +15,13 @@ const iconBtn = `inline-flex h-9 w-9 items-center justify-center rounded-lg bord
  * The findings (the answer key). The lines can be typed or picked on the preview of the code;
  * every range is checked against the code as it changes (inside the code, no shared lines).
  */
-export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, lineCount, disabled = false }: {
+export function FindingsEditor({ rows, onChange, errors, pickingKey, onPick, lineCount, disabled = false }: {
     rows: FindingRow[];
     onChange: (rows: FindingRow[]) => void;
     errors: Errors;
-    pickingIndex: number | null;
-    onPick: (index: number | null) => void;
+    /** The row being picked is followed by its key, not its position */
+    pickingKey: string | null;
+    onPick: (key: string | null) => void;
     lineCount: number;
     disabled?: boolean;
 }) {
@@ -32,7 +33,7 @@ export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, l
             {rows.length === 0 && <p className={`mb-3 text-sm ${muted}`}>No findings yet. An exercise needs at least one before it can be graded or published.</p>}
             <ol className="space-y-4">
                 {rows.map((row, i) => {
-                    const picking = pickingIndex === i;
+                    const picking = pickingKey === row.key;
                     const rangeError = err(i, 'lineStart') || err(i, 'lineEnd');
                     return (
                         <li key={row.key} className={`${card} space-y-3 p-4 ${picking ? 'ring-2 ring-violet-600 dark:ring-violet-400' : ''}`} data-testid="finding-row" data-invalid={rangeError ? 'true' : undefined}>
@@ -41,7 +42,7 @@ export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, l
                                     Finding {i + 1}{row.title.trim() ? `: ${row.title.trim()}` : ''}
                                 </h3>
                                 <div className="flex gap-1">
-                                    <button type="button" className={`${btnSecondary} !px-3 !py-1.5`} disabled={disabled} aria-pressed={picking} onClick={() => onPick(picking ? null : i)}>
+                                    <button type="button" className={`${btnSecondary} !px-3 !py-1.5`} disabled={disabled} aria-pressed={picking} onClick={() => onPick(picking ? null : row.key)}>
                                         <MousePointerClick className="h-4 w-4" aria-hidden="true" /> {picking ? 'Stop picking' : 'Pick lines on the preview'}
                                     </button>
                                     <button type="button" className={`${iconBtn} text-red-800 dark:text-red-300`} disabled={disabled} onClick={() => { if (picking) onPick(null); onChange(rows.filter((_, j) => j !== i)); }} aria-label={`Remove finding ${i + 1}`}><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
@@ -62,7 +63,7 @@ export function FindingsEditor({ rows, onChange, errors, pickingIndex, onPick, l
                                 <Field id={`finding-${row.key}-type`} label={`Finding ${i + 1} vulnerability type`} required error={err(i, 'vulnerabilityType')}>
                                     {(p) => (
                                         <select {...p} value={row.vulnerabilityType} onChange={(e) => set(i, { vulnerabilityType: e.target.value })} className={input}>
-                                            {CR_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                                            {CR_FINDING_TYPES.map((c) => <option key={c} value={c}>{findingTypeLabel(c)}</option>)}
                                         </select>
                                     )}
                                 </Field>

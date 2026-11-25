@@ -80,10 +80,10 @@ export function ConfirmDialog({
                     </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6">
-                    <button ref={cancelRef} onClick={onCancel} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                    <button type="button" ref={cancelRef} onClick={onCancel} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
                         {cancelText}
                     </button>
-                    <button onClick={onConfirm} className={`px-4 py-2 text-sm rounded-lg text-white transition-colors ${variantStyles[variant]}`}>
+                    <button type="button" onClick={onConfirm} className={`px-4 py-2 text-sm rounded-lg text-white transition-colors ${variantStyles[variant]}`}>
                         {confirmText}
                     </button>
                 </div>

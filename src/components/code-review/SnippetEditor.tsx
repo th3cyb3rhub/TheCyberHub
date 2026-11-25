@@ -10,21 +10,28 @@ import { Field } from '@/components/internships/FormField';
 import { useUnsavedGuard } from '@/components/internships/UnsavedGuard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/context/ToastContext';
-import { useCreateSnippet, useDeleteSnippet, useUpdateSnippet } from '@/hooks/queries/useCodeReview';
+import { useCreateSnippet, useDeleteSnippet, useSetPublished, useUpdateSnippet } from '@/hooks/queries/useCodeReview';
 import { CR_LIMITS, DIFFICULTY_LABELS, categoryLabel, languageLabel } from '@/lib/codeReview/constants';
-import { crErrorCode, crErrorMessage, fieldErrors, unattachedDetails } from '@/lib/codeReview/errors';
+import { crErrorCode, crErrorMessage, fieldErrors, keyChangeInfo, unattachedDetails, type KeyChange } from '@/lib/codeReview/errors';
 import {
-    buildPayload, byteLength, countLines, emptySnippet, findingBands, fromSnippet, isLiveError, normaliseCode, overlapBands, validateSnippet, wouldBeStripped,
+    buildPayload, byteLength, countLines, emptySnippet, findingBands, fromSnippet, isLiveError, normaliseCode, overlapBands, sanitisedFieldsStripped, validateSnippet,
     type CrFormValues,
 } from '@/lib/codeReview/form';
 import { clampLine, moveSelection, selectLine, splitCode, type Selection } from '@/lib/codeReview/selection';
-import { CR_CATEGORIES, CR_DIFFICULTIES, CR_LANGUAGES, type CrAdminSnippet } from '@/types/codeReview';
+import { CR_CATEGORIES, CR_DIFFICULTIES, CR_LANGUAGES, type CrAdminSnippet, type CrSnippetPayload } from '@/types/codeReview';
 import { CodeLines, type Band } from './CodeLines';
 import { FindingsEditor } from './FindingsEditor';
 import { HintsEditor } from './HintsEditor';
 
 // A disabled field is dimmed by the shared input style; a moderator reading the answer key needs it at full contrast
 const READ_ONLY_FIELDS = '[&_input:disabled]:opacity-100 [&_input:disabled]:text-gray-900 dark:[&_input:disabled]:text-white [&_textarea:disabled]:opacity-100 [&_textarea:disabled]:text-gray-900 dark:[&_textarea:disabled]:text-white [&_select:disabled]:opacity-100 [&_select:disabled]:text-gray-900 dark:[&_select:disabled]:text-white';
+
+/** What a held-back save would change, in the numbers the API gave */
+function keyChangeText(k: KeyChange): string {
+    const members = k.solveCount === 1 ? '1 member has' : `${k.solveCount} members have`;
+    return `${members} solved this exercise. This change touches its code, findings or hints: findings go from ${k.oldFindingCount} to ${k.newFindingCount}, hints from ${k.oldHintCount} to ${k.newHintCount}. Attempts already graded keep their score; every later attempt is graded against the new answer key.`;
+}
+
 const mono = `${input} font-mono text-[13px] leading-6`;
 
 /**
@@ -41,16 +48,20 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
     const create = useCreateSnippet();
     const update = useUpdateSnippet();
     const remove = useDeleteSnippet();
+    const unpublish = useSetPublished();
     const pending = create.isPending || update.isPending;
 
     const [initial] = useState<CrFormValues>(() => (snippet ? fromSnippet(snippet) : emptySnippet()));
     const [values, setValues] = useState<CrFormValues>(initial);
     const [server, setServer] = useState<Record<string, string>>({});
     const [submitted, setSubmitted] = useState(false);
-    const [banner, setBanner] = useState<{ message: string; lines: string[] } | null>(null);
+    const [banner, setBanner] = useState<{ message: string; lines: string[]; unpublish?: boolean } | null>(null);
+    /** A save the API held back because members solved the exercise: the numbers it gave, and what was sent */
+    const [keyChange, setKeyChange] = useState<{ info: KeyChange; payload: CrSnippetPayload } | null>(null);
     const [saved, setSaved] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [picking, setPicking] = useState<number | null>(null);
+    // The finding being picked is followed by its own key, so adding, removing or moving rows never changes which one it is
+    const [pickingKey, setPickingKey] = useState<string | null>(null);
     const [anchor, setAnchor] = useState<number | null>(null);
     const [cursor, setCursor] = useState<Selection | null>(null);
     const [previewFocused, setPreviewFocused] = useState(false);
@@ -71,6 +82,11 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
         setServer((old) => Object.fromEntries(Object.entries(old).filter(([k]) => k !== key && !k.startsWith(`${key}.`))));
     };
 
+    const picking = useMemo(() => {
+        const at = pickingKey === null ? -1 : values.findings.findIndex((f) => f.key === pickingKey);
+        return at >= 0 ? at : null;
+    }, [pickingKey, values.findings]);
+
     const lineCount = useMemo(() => countLines(values.vulnerableCode), [values.vulnerableCode]);
     const lines = useMemo(() => (lineCount ? splitCode(normaliseCode(values.vulnerableCode)) : []), [values.vulnerableCode, lineCount]);
     const bytes = useMemo(() => byteLength(normaliseCode(values.vulnerableCode)), [values.vulnerableCode]);
@@ -90,30 +106,32 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
         ];
     }, [values.findings, lineCount]);
 
-    const stripped = [values.vulnerableCode, values.fixedCode, values.exploitedCode, values.fixedExploitedCode, values.explanation, ...values.findings.map((f) => f.explanation)].some(wouldBeStripped);
+    // Code and answer text are stored as written; only these fields still lose script-like text
+    const stripped = sanitisedFieldsStripped(values);
 
     // ---- Picking lines on the preview ----
     const pick = (line: number) => {
-        if (picking === null) return;
+        if (pickingKey === null || picking === null) return;
         const n = clampLine(line, lineCount);
         if (anchor === null) {
-            setValues((old) => ({ ...old, findings: old.findings.map((f, i) => (i === picking ? { ...f, lineStart: String(n), lineEnd: String(n) } : f)) }));
+            setValues((old) => ({ ...old, findings: old.findings.map((f) => (f.key === pickingKey ? { ...f, lineStart: String(n), lineEnd: String(n) } : f)) }));
             setAnchor(n);
             setPickNote(`First line ${n}. Now pick the last line, or pick ${n} again for a single line.`);
         } else {
             const start = Math.min(anchor, n);
             const end = Math.max(anchor, n);
-            setValues((old) => ({ ...old, findings: old.findings.map((f, i) => (i === picking ? { ...f, lineStart: String(start), lineEnd: String(end) } : f)) }));
+            setValues((old) => ({ ...old, findings: old.findings.map((f) => (f.key === pickingKey ? { ...f, lineStart: String(start), lineEnd: String(end) } : f)) }));
             setPickNote(`Finding ${picking + 1} now covers ${start === end ? `line ${start}` : `lines ${start} to ${end}`}.`);
             setAnchor(null);
-            setPicking(null);
+            setPickingKey(null);
         }
         setServer((old) => Object.fromEntries(Object.entries(old).filter(([k]) => !k.startsWith('findings.'))));
     };
-    const startPicking = (index: number | null) => {
-        setPicking(index);
+    const startPicking = (key: string | null) => {
+        setPickingKey(key);
         setAnchor(null);
-        setPickNote(index === null ? 'Stopped picking.' : `Picking lines for finding ${index + 1}. Click the first line on the preview, then the last line.`);
+        const index = key === null ? -1 : values.findings.findIndex((f) => f.key === key);
+        setPickNote(index < 0 ? 'Stopped picking.' : `Picking lines for finding ${index + 1}. Click the first line on the preview, then the last line.`);
     };
     const onPreviewKey = (e: React.KeyboardEvent<HTMLOListElement>) => {
         if (picking === null || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -131,7 +149,9 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
         focusProblem();
     };
 
-    const onError = (err: unknown) => {
+    const onError = (err: unknown, sent?: CrSnippetPayload) => {
+        const change = keyChangeInfo(err);
+        if (change && sent) { setKeyChange({ info: change, payload: sent }); return; }
         const fields = fieldErrors(err);
         const code = crErrorCode(err);
         if (code === 'CR_SLUG_TAKEN') fields.slug = crErrorMessage(err);
@@ -159,8 +179,28 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
         setServer({});
         const payload = buildPayload(values, mode);
         const done = (message: string) => { setSaved(true); addToast({ variant: 'success', message }); router.push('/admin/code-review'); };
-        if (snippet) update.mutate({ ref: snippet.slug, payload }, { onSuccess: () => done('Exercise saved.'), onError });
+        if (snippet) update.mutate({ ref: snippet.slug, payload }, { onSuccess: () => done('Exercise saved.'), onError: (err) => onError(err, payload) });
         else create.mutate(payload, { onSuccess: () => done(values.isPublished ? 'Exercise created and published.' : 'Exercise saved as a draft.'), onError });
+    };
+
+    /** The author read the numbers and confirmed: the same save again, now with the confirmation the API asks for */
+    const confirmKeyChange = () => {
+        if (!snippet || !keyChange) return;
+        const payload = { ...keyChange.payload, confirmKeyChange: true };
+        setKeyChange(null);
+        update.mutate({ ref: snippet.slug, payload }, {
+            onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: 'Exercise saved.' }); router.push('/admin/code-review'); },
+            onError: (err) => onError(err),
+        });
+    };
+
+    const doUnpublish = () => {
+        if (!snippet) return;
+        setBanner(null);
+        unpublish.mutate({ ref: snippet.slug, published: false }, {
+            onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: 'Exercise unpublished.' }); router.push('/admin/code-review'); },
+            onError: (err) => setBanner({ message: crErrorMessage(err), lines: [] }),
+        });
     };
 
     const doDelete = () => {
@@ -169,7 +209,8 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
         setBanner(null);
         remove.mutate({ ref: snippet.slug }, {
             onSuccess: () => { setSaved(true); addToast({ variant: 'success', message: 'Exercise deleted.' }); router.push('/admin/code-review'); },
-            onError: (err) => setBanner({ message: crErrorMessage(err), lines: [] }),
+            // Members passed it: the answer is to unpublish it, so that is one press away
+            onError: (err) => setBanner({ message: crErrorMessage(err), lines: [], unpublish: crErrorCode(err) === 'CR_HAS_PROGRESS' && values.isPublished }),
         });
     };
 
@@ -189,6 +230,13 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                 <div ref={bannerRef} tabIndex={-1} role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" data-testid="form-banner">
                     <p className="flex items-start gap-2 font-medium"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> {banner.message}</p>
                     {banner.lines.length > 0 && <ul className="mt-2 list-disc pl-9">{banner.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
+                    {banner.unpublish && (
+                        <div className="mt-3 pl-6">
+                            <button type="button" className={btnSecondary} onClick={doUnpublish} disabled={unpublish.isPending} data-testid="unpublish-now">
+                                {unpublish.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Unpublish now
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -224,6 +272,7 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                         <Field id="cr-category" label="Category" required error={e.category}>
                             {(p) => (
                                 <select {...p} value={values.category} onChange={(ev) => set('category', ev.target.value)} className={input}>
+                                    {!(CR_CATEGORIES as readonly string[]).includes(values.category) && <option value="">Choose a category</option>}
                                     {CR_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
                                 </select>
                             )}
@@ -248,14 +297,14 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                     <p role="note" className="mb-4 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100" data-testid="strip-note">
                         <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>
-                            The API removes <code>&lt;script&gt;</code> tags and <code>on...=</code> attributes from anything an admin sends. An exercise whose code has to contain them (an XSS exercise)
-                            cannot be saved here without losing them: add it through the seed file instead.
+                            Code and answer text are stored exactly as written, so an exercise can contain <code>&lt;script&gt;</code> tags or <code>on...=</code> attributes (an XSS exercise).
+                            Titles, descriptions, tags, finding titles and OWASP names have script-like text removed when you save. Members always see code as text, never as HTML.
                         </span>
                     </p>
                     {stripped && (
                         <p role="alert" className="mb-4 flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-950 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100" data-testid="strip-warning">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span>Something you typed looks like a script tag or an event handler. The API will strip it when you save, which would change the code and the line numbers.</span>
+                            <span>A title, description, tag, finding title or OWASP name looks like it has a script tag or an event handler such as <code>once=</code>. The API removes it when you save. Put code in the code or answer fields, or in backticks.</span>
                         </p>
                     )}
                     <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
@@ -295,7 +344,7 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                 </Section>
 
                 <Section id="cr-findings" title="Findings" description="The answer key. Each finding is a range of lines inside the code; findings cannot share lines. Members never see this list: they see a finding only after they find it, or in the solution.">
-                    <FindingsEditor rows={values.findings} onChange={(rows) => setList('findings', rows)} errors={e} pickingIndex={picking} onPick={startPicking} lineCount={lineCount} disabled={readOnly} />
+                    <FindingsEditor rows={values.findings} onChange={(rows) => setList('findings', rows)} errors={e} pickingKey={pickingKey} onPick={startPicking} lineCount={lineCount} disabled={readOnly} />
                 </Section>
 
                 <Section id="cr-hints" title="Hints" description="Members open hints one at a time, in this order. Each costs its points once.">
@@ -362,6 +411,17 @@ export function SnippetEditor({ snippet, readOnly = false }: { snippet?: CrAdmin
                 )}
                 {readOnly && <div className="mt-6"><Link href="/admin/code-review" className={btnSecondary}>Back to the list</Link></div>}
             </section>
+
+            <ConfirmDialog
+                open={keyChange !== null}
+                variant="warning"
+                title="Change an exercise members have solved?"
+                description={keyChange ? keyChangeText(keyChange.info) : ''}
+                confirmText="Save the change"
+                cancelText="Keep editing"
+                onCancel={() => setKeyChange(null)}
+                onConfirm={confirmKeyChange}
+            />
 
             <ConfirmDialog
                 open={confirmDelete}

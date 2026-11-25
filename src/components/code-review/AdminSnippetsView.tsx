@@ -134,6 +134,12 @@ function List({ canWrite }: { canWrite: boolean }) {
     const rows = query.data?.data ?? [];
     const pagination = query.data?.pagination;
 
+    // The last row of the last page was deleted: that page is empty now, so go to the last page that has rows
+    const emptyPage = query.isSuccess && !query.isPlaceholderData && rows.length === 0 && page > 1;
+    useEffect(() => {
+        if (emptyPage) setPage(Math.max(1, Math.min(page - 1, pagination?.pages ?? page - 1)));
+    }, [emptyPage, page, pagination?.pages]);
+
     return (
         <PageShell
             title="Code review"
@@ -165,6 +171,8 @@ function List({ canWrite }: { canWrite: boolean }) {
                 <ListSkeleton label="Loading exercises" />
             ) : query.isError ? (
                 <ErrorState error={query.error} onRetry={() => void query.refetch()} title="Could not load the exercises" />
+            ) : emptyPage ? (
+                <ListSkeleton label="Loading exercises" />
             ) : rows.length === 0 ? (
                 <EmptyState icon={Code2} title={state || search ? 'No exercises match' : 'No exercises yet'} description={state || search ? 'Try another state or search.' : 'Create the first exercise, or load the starter set with the seed script.'} actionLabel={state || search || !canWrite ? undefined : 'New exercise'} actionHref={state || search || !canWrite ? undefined : '/admin/code-review/new'} />
             ) : (

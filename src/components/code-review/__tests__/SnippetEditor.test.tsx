@@ -8,9 +8,10 @@ const toast = vi.hoisted(() => ({ addToast: vi.fn() }))
 const create = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const update = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 const remove = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
+const publish = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: nav.push, replace: vi.fn() }) }))
 vi.mock('@/context/ToastContext', () => ({ useToast: () => toast }))
-vi.mock('@/hooks/queries/useCodeReview', () => ({ useCreateSnippet: () => create, useUpdateSnippet: () => update, useDeleteSnippet: () => remove }))
+vi.mock('@/hooks/queries/useCodeReview', () => ({ useCreateSnippet: () => create, useUpdateSnippet: () => update, useDeleteSnippet: () => remove, useSetPublished: () => publish }))
 
 import { SnippetEditor } from '../SnippetEditor'
 
@@ -126,6 +127,35 @@ describe('finding ranges are checked as they change', () => {
         expect(screen.getByTestId('pick-note')).toHaveTextContent('lines 3 to 5')
     })
 
+    it('keeps picking the same finding when an earlier one is removed', () => {
+        render(<SnippetEditor />)
+        fillBasics()
+        fireEvent.click(screen.getByRole('button', { name: /Add a finding/ }))
+        fireEvent.click(screen.getByRole('button', { name: /Add a finding/ }))
+        fireEvent.click(within(row(1)).getByRole('button', { name: /Pick lines on the preview/ }))
+        expect(screen.getByTestId('picking-banner')).toHaveTextContent('Picking lines for finding 2')
+        fireEvent.click(screen.getByRole('button', { name: 'Remove finding 1' }))
+        // The finding that was second is first now, and it is still the one being picked
+        expect(screen.getByTestId('picking-banner')).toHaveTextContent('Picking lines for finding 1')
+        fireEvent.click(document.getElementById('cr-preview-line-2') as HTMLElement)
+        fireEvent.click(document.getElementById('cr-preview-line-3') as HTMLElement)
+        expect(screen.getAllByTestId('finding-row')).toHaveLength(1)
+        expect(within(row(0)).getByLabelText(/first line/)).toHaveValue('2')
+        expect(within(row(0)).getByLabelText(/last line/)).toHaveValue('3')
+    })
+
+    it('stops picking when the finding being picked is removed', () => {
+        render(<SnippetEditor />)
+        fillBasics()
+        fireEvent.click(screen.getByRole('button', { name: /Add a finding/ }))
+        fireEvent.click(screen.getByRole('button', { name: /Add a finding/ }))
+        fireEvent.click(within(row(0)).getByRole('button', { name: /Pick lines on the preview/ }))
+        fireEvent.click(screen.getByRole('button', { name: 'Remove finding 1' }))
+        expect(screen.queryByTestId('picking-banner')).not.toBeInTheDocument()
+        fireEvent.click(document.getElementById('cr-preview-line-2') as HTMLElement)
+        expect(within(row(0)).getByLabelText(/first line/)).toHaveValue('')
+    })
+
     it('does nothing when a line is clicked while not picking', () => {
         render(<SnippetEditor />)
         fillBasics()
@@ -198,9 +228,75 @@ describe('editing', () => {
         fireEvent.click(screen.getByRole('button', { name: /^Delete exercise/ }))
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete exercise' }))
         expect(remove.mutate).toHaveBeenCalledWith({ ref: 'sql-injection-login' }, expect.any(Object))
+        // The buttons of the dialog never submit the form behind it
+        expect(update.mutate).not.toHaveBeenCalled()
         act(() => (remove.mutate.mock.calls[0][1] as Handlers).onError?.(new ApiError('x', 409, 'CR_HAS_PROGRESS')))
         expect(screen.getByTestId('form-banner')).toHaveTextContent(/unpublish/i)
         expect(nav.push).not.toHaveBeenCalled()
+    })
+
+    it('offers to unpublish right there when a delete is refused because members passed it', () => {
+        render(<SnippetEditor snippet={makeAdminSnippet({ isPublished: true })} />)
+        fireEvent.click(screen.getByRole('button', { name: /^Delete exercise/ }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete exercise' }))
+        act(() => (remove.mutate.mock.calls[0][1] as Handlers).onError?.(new ApiError('x', 409, 'CR_HAS_PROGRESS')))
+        fireEvent.click(screen.getByTestId('unpublish-now'))
+        expect(publish.mutate).toHaveBeenCalledWith({ ref: 'sql-injection-login', published: false }, expect.any(Object))
+        act(() => (publish.mutate.mock.calls[0][1] as Handlers).onSuccess?.())
+        expect(nav.push).toHaveBeenCalledWith('/admin/code-review')
+    })
+
+    it('has no unpublish action when the refused exercise is already a draft', () => {
+        render(<SnippetEditor snippet={makeAdminSnippet({ isPublished: false })} />)
+        fireEvent.click(screen.getByRole('button', { name: /^Delete exercise/ }))
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete exercise' }))
+        act(() => (remove.mutate.mock.calls[0][1] as Handlers).onError?.(new ApiError('x', 409, 'CR_HAS_PROGRESS')))
+        expect(screen.queryByTestId('unpublish-now')).not.toBeInTheDocument()
+    })
+
+    it('keeps the id of a hint through a save, and sends none for a new hint', () => {
+        render(<SnippetEditor snippet={makeAdminSnippet()} />)
+        fireEvent.click(screen.getByRole('button', { name: /Add a hint/ }))
+        fireEvent.change(screen.getByLabelText(/^Hint 2 text/), { target: { value: 'A new hint.' } })
+        fireEvent.click(screen.getByTestId('save-snippet'))
+        const hints = update.mutate.mock.calls[0][0].payload.hints
+        expect(hints[0]).toMatchObject({ id: 'h1' })
+        expect(hints[1]).not.toHaveProperty('id')
+    })
+
+    describe('a key change members have to confirm', () => {
+        const meta = { solveCount: 3, oldFindingCount: 2, newFindingCount: 1, oldHintCount: 2, newHintCount: 2 }
+
+        it('shows the numbers, saves nothing until confirmed, and then resends with the confirmation', () => {
+            render(<SnippetEditor snippet={makeAdminSnippet()} />)
+            fireEvent.change(screen.getByLabelText(/^Finding 1 explanation/), { target: { value: 'Now the whole story of the finding.' } })
+            fireEvent.click(screen.getByTestId('save-snippet'))
+            const sent = update.mutate.mock.calls[0][0].payload
+            expect(sent).not.toHaveProperty('confirmKeyChange')
+            act(() => (update.mutate.mock.calls[0][1] as Handlers).onError?.(new ApiError('x', 409, 'CR_KEY_CHANGE_UNCONFIRMED', undefined, meta)))
+            const dialog = screen.getByRole('dialog')
+            expect(dialog).toHaveTextContent('3 members have solved this exercise')
+            expect(dialog).toHaveTextContent('findings go from 2 to 1')
+            expect(dialog).toHaveTextContent('hints from 2 to 2')
+            expect(screen.queryByTestId('form-banner')).not.toBeInTheDocument()
+            expect(update.mutate).toHaveBeenCalledTimes(1)
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Save the change' }))
+            expect(update.mutate).toHaveBeenCalledTimes(2)
+            expect(update.mutate.mock.calls[1][0]).toMatchObject({ ref: 'sql-injection-login', payload: { ...sent, confirmKeyChange: true } })
+            act(() => (update.mutate.mock.calls[1][1] as Handlers).onSuccess?.())
+            expect(nav.push).toHaveBeenCalledWith('/admin/code-review')
+        })
+
+        it('keeps editing when the author declines, and sends nothing more', () => {
+            render(<SnippetEditor snippet={makeAdminSnippet()} />)
+            type(/^Title/, 'Login check v2')
+            fireEvent.click(screen.getByTestId('save-snippet'))
+            act(() => (update.mutate.mock.calls[0][1] as Handlers).onError?.(new ApiError('x', 409, 'CR_KEY_CHANGE_UNCONFIRMED', undefined, meta)))
+            fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep editing' }))
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+            expect(update.mutate).toHaveBeenCalledTimes(1)
+            expect(screen.getByLabelText(/^Title/)).toHaveValue('Login check v2')
+        })
     })
 
     it('is read-only for a moderator: no save, no delete, fields disabled', () => {
@@ -216,19 +312,31 @@ describe('editing', () => {
 })
 
 describe('script and handler samples', () => {
-    it('always says they have to go in through the seed file', () => {
+    it('says that code and answer text are stored as written and titles are cleaned', () => {
         render(<SnippetEditor />)
-        expect(screen.getByTestId('strip-note')).toHaveTextContent(/seed file/)
+        const note = screen.getByTestId('strip-note')
+        expect(note).toHaveTextContent(/stored exactly as written/)
+        expect(note).toHaveTextContent(/script-like text removed/)
+        expect(note).not.toHaveTextContent(/seed file/)
     })
 
-    it('warns as soon as the code holds a script tag or an event handler', () => {
+    it('does not warn about code or answer text: they are stored as written', () => {
+        render(<SnippetEditor />)
+        type(/^Vulnerable code/, 'el.innerHTML = "<img src=x onerror=alert(1)>"\nonce = 1')
+        type(/^Overview/, '<script>alert(1)</script> explains it')
+        expect(screen.queryByTestId('strip-warning')).not.toBeInTheDocument()
+    })
+
+    it('warns as soon as a title, description or tag has a script tag or an event handler', () => {
         render(<SnippetEditor />)
         expect(screen.queryByTestId('strip-warning')).not.toBeInTheDocument()
-        type(/^Vulnerable code/, 'el.innerHTML = "<img src=x onerror=alert(1)>"')
+        type(/^Title/, 'Login <script>alert(1)</script>')
         expect(screen.getByTestId('strip-warning')).toBeInTheDocument()
-        type(/^Vulnerable code/, 'plain code')
+        type(/^Title/, 'Login check')
         expect(screen.queryByTestId('strip-warning')).not.toBeInTheDocument()
-        type(/^Vulnerable code/, '<script>alert(1)</script>')
+        type(/^Description/, 'Look at <img src=x onerror=alert(1)>')
         expect(screen.getByTestId('strip-warning')).toBeInTheDocument()
+        type(/^Description/, 'It is `<img onerror=x()>` in backticks')
+        expect(screen.queryByTestId('strip-warning')).not.toBeInTheDocument()
     })
 })
