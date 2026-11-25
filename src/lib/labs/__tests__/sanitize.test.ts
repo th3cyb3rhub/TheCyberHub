@@ -78,3 +78,30 @@ describe('httpUrl', () => {
         }
     })
 })
+
+describe('sanitizeLabHtml options (what an event description may keep)', () => {
+    const img = '<img src="https://img.example/a.png" alt="A &quot;logo&quot;" loading="lazy" referrerpolicy="no-referrer" class="max-w-full rounded-lg my-4" />'
+
+    it('turns a remote image into a link by default', () => {
+        expect(sanitizeLabHtml(img)).toContain('<a href="https://img.example/a.png"')
+        expect(sanitizeLabHtml(img)).not.toContain('<img')
+    })
+
+    it('keeps an https image as a rebuilt image when asked, with only the checked attributes', () => {
+        const out = sanitizeLabHtml(img.replace('class=', 'onerror="x()" class='), { images: true })
+        expect(out).toBe('<img src="https://img.example/a.png" alt="A &quot;logo&quot;" loading="lazy" referrerpolicy="no-referrer" class="max-w-full rounded-lg my-4" />')
+    })
+
+    it('never keeps an image that is not https, or that has no address, even when asked', () => {
+        expect(sanitizeLabHtml('<img src="http://img.example/a.png" alt="x" />', { images: true })).not.toContain('<img')
+        expect(sanitizeLabHtml('<img src="javascript:alert(1)" alt="x" />', { images: true })).toBe('x')
+        expect(sanitizeLabHtml('<img src="data:image/svg+xml,<svg/>" alt="x" />', { images: true })).not.toContain('<img')
+    })
+
+    it('keeps a mailto link only when asked, and never one that carries markup or spaces', () => {
+        expect(sanitizeLabHtml('<a href="mailto:ctf@example.org">mail</a>')).toBe('mail')
+        expect(sanitizeLabHtml('<a href="mailto:ctf@example.org">mail</a>', { mailto: true })).toContain('href="mailto:ctf@example.org"')
+        expect(sanitizeLabHtml('<a href="mailto:a b@example.org">mail</a>', { mailto: true })).toBe('mail')
+        expect(sanitizeLabHtml('<a href="javascript:alert(1)">x</a>', { mailto: true })).toBe('x')
+    })
+})

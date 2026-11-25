@@ -39,6 +39,21 @@ export function httpUrl(value: string | undefined): string | null {
     }
 }
 
+/** A `mailto:` address with no control characters or spaces, else null */
+function mailtoUrl(value: string | undefined): string | null {
+    if (!value) return null;
+    const url = decode(value).trim();
+    return /^mailto:[^\s\u0000-\u001f\u007f<>"']+$/i.test(url) ? url : null;
+}
+
+/** What a caller may keep beyond the lab defaults (events show pictures and mail links) */
+export interface SanitizeOptions {
+    /** Keep an https image as an image (rebuilt from its checked address and description) instead of a link */
+    images?: boolean;
+    /** Keep `mailto:` links */
+    mailto?: boolean;
+}
+
 function attributes(raw: string): Record<string, string> {
     const found: Record<string, string> = {};
     for (const m of Array.from(raw.matchAll(ATTR_RE))) found[m[1].toLowerCase()] = m[2] ?? '';
@@ -48,7 +63,7 @@ function attributes(raw: string): Record<string, string> {
 const classAttr = (value: string | undefined) => (value && CLASS_VALUE.test(decode(value)) ? ` class="${escapeAttr(decode(value))}"` : '');
 const link = (href: string, className: string | undefined) => `<a href="${escapeAttr(href)}"${classAttr(className)} target="_blank" rel="${LINK_REL}">`;
 
-export function sanitizeLabHtml(html: string): string {
+export function sanitizeLabHtml(html: string, options: SanitizeOptions = {}): string {
     let out = '';
     let last = 0;
     // For each open <a>: did we keep it? Its closing tag follows the same answer.
@@ -72,13 +87,15 @@ export function sanitizeLabHtml(html: string): string {
 
         const attrs = attributes(m[3]);
         if (name === 'a') {
-            const href = httpUrl(attrs.href);
+            const href = httpUrl(attrs.href) ?? (options.mailto ? mailtoUrl(attrs.href) : null);
             anchors.push(!!href);
             if (href) out += link(href, attrs.class);
         } else if (name === 'img') {
             // No remote images: show the picture as a link to it, with its description
             const src = httpUrl(attrs.src);
-            if (src) {
+            if (src && options.images && /^https:\/\//i.test(src)) {
+                out += `<img src="${escapeAttr(src)}" alt="${escapeAttr(attrs.alt ? decode(attrs.alt) : '')}" loading="lazy" referrerpolicy="no-referrer"${classAttr(attrs.class)} />`;
+            } else if (src) {
                 const label = attrs.alt ? attrs.alt : src;
                 out += `${link(src, undefined)}${escapeText(label)}</a>`;
             } else if (attrs.alt) {

@@ -51,10 +51,36 @@ describe('useSanitizer', () => {
 })
 
 describe('EventDescription on the server', () => {
+    const text = 'Intro **bold** with [a link](https://example.org) and <script>alert(1)</script>\n\n```js\nconst a = "<b>"\n```'
+
     it('does not throw while rendering without a browser, and keeps fenced code as text', () => {
-        const out = renderToString(<EventDescription content={'Intro **bold**\n\n```js\nconst a = "<b>"\n```'} />)
+        const out = renderToString(<EventDescription content={text} />)
         expect(out).toContain('event-md')
         expect(out).toContain('>const<')
         expect(out).not.toContain('<script')
+    })
+
+    it('has the description in the server HTML, escaped, so crawlers read it and the layout does not move', () => {
+        const out = renderToString(<EventDescription content={text} />)
+        expect(out).toMatch(/<strong[^>]*>bold<\/strong>/)
+        expect(out).toContain('href="https://example.org"')
+        expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    })
+
+    it('hydrates onto the server copy without a mismatch and keeps a mail link and an https picture', async () => {
+        ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+        const source = 'Write to [us](mailto:ctf@example.org)\n\n![logo](https://img.example/a.png)'
+        const serverHtml = renderToString(<EventDescription content={source} />)
+        expect(serverHtml).toContain('<img src="https://img.example/a.png"')
+        const container = document.createElement('div')
+        container.innerHTML = serverHtml
+        document.body.appendChild(container)
+        await act(async () => { hydrateRoot(container, <EventDescription content={source} />) })
+        expect(container.querySelector('a[href="mailto:ctf@example.org"]')).not.toBeNull()
+        expect(container.querySelector('img')?.getAttribute('src')).toBe('https://img.example/a.png')
+        expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([])
+        errors.mockRestore()
+        container.remove()
     })
 })

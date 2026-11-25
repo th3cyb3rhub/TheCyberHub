@@ -26,11 +26,16 @@ const STATUS_PAGES: { route: string; notFound: boolean; permanentRedirect?: bool
 ]
 
 /**
- * Pages whose content the server fetches. Under a `loading.tsx` the server HTML would hold the loading
- * screen and the content would arrive in a hidden element that only a script reveals: no content for a
- * crawler or a browser without JavaScript.
+ * Pages whose data the server fetches. Under a `loading.tsx` the server HTML would hold the loading
+ * screen and the content would arrive in a hidden element that only a script reveals. This only keeps the
+ * boundary away; that the content really is in the HTML is proven by a test per page (see CONTENT_PROOFS).
  */
 const SERVER_DATA_PAGES = ['events/[slug]', 'resources/[slug]', 'mentorship/mentor/[id]', 'internships/[id]', 'jobs', 'labs', 'code-review', 'ctf/competitions']
+
+/** A page counts as "content in the server HTML" only when a test renders it on the server and reads the text */
+const CONTENT_PROOFS: { route: string; test: string; mentions: RegExp }[] = [
+    { route: 'events/[slug]', test: 'components/events/__tests__/EventDetailServer.test.tsx', mentions: /description/i },
+]
 
 const ancestors = (route: string): string[] => {
     const parts = route.split('/')
@@ -72,6 +77,16 @@ describe('pages that decide the HTTP status', () => {
     for (const route of SERVER_DATA_PAGES) {
         it(`${route} has no loading.tsx at its segment or above, so its content is in the server HTML`, () => {
             expect(ancestors(route).filter((dir) => existsSync(join(APP, dir, 'loading.tsx')))).toEqual([])
+        })
+    }
+
+    for (const { route, test, mentions } of CONTENT_PROOFS) {
+        it(`${route} has a server render test that reads its text`, () => {
+            const file = join(APP, '..', test)
+            expect(existsSync(file)).toBe(true)
+            const source = readFileSync(file, 'utf8')
+            expect(source).toMatch(/renderToString/)
+            expect(source).toMatch(mentions)
         })
     }
 
