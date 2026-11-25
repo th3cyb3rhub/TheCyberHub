@@ -6,6 +6,7 @@ import { ArrowLeft, Code2, Pencil, Search, Star } from 'lucide-react';
 import { btnSecondary, card, cardPad, chip, muted, pageBg } from '@/components/events/styles';
 import { useAuth } from '@/context/AuthContext';
 import { useCodeSnippet, useSubmitAttempt } from '@/hooks/queries/useCodeReview';
+import { MissingBody, MissingPage } from '@/components/ui/MissingNotice';
 import { ApiError } from '@/lib/api';
 import { crErrorMessage, isDailyLimit, isRateLimited, retryAfterSeconds, tooBroadLimits } from '@/lib/codeReview/errors';
 import { markLimits, type MarkLimits } from '@/lib/codeReview/constants';
@@ -69,23 +70,12 @@ function Header({ snippet, canEdit }: { snippet: CrDetail; canEdit: boolean }) {
  */
 /** What an exercise that is not there (or not published, for this viewer) says */
 export function ExerciseMissingBody() {
-    return (
-        <>
-            <Code2 className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This exercise is not available</h1>
-            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
-            <Link href="/code-review" className={btnSecondary}>Back to the exercises</Link>
-        </>
-    );
+    return <MissingBody kind="exercise" />;
 }
 
 /** The page for an address that cannot be an exercise */
 export function ExerciseMissing() {
-    return (
-        <Shell>
-            <div className="mx-auto max-w-2xl pt-6 text-center"><ExerciseMissingBody /></div>
-        </Shell>
-    );
+    return <MissingPage kind="exercise" />;
 }
 
 export function ExerciseView({ slug, initialSnippet, initialUpdatedAt }: { slug: string; initialSnippet: CrDetail | null; initialUpdatedAt?: number }) {

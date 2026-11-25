@@ -5,6 +5,7 @@ import { ArrowLeft, Crown, Hourglass, Medal, Snowflake, Trophy, UserCheck } from
 import { btnPrimary, btnSecondary, card, cardPad, focusRing, muted, pageBg } from '@/components/events/styles';
 import { ViewerTime } from '@/components/internships/ViewerTime';
 import { useCtfCompetition, useCtfResults } from '@/hooks/queries/useCtf';
+import { MissingPage } from '@/components/ui/MissingNotice';
 import { ApiError } from '@/lib/api';
 import { categoryLabel, participantsText, placeLabel, scoreText, sortedPrizes } from '@/lib/ctf/display';
 import { entryKey } from '@/lib/ctf/scoreboard';
@@ -169,16 +170,7 @@ export function ResultsBody({ results }: { results: CtfResults }) {
 
 /** What results that are not there (or not published, for this viewer) say */
 export function ResultsMissing() {
-    return (
-        <Shell>
-            <div className="mx-auto max-w-xl py-10 text-center">
-                <Trophy className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-                <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">These results are not available</h1>
-                <p className={`mb-6 text-sm ${muted}`}>The competition may have been removed, or it is not published.</p>
-                <Link href="/ctf/competitions" className={btnSecondary}>All competitions</Link>
-            </div>
-        </Shell>
-    );
+    return <MissingPage kind="results" />;
 }
 
 interface Props { slug: string; initialResults: CtfResults | null; initialUpdatedAt?: number }

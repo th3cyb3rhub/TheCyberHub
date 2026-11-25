@@ -1,15 +1,7 @@
-'use client';
+import { LabRecovery } from '@/components/labs/LabRecovery';
+import { MissingPage } from '@/components/ui/MissingNotice';
 
-import { LabDetailView, LabMissing } from '@/components/labs/LabDetailView';
-import { useRouteSegment } from '@/hooks/useRouteSegment';
-import { isLabSlug } from '@/lib/labs/slug';
-
-/**
- * What a lab page shows when the server found no public lab. The answer is a real 404 for search
- * engines and anonymous visitors. A draft or an archived lab is still readable by staff, so the
- * browser asks again with the viewer's own token; a visitor gets the "not available" page.
- */
+// A server component: the notice is part of the page the server sends, the island asks again only for a viewer with a token
 export default function NotFound() {
-    const slug = useRouteSegment('slug').toLowerCase();
-    return isLabSlug(slug) ? <LabDetailView slug={slug} initialLab={null} /> : <LabMissing />;
+    return <LabRecovery missing={<MissingPage kind="lab" />} />;
 }

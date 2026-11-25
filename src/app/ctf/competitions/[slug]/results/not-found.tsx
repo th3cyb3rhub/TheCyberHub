@@ -1,15 +1,7 @@
-'use client';
+import { ResultsRecovery } from '@/components/ctf/ResultsRecovery';
+import { MissingPage } from '@/components/ui/MissingNotice';
 
-import { ResultsMissing, ResultsView } from '@/components/ctf/ResultsView';
-import { useRouteSegment } from '@/hooks/useRouteSegment';
-import { isCtfSlug } from '@/lib/ctf/slug';
-
-/**
- * What the results page shows when the server found no public results. The answer is a real 404 for
- * search engines and anonymous visitors. The results of a draft are still readable by staff, so the
- * browser asks again with the viewer's own token; a visitor gets the "not available" page.
- */
+// A server component: the notice is part of the page the server sends, the island asks again only for a viewer with a token
 export default function NotFound() {
-    const slug = useRouteSegment('slug').toLowerCase();
-    return isCtfSlug(slug) ? <ResultsView slug={slug} initialResults={null} /> : <ResultsMissing />;
+    return <ResultsRecovery missing={<MissingPage kind="results" />} />;
 }

@@ -1,15 +1,7 @@
-'use client';
+import { CompetitionRecovery } from '@/components/ctf/CompetitionRecovery';
+import { MissingPage } from '@/components/ui/MissingNotice';
 
-import { CompetitionMissing, CompetitionView } from '@/components/ctf/CompetitionView';
-import { useRouteSegment } from '@/hooks/useRouteSegment';
-import { isCtfSlug } from '@/lib/ctf/slug';
-
-/**
- * What a competition page shows when the server found no public competition. The answer is a real
- * 404 for search engines and anonymous visitors. A draft is still readable by staff, so the browser
- * asks again with the viewer's own token; a visitor gets the "not available" page.
- */
+// A server component: the notice is part of the page the server sends, the island asks again only for a viewer with a token
 export default function NotFound() {
-    const slug = useRouteSegment('slug').toLowerCase();
-    return isCtfSlug(slug) ? <CompetitionView slug={slug} initialCompetition={null} /> : <CompetitionMissing />;
+    return <CompetitionRecovery missing={<MissingPage kind="competition" />} />;
 }

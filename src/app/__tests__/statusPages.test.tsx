@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * What each detail page does with the three answers the server can get from the API: found (the page,
@@ -10,6 +11,7 @@ const nav = vi.hoisted(() => ({
     notFound: vi.fn(() => { throw new Error('NEXT_NOT_FOUND') }),
     permanentRedirect: vi.fn((to: string) => { throw new Error(`NEXT_REDIRECT:${to}`) }),
     useParams: vi.fn(() => ({})),
+    useSearchParams: vi.fn(() => new URLSearchParams()),
 }))
 vi.mock('next/navigation', () => nav)
 
@@ -23,11 +25,11 @@ const internships = vi.hoisted(() => ({ fetchPublicCohort: vi.fn() }))
 vi.mock('@/lib/internships/server', async (orig) => ({ ...(await orig<typeof import('@/lib/internships/server')>()), ...internships }))
 
 // The views need the app's providers and query client; a page only has to hand them what it fetched
-vi.mock('@/components/labs/LabDetailView', () => ({ LabDetailView: (p: { slug: string; initialLab: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialLab ? 'yes' : 'no'} />, LabMissing: () => <div data-testid="missing" /> }))
-vi.mock('@/components/code-review/ExerciseView', () => ({ ExerciseView: (p: { slug: string; initialSnippet: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialSnippet ? 'yes' : 'no'} />, ExerciseMissing: () => <div data-testid="missing" /> }))
-vi.mock('@/components/ctf/CompetitionView', () => ({ CompetitionView: (p: { slug: string; initialCompetition: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialCompetition ? 'yes' : 'no'} />, CompetitionMissing: () => <div data-testid="missing" /> }))
-vi.mock('@/components/ctf/ResultsView', () => ({ ResultsView: (p: { slug: string; initialResults: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialResults ? 'yes' : 'no'} />, ResultsMissing: () => <div data-testid="missing" /> }))
-vi.mock('@/components/internships/CohortDetailView', () => ({ CohortDetailView: (p: { id: string; initialCohort: unknown }) => <div data-testid="view" data-slug={p.id} data-initial={p.initialCohort ? 'yes' : 'no'} />, CohortMissing: () => <div data-testid="missing" /> }))
+vi.mock('@/components/labs/LabDetailView', () => ({ LabDetailView: (p: { slug: string; initialLab: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialLab ? 'yes' : 'no'} /> }))
+vi.mock('@/components/code-review/ExerciseView', () => ({ ExerciseView: (p: { slug: string; initialSnippet: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialSnippet ? 'yes' : 'no'} /> }))
+vi.mock('@/components/ctf/CompetitionView', () => ({ CompetitionView: (p: { slug: string; initialCompetition: unknown; initialTab?: string }) => <div data-testid="view" data-tab={p.initialTab} data-slug={p.slug} data-initial={p.initialCompetition ? 'yes' : 'no'} /> }))
+vi.mock('@/components/ctf/ResultsView', () => ({ ResultsView: (p: { slug: string; initialResults: unknown }) => <div data-testid="view" data-slug={p.slug} data-initial={p.initialResults ? 'yes' : 'no'} /> }))
+vi.mock('@/components/internships/CohortDetailView', () => ({ CohortDetailView: (p: { id: string; initialCohort: unknown }) => <div data-testid="view" data-slug={p.id} data-initial={p.initialCohort ? 'yes' : 'no'} /> }))
 
 import CodeReviewExercisePage from '@/app/code-review/[ref]/page'
 import CodeReviewNotFound from '@/app/code-review/[ref]/not-found'
@@ -66,6 +68,7 @@ const CASES: Case[] = [
 ]
 
 beforeEach(() => vi.clearAllMocks())
+afterEach(() => { cleanup(); window.localStorage.removeItem('token') })
 
 describe.each(CASES)('$name page', (c) => {
     it('renders its view with what the server fetched', async () => {
@@ -91,23 +94,51 @@ describe.each(CASES)('$name page', (c) => {
     })
 
     it('has a 404 view that asks again with the viewer\'s token for a well formed address', () => {
+        window.localStorage.setItem('token', 't')
         nav.useParams.mockReturnValue({ [c.slug]: c.ok })
-        const out = renderToStaticMarkup(c.notFoundView() as React.ReactElement)
-        expect(out).toContain('data-testid="view"')
-        expect(out).toContain('data-initial="no"')
+        render(c.notFoundView() as React.ReactElement)
+        expect(screen.getByTestId('view')).toHaveAttribute('data-initial', 'no')
+        expect(screen.queryByText(/not available/i)).not.toBeInTheDocument()
     })
 
-    it('has a 404 view that never asks the API about an address that cannot be one', () => {
+    it('has a 404 view that keeps the server notice, and asks the API nothing, for a visitor without a token', () => {
+        nav.useParams.mockReturnValue({ [c.slug]: c.ok })
+        render(c.notFoundView() as React.ReactElement)
+        expect(screen.queryByTestId('view')).not.toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: /not available/i })).toBeInTheDocument()
+        expect(screen.getByRole('link')).toHaveAttribute('href')
+    })
+
+    it('has a 404 view that never asks the API about an address that cannot be one, token or not', () => {
+        window.localStorage.setItem('token', 't')
         nav.useParams.mockReturnValue({ [c.slug]: c.badSlug })
-        expect(renderToStaticMarkup(c.notFoundView() as React.ReactElement)).toContain('data-testid="missing"')
+        render(c.notFoundView() as React.ReactElement)
+        expect(screen.queryByTestId('view')).not.toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: /not available/i })).toBeInTheDocument()
+        cleanup()
         nav.useParams.mockReturnValue({})
-        expect(renderToStaticMarkup(c.notFoundView() as React.ReactElement)).toContain('data-testid="missing"')
+        render(c.notFoundView() as React.ReactElement)
+        expect(screen.queryByTestId('view')).not.toBeInTheDocument()
+    })
+
+    it('has a 404 file that is a server component (the notice is in the page the server builds)', () => {
+        expect(renderToStaticMarkup(c.notFoundView() as React.ReactElement)).toMatch(/not available/i)
     })
 })
 
 describe('the 404 view reads the address the way the pages do', () => {
     it('lower cases a slug, as the API does', () => {
+        window.localStorage.setItem('token', 't')
         nav.useParams.mockReturnValue({ slug: 'SQL-Injection-Basics' })
-        expect(renderToStaticMarkup(LabNotFound() as React.ReactElement)).toContain('data-slug="sql-injection-basics"')
+        render(LabNotFound() as React.ReactElement)
+        expect(screen.getByTestId('view')).toHaveAttribute('data-slug', 'sql-injection-basics')
+    })
+
+    it('keeps the tab of a competition address when it asks again', () => {
+        window.localStorage.setItem('token', 't')
+        nav.useParams.mockReturnValue({ slug: 'frozen-cup' })
+        nav.useSearchParams.mockReturnValue(new URLSearchParams('tab=scoreboard'))
+        render(CompetitionNotFound() as React.ReactElement)
+        expect(screen.getByTestId('view')).toHaveAttribute('data-tab', 'scoreboard')
     })
 })

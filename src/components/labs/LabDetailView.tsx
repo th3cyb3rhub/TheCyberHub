@@ -1,10 +1,10 @@
 'use client';
 
-import Link from 'next/link';
-import { BookOpen, FlaskConical } from 'lucide-react';
-import { btnSecondary, card, cardPad, muted, pageBg } from '@/components/events/styles';
+import { BookOpen } from 'lucide-react';
+import { card, cardPad, muted, pageBg } from '@/components/events/styles';
 import { useAuth } from '@/context/AuthContext';
 import { useLab } from '@/hooks/queries/useLabs';
+import { MissingBody, MissingPage } from '@/components/ui/MissingNotice';
 import { ApiError } from '@/lib/api';
 import type { LabDetail } from '@/types/lab';
 import { FlagForm } from './FlagForm';
@@ -22,23 +22,12 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 /** What a lab that is not there (or not published, for this viewer) says */
 export function LabMissingBody() {
-    return (
-        <>
-            <FlaskConical className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This lab is not available</h1>
-            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
-            <Link href="/labs" className={btnSecondary}>Back to labs</Link>
-        </>
-    );
+    return <MissingBody kind="lab" />;
 }
 
 /** The page for an address that cannot be a lab */
 export function LabMissing() {
-    return (
-        <div className={pageBg}>
-            <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6"><LabMissingBody /></div>
-        </div>
-    );
+    return <MissingPage kind="lab" />;
 }
 
 /**

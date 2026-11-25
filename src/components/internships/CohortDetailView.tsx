@@ -9,6 +9,7 @@ import {
 import { btnPrimary, btnSecondary, card, cardPad, chip, focusRing, muted, pageBg } from '@/components/events/styles';
 import { useAuth } from '@/context/AuthContext';
 import { useInternship } from '@/hooks/queries/useInternships';
+import { MissingBody, MissingPage } from '@/components/ui/MissingNotice';
 import { useNow } from '@/lib/events/clock';
 import { applyView, spotsInfo, TYPE_LABELS } from '@/lib/internships/display';
 import { canWithdraw } from '@/lib/internships/review';
@@ -136,23 +137,12 @@ function Deadline({ cohort }: { cohort: CohortDetail }) {
 
 /** What a program that is not there (or not published, for this viewer) says */
 export function CohortMissingBody() {
-    return (
-        <>
-            <GraduationCap className="mx-auto mb-4 h-10 w-10 text-gray-500" aria-hidden="true" />
-            <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">This program is not available</h1>
-            <p className={`mb-6 text-sm ${muted}`}>It may have been removed, or it is not published yet.</p>
-            <Link href="/internships" className={btnSecondary}>Back to internships</Link>
-        </>
-    );
+    return <MissingBody kind="program" />;
 }
 
 /** The page for an address that cannot be a program */
 export function CohortMissing() {
-    return (
-        <div className={pageBg}>
-            <div className="mx-auto max-w-2xl px-4 pb-16 pt-28 text-center sm:px-6"><CohortMissingBody /></div>
-        </div>
-    );
+    return <MissingPage kind="program" />;
 }
 
 export function CohortDetailView({ id, initialCohort = null }: { id: string; initialCohort?: CohortDetail | null }) {

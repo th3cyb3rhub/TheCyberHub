@@ -51,12 +51,19 @@ describe('pages that decide the HTTP status', () => {
                 })
             }
             if (recoversInBrowser) {
-                it('has a not-found.tsx that asks again in the browser, for a poster, reviewer or staff viewer', () => {
+                it('has a not-found.tsx that is a server component with the notice, and an island that asks again for a viewer with a token', () => {
                     const file = join(APP, route, 'not-found.tsx')
                     expect(existsSync(file)).toBe(true)
-                    // Either a client component itself, or one that hands the address to a client view
                     const source = readFileSync(file, 'utf8')
-                    expect(source).toMatch(/^'use client'|useAuth|View|NotFound/)
+                    // Server component: the notice is part of what the server sends
+                    expect(source).not.toMatch(/^['"]use client['"]/)
+                    expect(source).toMatch(/<MissingPage kind="\w+" \/>/)
+                    // The island that may ask the API again; it is a client file that checks the stored token
+                    const island = source.match(/import \{ (\w+) \} from '(@\/components\/[^']*(?:Recovery|JobNotFound))'/)
+                    expect(island).not.toBeNull()
+                    const islandSource = readFileSync(join(APP, '..', island![2].replace('@/', ''), '').replace(/\/$/, '') + '.tsx', 'utf8')
+                    expect(islandSource).toMatch(/^'use client'/)
+                    expect(islandSource).toMatch(/useHasStoredToken\(\)/)
                 })
             }
         })

@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { job } from '@/lib/jobs/__tests__/fixtures'
 import { renderWithClient } from './utils'
@@ -126,31 +126,38 @@ describe('JobViewerBanner', () => {
 })
 
 describe('JobNotFound (the preview a poster gets of a job the public cannot see)', () => {
-    it('tells a visitor the job is not available and asks nothing', () => {
-        renderWithClient(<JobNotFound />)
-        expect(screen.getByText(/not available|not found/i)).toBeInTheDocument()
+    const missing = <p>This job is not available</p>
+    afterEach(() => window.localStorage.removeItem('token'))
+
+    it('keeps the server notice for a visitor and asks nothing', () => {
+        renderWithClient(<JobNotFound missing={missing} />)
+        expect(screen.getByText(/not available/i)).toBeInTheDocument()
         expect(api.getJob).not.toHaveBeenCalled()
     })
 
     it('asks again with the token of a signed-in member and shows their own draft', async () => {
+        window.localStorage.setItem('token', 't')
         auth.current = { user: { id: 'e1', role: 'employer' }, loading: false, refreshUser: vi.fn() }
         api.getJob.mockResolvedValue({ job: job({ status: 'draft', title: 'My secret draft', viewer: { saved: false, isOwner: true } }), meta: {} })
-        renderWithClient(<JobNotFound />)
+        renderWithClient(<JobNotFound missing={missing} />)
         expect((await screen.findAllByText('My secret draft')).length).toBeGreaterThan(0)
         expect(api.getJob).toHaveBeenCalledWith('senior-pentester-abc123')
     })
 
-    it('still says not found when the API answers 404 for a signed-in member too', async () => {
+    it('still says not available when the API answers 404 for a signed-in member too', async () => {
+        window.localStorage.setItem('token', 't')
         auth.current = { user: { id: 'u1', role: 'user' }, loading: false, refreshUser: vi.fn() }
         api.getJob.mockRejectedValue(new ApiError('nope', 404, 'JOB_NOT_FOUND'))
-        renderWithClient(<JobNotFound />)
-        expect(await screen.findByText(/not available|not found/i)).toBeInTheDocument()
+        renderWithClient(<JobNotFound missing={missing} />)
+        expect(await screen.findByText(/not available/i)).toBeInTheDocument()
     })
 
     it('does not ask for a reference that cannot be a job', () => {
+        window.localStorage.setItem('token', 't')
         auth.current = { user: { id: 'u1', role: 'user' }, loading: false, refreshUser: vi.fn() }
         nav.params = { slug: '../etc' }
-        renderWithClient(<JobNotFound />)
+        renderWithClient(<JobNotFound missing={missing} />)
+        expect(screen.getByText(/not available/i)).toBeInTheDocument()
         expect(api.getJob).not.toHaveBeenCalled()
     })
 })
