@@ -1,112 +1,64 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { CallbackStatus, providerErrorMessage, type CallbackState } from '@/components/auth/CallbackStatus';
 import { landingPath } from '@/lib/landingPath';
+import { takeOAuthReturn } from '@/lib/oauthReturn';
 import { stashPending2fa } from '@/lib/pending2fa';
+import { signInHref } from '@/lib/safeRedirect';
+import { authErrorMessage } from '@/lib/authErrors';
 
 const GoogleCallbackPage = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loginWithGoogle } = useAuth();
-    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+    const [state, setState] = useState<CallbackState>('loading');
     const [error, setError] = useState<string | null>(null);
+    // Where the member was heading before they left for Google (a same-site path, or null)
+    const [returnTo, setReturnTo] = useState<string | null>(null);
+    // The sign-in must be sent once per visit however often this page re-renders
+    const started = useRef(false);
 
     useEffect(() => {
-        // Google returns the token in the URL hash for implicit flow
-        // or as a code for authorization code flow
-        const hash = window.location.hash;
+        if (started.current) return;
+        started.current = true;
+        const target = takeOAuthReturn();
+        setReturnTo(target);
+
+        const fail = (message: string) => { setState('error'); setError(message); };
+
         const errorParam = searchParams.get('error');
+        if (errorParam) return fail(providerErrorMessage(errorParam));
 
-        if (errorParam) {
-            setStatus('error');
-            setError(errorParam === 'access_denied' ? 'Access denied by user' : errorParam);
-            return;
-        }
+        // Google returns the token in the URL hash (implicit flow) or as a credential (One Tap)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const idToken = hashParams.get('id_token') || hashParams.get('access_token') || searchParams.get('credential');
+        // The token must not stay in the address bar or in history: Back would run this page again with it
+        window.history.replaceState(null, '', window.location.pathname);
+        if (!idToken) return fail('Google did not send a sign-in token.');
 
-        // Parse token from hash (implicit flow)
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-            const idToken = params.get('id_token') || params.get('access_token');
-
-            if (idToken) {
-                handleGoogleAuth(idToken);
-                return;
-            }
-        }
-
-        // Check for credential in search params (Google One Tap)
-        const credential = searchParams.get('credential');
-        if (credential) {
-            handleGoogleAuth(credential);
-            return;
-        }
-
-        setStatus('error');
-        setError('No authentication token received');
-    }, [searchParams]);
-
-    const handleGoogleAuth = async (idToken: string) => {
-        try {
-            const challenge = await loginWithGoogle(idToken);
+        loginWithGoogle(idToken).then((challenge) => {
             if (challenge) {
                 stashPending2fa(challenge.tempToken);
-                router.replace('/auth');
+                router.replace(signInHref(target));
                 return;
             }
-            setStatus('success');
+            setState('success');
             // The effect below takes them on once their account has loaded
-        } catch (err) {
-            setStatus('error');
-            setError(err instanceof Error ? err.message : 'Authentication failed');
-        }
-    };
+        }).catch((err) => fail(authErrorMessage(err, 'Authentication failed')));
+    }, [searchParams, loginWithGoogle, router]);
 
-    // New accounts go through the welcome flow; everyone else to their profile
+    // A valid remembered page wins; a new account goes through the welcome flow; everyone else to their profile
+    const next = user ? landingPath(user, returnTo) : undefined;
     useEffect(() => {
-        if (status !== 'success' || !user) return;
-        const timer = setTimeout(() => router.push(landingPath(user, null)), 1500);
+        if (state !== 'success' || !next) return;
+        const timer = setTimeout(() => router.replace(next), 800);
         return () => clearTimeout(timer);
-    }, [status, user, router]);
+    }, [state, next, router]);
 
-    return (
-        <div className="min-h-screen bg-black flex items-center justify-center px-4">
-            <div className="text-center">
-                {status === 'loading' && (
-                    <>
-                        <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Signing in with Google...</h1>
-                        <p className="text-gray-400">Please wait while we complete your authentication.</p>
-                    </>
-                )}
-
-                {status === 'success' && (
-                    <>
-                        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Success!</h1>
-                        <p className="text-gray-400">Redirecting to your profile...</p>
-                    </>
-                )}
-
-                {status === 'error' && (
-                    <>
-                        <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Authentication Failed</h1>
-                        <p className="text-red-400 mb-6">{error}</p>
-                        <button
-                            onClick={() => router.push('/auth')}
-                            className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                        >
-                            Try Again
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
-    );
+    return <CallbackStatus provider="Google" state={state} message={error} continueHref={state === 'success' ? next : undefined} signInHref={signInHref(returnTo)} />;
 };
 
 export default GoogleCallbackPage;

@@ -11,11 +11,12 @@ import {
     Ticket,
     GraduationCap,
     Building2,
+    KeyRound,
 } from 'lucide-react';
 
 interface UserDropdownProps {
     user: { name: string; email: string; role: string };
-    logout: () => void;
+    logout: (options?: { allDevices?: boolean }) => Promise<void>;
 }
 
 export const UserDropdown = ({
@@ -50,6 +51,9 @@ export const UserDropdown = ({
                         <Link href="/profile" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 transition-all">
                             <User className="w-4 h-4" /> Profile
                         </Link>
+                        <Link href="/profile/sessions" className="flex items-center gap-3 px-4 py-3 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/5 transition-all">
+                            <KeyRound className="w-4 h-4" /> Active sessions
+                        </Link>
                         {(user.role === 'admin' || user.role === 'owner' || user.role === 'moderator') && (
                             <Link href="/admin" className="flex items-center gap-3 px-4 py-3 text-sm text-orange-700 hover:text-orange-800 hover:bg-gray-100 dark:text-orange-400 dark:hover:text-orange-300 dark:hover:bg-white/5 transition-all">
                                 <Shield className="w-4 h-4" /> Admin Panel
@@ -71,7 +75,7 @@ export const UserDropdown = ({
                                 </Link>
                             </>
                         )}
-                        <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-all">
+                        <button onClick={() => { void logout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-700 hover:text-red-800 hover:bg-gray-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-white/5 transition-all">
                             <LogOut className="w-4 h-4" /> Sign Out
                         </button>
                     </div>

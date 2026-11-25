@@ -1,96 +1,70 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { CallbackStatus, providerErrorMessage, type CallbackState } from '@/components/auth/CallbackStatus';
 import { landingPath } from '@/lib/landingPath';
+import { takeOAuthReturn } from '@/lib/oauthReturn';
 import { stashPending2fa } from '@/lib/pending2fa';
+import { signInHref } from '@/lib/safeRedirect';
+import { authErrorMessage } from '@/lib/authErrors';
 
 const GitHubCallbackPage = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loginWithGithub } = useAuth();
-    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+    const [state, setState] = useState<CallbackState>('loading');
     const [error, setError] = useState<string | null>(null);
+    // Where the member was heading before they left for GitHub (a same-site path, or null)
+    const [returnTo, setReturnTo] = useState<string | null>(null);
+    // A GitHub code works once: the exchange must run once per visit however often this page re-renders
+    const started = useRef(false);
 
     useEffect(() => {
+        if (started.current) return;
+        started.current = true;
+        const target = takeOAuthReturn();
+        setReturnTo(target);
+
         const code = searchParams.get('code');
         const errorParam = searchParams.get('error');
-
+        // The one-time code must not stay in the address bar or in history
+        window.history.replaceState(null, '', window.location.pathname);
         if (errorParam) {
-            setStatus('error');
-            setError(errorParam === 'access_denied' ? 'Access denied by user' : errorParam);
+            setState('error');
+            setError(providerErrorMessage(errorParam));
             return;
         }
-
         if (!code) {
-            setStatus('error');
-            setError('No authorization code received');
+            setState('error');
+            setError('GitHub did not send an authorization code.');
             return;
         }
 
-        const handleCallback = async () => {
-            try {
-                const challenge = await loginWithGithub(code);
-                if (challenge) {
-                    stashPending2fa(challenge.tempToken);
-                    router.replace('/auth');
-                    return;
-                }
-                setStatus('success');
-                // The effect below takes them on once their account has loaded
-            } catch (err) {
-                setStatus('error');
-                setError(err instanceof Error ? err.message : 'Authentication failed');
+        loginWithGithub(code).then((challenge) => {
+            if (challenge) {
+                stashPending2fa(challenge.tempToken);
+                router.replace(signInHref(target));
+                return;
             }
-        };
-
-        handleCallback();
+            setState('success');
+            // The effect below takes them on once their account has loaded
+        }).catch((err) => {
+            setState('error');
+            setError(authErrorMessage(err, 'Authentication failed'));
+        });
     }, [searchParams, loginWithGithub, router]);
 
-    // New accounts go through the welcome flow; everyone else to their profile
+    // A valid remembered page wins; a new account goes through the welcome flow; everyone else to their profile
+    const next = user ? landingPath(user, returnTo) : undefined;
     useEffect(() => {
-        if (status !== 'success' || !user) return;
-        const timer = setTimeout(() => router.push(landingPath(user, null)), 1500);
+        if (state !== 'success' || !next) return;
+        const timer = setTimeout(() => router.replace(next), 800);
         return () => clearTimeout(timer);
-    }, [status, user, router]);
+    }, [state, next, router]);
 
-    return (
-        <div className="min-h-screen bg-black flex items-center justify-center px-4">
-            <div className="text-center">
-                {status === 'loading' && (
-                    <>
-                        <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Signing in with GitHub...</h1>
-                        <p className="text-gray-400">Please wait while we complete your authentication.</p>
-                    </>
-                )}
-
-                {status === 'success' && (
-                    <>
-                        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Success!</h1>
-                        <p className="text-gray-400">Redirecting to your profile...</p>
-                    </>
-                )}
-
-                {status === 'error' && (
-                    <>
-                        <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                        <h1 className="text-xl font-semibold text-white mb-2">Authentication Failed</h1>
-                        <p className="text-red-400 mb-6">{error}</p>
-                        <button
-                            onClick={() => router.push('/auth')}
-                            className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                        >
-                            Try Again
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
-    );
+    return <CallbackStatus provider="GitHub" state={state} message={error} continueHref={state === 'success' ? next : undefined} signInHref={signInHref(returnTo)} />;
 };
 
 export default GitHubCallbackPage;

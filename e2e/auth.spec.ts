@@ -36,6 +36,8 @@ test.describe('Authentication Flows', () => {
 
     test('should display OAuth options', async ({ page }) => {
         await page.goto(`${BASE_URL}/auth`);
+        // The form renders once the page has hydrated
+        await page.locator('input[type="email"]').waitFor();
         
         // Check for OAuth buttons (Google, GitHub, etc.)
         const oauthButtons = page.locator('button, a').filter({ 
@@ -75,6 +77,7 @@ test.describe('Registration Flow', () => {
     test('should display registration form fields', async ({ page }) => {
         // Try direct register page or toggle from auth page
         await page.goto(`${BASE_URL}/auth`);
+        await page.locator('input[type="email"]').waitFor();
         
         // Check if there's a sign up toggle/tab
         const signUpButton = page.locator('button, a').filter({ hasText: /sign up|register/i });

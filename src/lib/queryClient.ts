@@ -8,10 +8,17 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { errorStatus } from '@/lib/authErrors';
 
 // ============================================
 // Query Client Configuration
 // ============================================
+
+/** An answer the API gave on purpose (4xx): repeating the request does not change it */
+const isClientError = (error: unknown) => {
+    const status = errorStatus(error);
+    return status !== undefined && status >= 400 && status < 500;
+};
 
 /**
  * Create a new QueryClient with default options
@@ -23,8 +30,10 @@ export const createQueryClient = () => new QueryClient({
             staleTime: 5 * 60 * 1000,
             // Keep unused data in cache for 30 minutes
             gcTime: 30 * 60 * 1000,
-            // Retry failed requests up to 3 times
-            retry: 3,
+            // Retry failed requests up to 3 times, but never an answer the API gave on purpose (4xx: a
+            // refused session, a rate limit): repeating it does not change it, and every repeat of a
+            // refused sign-in would ask for a new access token again
+            retry: (failureCount: number, error: unknown) => !isClientError(error) && failureCount < 3,
             // Exponential backoff for retries (1s, 2s, 4s)
             retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
             // Don't refetch on window focus (can be enabled per-query)
@@ -35,8 +44,8 @@ export const createQueryClient = () => new QueryClient({
             networkMode: 'always',
         },
         mutations: {
-            // Retry mutations once on failure
-            retry: 1,
+            // Retry mutations once on failure, unless the API refused them on purpose
+            retry: (failureCount: number, error: unknown) => !isClientError(error) && failureCount < 1,
             // Network mode for mutations
             networkMode: 'always',
         },
@@ -52,8 +61,12 @@ export const createQueryClient = () => new QueryClient({
  */
 export const queryKeys = {
     // Auth
-    user: ['user'] as const,
-    session: ['session'] as const,
+    // The signed-in account. The key carries the account id (read from the access token), so one
+    // account's cached profile is never served to another.
+    auth: {
+        me: (userId: string | null) => ['auth', 'me', userId ?? 'unknown'] as const,
+        sessions: (userId: string | null) => ['auth', 'sessions', userId ?? 'unknown'] as const,
+    },
     
     // Users
     users: {

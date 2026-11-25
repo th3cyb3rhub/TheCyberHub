@@ -51,6 +51,8 @@ import {
     Bell
 } from 'lucide-react';
 import { API_URL, fetchApi, tokenStore } from '@/lib/api';
+import { API_ENDPOINTS } from '@/lib/constants/api-endpoints';
+import { PasswordStrength } from '@/components/auth/PasswordStrength';
 import { profileSchema } from '@/lib/validations';
 type ProfileTab = 'stats' | 'profile' | 'security' | 'privacy' | 'notifications';
 const PROFILE_TABS: ProfileTab[] = ['stats', 'profile', 'security', 'privacy', 'notifications'];
@@ -323,12 +325,14 @@ const ProfilePage = () => {
         setPasswordLoading(true);
 
         try {
-            await updatePassword(currentPassword, newPassword);
+            const { revokedSessions } = await updatePassword(currentPassword, newPassword);
             setPasswordSuccess(true);
             addToast({
                 variant: 'success',
                 title: 'Password updated',
-                message: 'Your password has been changed successfully.',
+                message: revokedSessions > 0
+                    ? `Your password has been changed. ${revokedSessions} other ${revokedSessions === 1 ? 'device was' : 'devices were'} signed out.`
+                    : 'Your password has been changed successfully.',
             });
             setCurrentPassword('');
             setNewPassword('');
@@ -349,7 +353,7 @@ const ProfilePage = () => {
     const handleGenerate2FA = async () => {
         setTwoFactorLoading(true);
         try {
-            const res = await fetchApi('/api/auth/2fa/generate', { method: 'GET' });
+            const res = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_GENERATE, { method: 'GET' });
             if (res.success) {
                 setQrCodeData({ secret: res.data.secret, qr: res.data.qrCodeUrl });
                 setSetupStep('verify');
@@ -367,7 +371,7 @@ const ProfilePage = () => {
         if (setupCode.length !== 6) return;
         setTwoFactorLoading(true);
         try {
-            const res = await fetchApi('/api/auth/2fa/enable', {
+            const res = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_ENABLE, {
                 method: 'POST',
                 body: JSON.stringify({ token: setupCode }),
             });
@@ -389,7 +393,7 @@ const ProfilePage = () => {
         if (disableCode.length !== 6) return;
         setTwoFactorLoading(true);
         try {
-            const data = await fetchApi('/api/auth/2fa/disable', {
+            const data = await fetchApi(API_ENDPOINTS.AUTH.TWO_FACTOR_DISABLE, {
                 method: 'POST',
                 body: JSON.stringify({ token: disableCode, password: disablePassword }),
             });
@@ -409,8 +413,9 @@ const ProfilePage = () => {
         }
     };
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        // Wait for the sign-out: the home page must not show this member as signed in
+        await logout();
         addToast({
             variant: 'info',
             title: 'Signed out',
@@ -430,7 +435,7 @@ const ProfilePage = () => {
     if (!user) return null;
 
     return (
-        <div className="min-h-screen bg-black">
+        <div className="relative min-h-screen overflow-x-clip bg-black">
             {/* Background glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
 
@@ -1063,11 +1068,13 @@ const ProfilePage = () => {
 
                             <form onSubmit={handlePasswordUpdate} className="space-y-6">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">Current Password</label>
+                                    <label htmlFor="current-password" className="block text-sm text-gray-400 mb-2">Current Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="current-password"
                                             type="password"
+                                            autoComplete="current-password"
                                             value={currentPassword}
                                             onChange={(e) => setCurrentPassword(e.target.value)}
                                             placeholder="••••••••"
@@ -1079,11 +1086,14 @@ const ProfilePage = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">New Password</label>
+                                    <label htmlFor="new-password" className="block text-sm text-gray-400 mb-2">New Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="new-password"
                                             type="password"
+                                            autoComplete="new-password"
+                                            aria-describedby={newPassword ? 'new-password-strength' : undefined}
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
                                             placeholder="••••••••"
@@ -1093,14 +1103,17 @@ const ProfilePage = () => {
                                             className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-orange-500/50 focus:outline-none transition-colors"
                                         />
                                     </div>
+                                    {user.provider === 'local' && <PasswordStrength password={newPassword} id="new-password-strength" tone="dark" />}
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
+                                    <label htmlFor="confirm-new-password" className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
                                     <div className="relative">
                                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                         <input
+                                            id="confirm-new-password"
                                             type="password"
+                                            autoComplete="new-password"
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="••••••••"
@@ -1128,7 +1141,7 @@ const ProfilePage = () => {
 
                             {/* Two-Factor Authentication */}
                             <div className="mt-8 pt-8 border-t border-white/10">
-                                <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                                     <div>
                                         <h3 className="text-white font-medium mb-1">Two-Factor Authentication</h3>
                                         <p className="text-sm text-gray-400">Add an extra layer of security to your account.</p>
@@ -1299,14 +1312,14 @@ const ProfilePage = () => {
 
                             {/* Active Sessions */}
                             <div className="mt-8 pt-8 border-t border-white/10">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <h3 className="text-white font-medium mb-1">Active Sessions</h3>
                                         <p className="text-sm text-gray-400">Manage your logged-in devices</p>
                                     </div>
                                     <Link
                                         href="/profile/sessions"
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                                        className="flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                                     >
                                         <Shield className="w-4 h-4" />
                                         Manage sessions

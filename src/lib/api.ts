@@ -1,4 +1,10 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+import { API_URL } from '@/lib/apiBase';
+import { AUTH_CODES, sessionEndReason } from '@/lib/authErrors';
+import { refreshAccessToken } from '@/lib/authRefresh';
+import { endSession } from '@/lib/authSession';
+import { tokenStore, tokenUserId } from '@/lib/tokenStore';
+
+export { API_URL, tokenStore };
 
 interface FetchOptions extends RequestInit {
     requireAuth?: boolean;
@@ -34,26 +40,59 @@ export interface ApiErrorDetail {
     message: string;
 }
 
-// Centralized token access — all token reads/writes go through here
-export const tokenStore = {
-    get: (): string | null => {
-        if (typeof window === 'undefined') return null;
-        try { return window.localStorage.getItem('token'); } catch { return null; }
-    },
-    set: (token: string): void => {
-        if (typeof window === 'undefined') return;
-        try { window.localStorage.setItem('token', token); } catch { /* quota/private */ }
-    },
-    remove: (): void => {
-        if (typeof window === 'undefined') return;
-        try { window.localStorage.removeItem('token'); } catch { /* ignore */ }
-    },
-};
+/** A failed response as an `ApiError`: the API's message, code, field details and the wait of a rate limit. */
+async function failureOf(response: Response): Promise<ApiError> {
+    let errorMessage = 'An error occurred while fetching data';
+    let errorCode: string | undefined;
+    let errorDetails: ApiErrorDetail[] | undefined;
+    let errorMeta: Record<string, unknown> | undefined;
+    let errorTime: string | undefined;
+    try {
+        const data = await response.json();
+        errorMessage = data.message || data.error?.message || errorMessage;
+        if (typeof data.timestamp === 'string') errorTime = data.timestamp;
+        if (typeof data.error?.code === 'string') errorCode = data.error.code;
+        // Rate limiters answer with the wait at `error.retryAfter` (seconds); a lock puts it in `meta`.
+        // Either way callers read `meta.retryAfter`.
+        const waited = Number(data.error?.retryAfter);
+        if (Number.isFinite(waited) && waited > 0 && !(typeof data.error?.meta?.retryAfter === 'number')) {
+            const own = data.error?.meta;
+            errorMeta = { ...(own && typeof own === 'object' && !Array.isArray(own) ? own : {}), retryAfter: waited };
+        }
+        if (!errorMeta && data.error?.meta && typeof data.error.meta === 'object' && !Array.isArray(data.error.meta)) {
+            errorMeta = data.error.meta;
+        }
+        if (Array.isArray(data.error?.details)) {
+            errorDetails = data.error.details
+                .filter((d: unknown): d is { field?: unknown; message: string } => !!d && typeof (d as { message?: unknown }).message === 'string')
+                .map((d: { field?: unknown; message: string }) => ({
+                    field: typeof d.field === 'string' ? d.field : undefined,
+                    message: d.message,
+                }));
+        }
+    } catch {
+        // Ignore JSON parsing errors
+    }
+    // A 429 also carries the wait in the `Retry-After` header (seconds); the body's own value wins
+    const headerWait = Number(response.headers?.get?.('Retry-After'));
+    if (Number.isFinite(headerWait) && headerWait > 0 && typeof errorMeta?.retryAfter !== 'number') {
+        errorMeta = { ...(errorMeta ?? {}), retryAfter: headerWait };
+    }
+    const failure = new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
+    if (errorTime) failure.serverTime = errorTime;
+    return failure;
+}
 
 /**
- * A wrapper around the native Web API fetch function that automatically handles
- * attaching the Authentication token if present, provides consistent error handling,
- * and attempts a single token refresh on 401 responses.
+ * A wrapper around the native Web API fetch function that attaches the access token, maps failures to
+ * `ApiError`, and keeps the sign-in alive.
+ *
+ * Only a 401 with code `AUTH_TOKEN_INVALID` on a call that carried the access token means "renew it":
+ * the token is refreshed (one refresh at a time for the whole page) and the request is sent once more.
+ * A 401 from a call without the token (sign-in, the second factor) is just an error, and so is any
+ * other 401 without that code. A session the API says is over (`AUTH_SESSION_REVOKED`,
+ * `AUTH_LEGACY_TOKEN_REFUSED`, a disabled account) signs this browser out. Calls under `/api/auth/`
+ * send the cookie that holds the refresh token.
  */
 export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
     const { requireAuth = true, raw = false, headers = {}, ...restOptions } = options;
@@ -73,62 +112,36 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
     };
 
     const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+    const send = async () => {
+        const requestHeaders = buildHeaders();
+        const response = await fetch(url, {
+            ...(endpoint.startsWith('/api/auth/') ? { credentials: 'include' as const } : {}),
+            headers: requestHeaders,
+            ...restOptions,
+        });
+        return { response, bearer: requestHeaders['Authorization'] as string | undefined };
+    };
 
-    let response = await fetch(url, {
-        headers: buildHeaders(),
-        ...restOptions,
-    });
+    let { response, bearer } = await send();
+    let failure = response.ok ? null : await failureOf(response);
 
-    // Attempt token refresh on 401 (only once, only if auth was required)
-    if (response.status === 401 && requireAuth) {
-        const refreshed = await tryRefreshToken();
-        if (refreshed) {
-            response = await fetch(url, {
-                headers: buildHeaders(),
-                ...restOptions,
-            });
+    if (failure?.status === 401 && failure.code === AUTH_CODES.TOKEN_INVALID && requireAuth && bearer) {
+        const stale = bearer.replace(/^Bearer /, '');
+        const outcome = await refreshAccessToken(stale);
+        if (outcome === 'refreshed') {
+            // Another account may have signed in here while this call waited: its token must not carry this call
+            const staleId = tokenUserId(stale);
+            const freshId = tokenUserId(tokenStore.get());
+            if (staleId && freshId && staleId !== freshId) throw failure;
+            ({ response, bearer } = await send());
+            failure = response.ok ? null : await failureOf(response);
         }
     }
 
-    if (!response.ok) {
-        let errorMessage = 'An error occurred while fetching data';
-        let errorCode: string | undefined;
-        let errorDetails: ApiErrorDetail[] | undefined;
-        let errorMeta: Record<string, unknown> | undefined;
-        let errorTime: string | undefined;
-        try {
-            const data = await response.json();
-            errorMessage = data.message || data.error?.message || errorMessage;
-            if (typeof data.timestamp === 'string') errorTime = data.timestamp;
-            if (typeof data.error?.code === 'string') errorCode = data.error.code;
-            // Rate limiters answer with the wait at `error.retryAfter` (seconds); a lock puts it in `meta`.
-            // Either way callers read `meta.retryAfter`.
-            const waited = Number(data.error?.retryAfter);
-            if (Number.isFinite(waited) && waited > 0 && !(typeof data.error?.meta?.retryAfter === 'number')) {
-                const own = data.error?.meta;
-                errorMeta = { ...(own && typeof own === 'object' && !Array.isArray(own) ? own : {}), retryAfter: waited };
-            }
-            if (!errorMeta && data.error?.meta && typeof data.error.meta === 'object' && !Array.isArray(data.error.meta)) {
-                errorMeta = data.error.meta;
-            }
-            if (Array.isArray(data.error?.details)) {
-                errorDetails = data.error.details
-                    .filter((d: unknown): d is { field?: unknown; message: string } => !!d && typeof (d as { message?: unknown }).message === 'string')
-                    .map((d: { field?: unknown; message: string }) => ({
-                        field: typeof d.field === 'string' ? d.field : undefined,
-                        message: d.message,
-                    }));
-            }
-        } catch {
-            // Ignore JSON parsing errors
-        }
-        // A 429 also carries the wait in the `Retry-After` header (seconds); the body's own value wins
-        const headerWait = Number(response.headers?.get?.('Retry-After'));
-        if (Number.isFinite(headerWait) && headerWait > 0 && typeof errorMeta?.retryAfter !== 'number') {
-            errorMeta = { ...(errorMeta ?? {}), retryAfter: headerWait };
-        }
-        const failure = new ApiError(errorMessage, response.status, errorCode, errorDetails, errorMeta);
-        if (errorTime) failure.serverTime = errorTime;
+    if (failure) {
+        const reason = bearer ? sessionEndReason(failure.status, failure.code) : null;
+        // Only the session this call was sent with: a newer sign-in is not ended by an old answer
+        if (reason) endSession(reason, bearer!.replace(/^Bearer /, ''));
         throw failure;
     }
 
@@ -142,52 +155,6 @@ export async function fetchApi(endpoint: string, options: FetchOptions = {}) {
     } catch {
         return null;
     }
-}
-
-// Token refresh — called automatically on 401, prevents concurrent refresh attempts
-let refreshPromise: Promise<boolean> | null = null;
-
-async function tryRefreshToken(): Promise<boolean> {
-    if (refreshPromise) return refreshPromise;
-
-    refreshPromise = (async () => {
-        try {
-            if (typeof window === 'undefined') return false;
-
-            // The refresh token lives in an httpOnly cookie the browser sends with
-            // `credentials: 'include'`. A token kept in localStorage by older sessions
-            // is still sent in the body as a fallback.
-            let legacyRefreshToken: string | null = null;
-            try { legacyRefreshToken = window.localStorage.getItem('refreshToken'); } catch { /* ignore */ }
-
-            const response = await fetch(`${API_URL}/api/auth/refresh`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}),
-            });
-
-            if (!response.ok) return false;
-
-            // The backend answers { token, refreshToken, expiresIn }
-            const data = await response.json();
-            const accessToken: string | undefined = data.token ?? data.accessToken;
-            if (accessToken) {
-                tokenStore.set(accessToken);
-                if (data.refreshToken && legacyRefreshToken) {
-                    try { window.localStorage.setItem('refreshToken', data.refreshToken); } catch { /* ignore */ }
-                }
-                return true;
-            }
-            return false;
-        } catch {
-            return false;
-        } finally {
-            refreshPromise = null;
-        }
-    })();
-
-    return refreshPromise;
 }
 
 /**

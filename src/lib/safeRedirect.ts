@@ -1,11 +1,62 @@
+const PROBE_ORIGIN = 'http://redirect-check.invalid';
+const MAX_LENGTH = 2048;
+
+/** The sign-in page and the OAuth callbacks: sending someone there after signing in would loop. */
+const AUTH_LOOP = /^\/auth(?:[/?#]|$)/i;
+
+/** Percent-decodes up to a few layers, so `/%2F/host` and `/%255C/host` read as what a browser may end up with. */
+function decodeLayers(value: string): string | null {
+    let current = value;
+    for (let i = 0; i < 4; i += 1) {
+        let next: string;
+        try {
+            next = decodeURIComponent(current);
+        } catch {
+            return null;
+        }
+        if (next === current) return current;
+        current = next;
+    }
+    return current;
+}
+
+function isOffSite(value: string): boolean {
+    // `//host` is a protocol-relative URL; browsers also read `\` as `/`, and drop tabs and line breaks inside a URL
+    if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return true;
+    if (/[\u0000-\u001f\u007f-\u009f]/.test(value) || value.includes(String.fromCharCode(0x2028)) || value.includes(String.fromCharCode(0x2029))) return true;
+    return false;
+}
+
 /**
- * Returns `target` only when it is a same-site path, otherwise `fallback`.
- * Blocks absolute URLs, protocol-relative `//host`, and backslash tricks such as `/\host`
- * (browsers read `\` as `/`), so `?redirect=` cannot send a signed-in user off-site.
+ * Returns `target` only when it is a path on this site, otherwise `fallback`.
+ *
+ * Accepted: a path that starts with a single `/`. Refused: absolute URLs and other schemes,
+ * protocol-relative `//host`, backslashes (`/\host`), control characters, any of those hidden behind
+ * percent-encoding (`/%2F/host`, `/%5Chost`), and the sign-in page itself (a redirect loop).
+ * So `?redirect=` can never send a signed-in user off-site.
  */
 export function safeRedirectPath(target: string | null | undefined, fallback = '/profile'): string {
-    if (!target || !target.startsWith('/')) return fallback;
-    if (target.startsWith('//') || target.includes('\\')) return fallback;
-    if (/[\u0000-\u001f\u007f]/.test(target)) return fallback;
+    if (!target || target.length > MAX_LENGTH) return fallback;
+    if (isOffSite(target)) return fallback;
+    const decoded = decodeLayers(target);
+    if (decoded === null || isOffSite(decoded)) return fallback;
+    if (AUTH_LOOP.test(target) || AUTH_LOOP.test(decoded)) return fallback;
+    try {
+        // The final word is the URL parser: whatever it resolves must still be this site, and must not be
+        // the sign-in page by another spelling (`/./auth`, `/x/../auth`, `/%2e/auth`)
+        const resolved = new URL(target, PROBE_ORIGIN);
+        if (resolved.origin !== PROBE_ORIGIN) return fallback;
+        // Dot segments can leave a path that starts with `//` (`/..//host`), which a browser reads as another site
+        if (resolved.pathname.startsWith('//') || new URL(decoded, PROBE_ORIGIN).pathname.startsWith('//')) return fallback;
+        if (AUTH_LOOP.test(resolved.pathname) || AUTH_LOOP.test(new URL(decoded, PROBE_ORIGIN).pathname)) return fallback;
+    } catch {
+        return fallback;
+    }
     return target;
+}
+
+/** The sign-in URL that brings the person back to `returnTo` (only a safe path is kept). */
+export function signInHref(returnTo?: string | null): string {
+    const safe = safeRedirectPath(returnTo, '');
+    return safe ? `/auth?redirect=${encodeURIComponent(safe)}` : '/auth';
 }
