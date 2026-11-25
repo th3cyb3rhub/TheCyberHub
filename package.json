@@ -16,7 +16,7 @@
     "test:ci": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:ssr": "node scripts/e2e-ssr.mjs"
+    "test:e2e:ssr": "playwright test --config e2e/support/ssr.playwright.config.ts --project=chromium"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.12",

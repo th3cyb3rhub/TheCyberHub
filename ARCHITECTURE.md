@@ -118,7 +118,7 @@ TanStack React Query caches client-side
 
 - **Vitest** + **Testing Library** for unit tests (`src/**/__tests__/*.test.{ts,tsx}`)
 - **Playwright** for E2E tests (`e2e/*.spec.ts`) targeting Chromium, Firefox, and Mobile Chrome
-- `e2e/ssr-shell.spec.ts` checks the HTML the server sends (status codes, redirects, first paint with scripts off). Its server-data checks read what the app's own server fetched, which a browser route cannot intercept, so they run against a stand-in API (`e2e/support/mock-api-server.ts`, bound to 127.0.0.1) and a build made with `NEXT_PUBLIC_API_URL` pointing at it. `npm run test:e2e:ssr` does all of that (build, start, run, stop); the manual workflow `.github/workflows/ci-full.yml` has the same run as a separate job (`e2e-ssr`), off unless chosen
+- `e2e/ssr-shell.spec.ts` checks the HTML the server sends (status codes, redirects, first paint with scripts off). Its server-data checks read what the app's own server fetched, which a browser route cannot intercept, so they run against a stand-in API (`e2e/support/mock-api-server.ts`, bound to 127.0.0.1) and a build made with `NEXT_PUBLIC_API_URL` pointing at it. `npm run test:e2e:ssr` does all of that (`e2e/support/ssr.playwright.config.ts`: start the stand-in API, build, start, run, stop); the manual workflow `.github/workflows/ci-full.yml` has the same run as a separate job (`e2e-ssr`), off unless chosen
 
 ---
 
