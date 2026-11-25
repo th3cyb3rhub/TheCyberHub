@@ -32,4 +32,20 @@ describe('theme dependent styling', () => {
         expect(navbar).toMatch(/<Sun className="hidden dark:block/)
         expect(navbar).toMatch(/<Moon className="block dark:hidden/)
     })
+
+    it('the header, its dropdown and the mobile menu have no classes that only work on a dark page', () => {
+        // Light text and see-through white hovers are invisible on the light page unless a dark: variant carries them
+        const darkOnly = /(?<![\w:-])(text-gray-300|text-white|hover:text-white|hover:bg-white\/\d+|border-white\/\d+|text-(?:red|cyan|indigo|yellow|orange)-[34]00)(?![\w/-])/g
+        const offenders: string[] = []
+        for (const file of ['components/Navbar.tsx', 'components/navbar/MobileMenu.tsx', 'components/navbar/UserDropdown.tsx']) {
+            const text = readFileSync(join(SRC, file), 'utf8')
+            for (const match of Array.from(text.matchAll(darkOnly))) {
+                // text-white is fine on a coloured badge or button: those lines say so with a bg- colour class
+                const line = text.slice(text.lastIndexOf('\n', match.index) + 1, text.indexOf('\n', match.index))
+                if (match[1] === 'text-white' && /\bbg-(?:red|orange|gradient)/.test(line)) continue
+                offenders.push(`${file}: ${match[1]}`)
+            }
+        }
+        expect(offenders).toEqual([])
+    })
 })

@@ -100,7 +100,7 @@ const Navbar = () => {
     // --- Hacker/Cyberpunk nav link with animated underline ---
     const navLink = (href: string, icon: React.ReactNode, label: string) => (
         <Link key={href} href={href} prefetch className="group/navlink relative inline-flex items-center gap-1.5 h-10 px-3 text-[13px] font-medium tracking-wide uppercase transition-all duration-200">
-            <span className={isActive(href) ? 'text-orange-400' : 'text-gray-500 group-hover/navlink:text-orange-400 transition-colors duration-200'}>{icon}</span>
+            <span className={isActive(href) ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 group-hover/navlink:text-orange-600 dark:group-hover/navlink:text-orange-400 transition-colors duration-200'}>{icon}</span>
             <span className={isActive(href) ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 group-hover/navlink:text-gray-900 dark:group-hover/navlink:text-white transition-colors duration-200'}>{label}</span>
             {/* Animated underline */}
             <span className={`absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-orange-500 to-orange-400 rounded-full transition-all duration-300 ${isActive(href) ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0 group-hover/navlink:opacity-100 group-hover/navlink:scale-x-100'}`} />
@@ -114,7 +114,7 @@ const Navbar = () => {
         const active = hrefs.some(h => isActive(h));
         return (
             <NavigationMenuTrigger className={`group relative bg-transparent !px-3 h-10 text-[13px] font-medium tracking-wide uppercase transition-all duration-200 ${active ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}>
-                <span className={`mr-1.5 ${active ? 'text-orange-400' : 'text-gray-500 group-hover:text-orange-400 transition-colors'}`}>{icon}</span>
+                <span className={`mr-1.5 ${active ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors'}`}>{icon}</span>
                 {label}
                 {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" />}
                 {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-orange-500 blur-sm" />}
@@ -167,20 +167,20 @@ const Navbar = () => {
                         >
                             <div className={`p-2 rounded-lg shrink-0 transition-colors duration-200 ${
                                 active
-                                    ? 'bg-orange-500/20 text-orange-400'
+                                    ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
                                     : 'bg-gray-100 text-gray-500 group-hover/item:text-orange-500 group-hover/item:bg-orange-50 dark:bg-white/[0.04] dark:group-hover/item:text-orange-400 dark:group-hover/item:bg-orange-500/10'
                             }`}>
                                 {link.icon}
                             </div>
                             <div className="flex-1">
-                                <div className={`text-[13px] font-semibold transition-colors ${active ? 'text-orange-400' : 'text-gray-800 dark:text-gray-200 dark:group-hover/item:text-white'}`}>
+                                <div className={`text-[13px] font-semibold transition-colors ${active ? 'text-orange-700 dark:text-orange-400' : 'text-gray-800 dark:text-gray-200 dark:group-hover/item:text-white'}`}>
                                     {link.title}
                                 </div>
                                 <p className="text-[11px] mt-0.5 text-gray-500">
                                     {link.description}
                                 </p>
                             </div>
-                            <ChevronRight className={`w-3.5 h-3.5 shrink-0 opacity-0 group-hover/item:opacity-100 transition-all ${active ? 'text-orange-400 opacity-100' : 'text-gray-600'}`} />
+                            <ChevronRight className={`w-3.5 h-3.5 shrink-0 opacity-0 group-hover/item:opacity-100 transition-all ${active ? 'text-orange-600 dark:text-orange-400 opacity-100' : 'text-gray-600'}`} />
                         </Link>
                     );
                 })}
@@ -267,7 +267,7 @@ const Navbar = () => {
                                 href="https://discord.gg/d3gBSNrVKb"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-mono text-indigo-400 bg-indigo-500/[0.08] border border-indigo-500/20 rounded-lg hover:bg-indigo-500/15 hover:border-indigo-500/30 transition-all duration-200"
+                                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-mono text-indigo-700 dark:text-indigo-400 bg-indigo-500/[0.08] border border-indigo-500/20 rounded-lg hover:bg-indigo-500/15 hover:border-indigo-500/30 transition-all duration-200"
                                 aria-label="Join Discord"
                             >
                                 <MessageCircle className="w-3.5 h-3.5" />
@@ -324,7 +324,7 @@ const Navbar = () => {
 
                             {/* Mobile hamburger */}
                             <button
-                                className="md:hidden p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-500 hover:text-orange-400 rounded-lg hover:bg-white/5 transition-colors"
+                                className="md:hidden p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-600 hover:text-orange-600 rounded-lg hover:bg-gray-100 dark:text-gray-500 dark:hover:text-orange-400 dark:hover:bg-white/5 transition-colors"
                                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                                 aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
                                 aria-expanded={isMobileMenuOpen}
