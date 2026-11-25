@@ -434,7 +434,7 @@ const ProfilePage = () => {
     if (!user) return null;
 
     return (
-        <div className="min-h-screen bg-black">
+        <div className="relative min-h-screen overflow-x-clip bg-black">
             {/* Background glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
 
@@ -1140,7 +1140,7 @@ const ProfilePage = () => {
 
                             {/* Two-Factor Authentication */}
                             <div className="mt-8 pt-8 border-t border-white/10">
-                                <div className="flex items-center justify-between mb-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                                     <div>
                                         <h3 className="text-white font-medium mb-1">Two-Factor Authentication</h3>
                                         <p className="text-sm text-gray-400">Add an extra layer of security to your account.</p>
@@ -1311,14 +1311,14 @@ const ProfilePage = () => {
 
                             {/* Active Sessions */}
                             <div className="mt-8 pt-8 border-t border-white/10">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <h3 className="text-white font-medium mb-1">Active Sessions</h3>
                                         <p className="text-sm text-gray-400">Manage your logged-in devices</p>
                                     </div>
                                     <Link
                                         href="/profile/sessions"
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                                        className="flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                                     >
                                         <Shield className="w-4 h-4" />
                                         Manage sessions
